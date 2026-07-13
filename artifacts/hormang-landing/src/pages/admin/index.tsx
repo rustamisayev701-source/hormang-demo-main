@@ -5933,6 +5933,9 @@ function CategoryManagementPanel() {
     if (!row) return;
     const consequences =
       `«${row.nameUz}» kategoriyasini BUTUNLAY o'chirasizmi?\n\n` +
+      (row.builtIn
+        ? `• Bu ASOSIY (standart) kategoriya — uni o'chirish ilova bo'ylab kategoriya tanlovlariga ta'sir qilishi mumkin.\n`
+        : ``) +
       `• Bu amalni ORQAGA QAYTARIB BO'LMAYDI.\n` +
       `• Shu kategoriyaga bog'liq eski so'rovlar/profillarda ID saqlanib qoladi, lekin nomi ko'rinmay qoladi.\n\n` +
       `Agar shunchaki yashirmoqchi bo'lsangiz, "Faol" tugmasidan foydalaning.\n\n` +
@@ -5941,11 +5944,7 @@ function CategoryManagementPanel() {
 
     const result = deleteAdminCategory(id);
     if (!result.ok) {
-      alert(
-        result.reason === "builtin_protected"
-          ? "Asosiy kategoriyalarni o'chirib bo'lmaydi — faqat deaktivatsiya qiling."
-          : "Kategoriyani o'chirib bo'lmadi."
-      );
+      alert("Kategoriyani o'chirib bo'lmadi.");
       return;
     }
     logAction({
@@ -5967,7 +5966,7 @@ function CategoryManagementPanel() {
           <p className="font-extrabold text-sm text-gray-900">Kategoriyalar boshqaruvi</p>
           <p className="text-xs text-gray-500">
             Kategoriyalar ID orqali bog'lanadi — ismni o'zgartirish ijrochi profillariga ta'sir qilmaydi.
-            Asosiy kategoriyalarni faqat deaktivatsiya qilish mumkin; o'zingiz qo'shgan kategoriyalarni butunlay o'chirish mumkin.
+            Har qanday kategoriyani (shu jumladan ASOSIY) butunlay o'chirish mumkin — ehtiyot bo'ling, bu amalni qaytarib bo'lmaydi.
           </p>
         </div>
         <Button onClick={() => setCreating(true)}
@@ -6030,13 +6029,11 @@ function CategoryManagementPanel() {
                 className="w-8 h-8 rounded-lg flex items-center justify-center text-gray-400 hover:text-blue-600 hover:bg-blue-50 transition-colors">
                 <Edit3 className="w-3.5 h-3.5" />
               </button>
-              {!row.builtIn && (
-                <button onClick={() => handleDelete(row.id)}
-                  title="Butunlay o'chirish"
-                  className="w-8 h-8 rounded-lg flex items-center justify-center text-gray-400 hover:text-rose-600 hover:bg-rose-50 transition-colors">
-                  <Trash2 className="w-3.5 h-3.5" />
-                </button>
-              )}
+              <button onClick={() => handleDelete(row.id)}
+                title="Butunlay o'chirish"
+                className="w-8 h-8 rounded-lg flex items-center justify-center text-gray-400 hover:text-rose-600 hover:bg-rose-50 transition-colors">
+                <Trash2 className="w-3.5 h-3.5" />
+              </button>
             </div>
           </div>
         ))}

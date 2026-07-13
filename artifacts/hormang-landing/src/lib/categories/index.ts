@@ -138,15 +138,6 @@ function writeStore(cats: Category[]): void {
 export function getAllCategories(): Category[] {
   const stored = readStore();
   if (stored && stored.length) {
-    // Ensure built-in seeds are always present (admin should not be able to
-    // accidentally lose them by clearing the array).
-    const haveIds = new Set(stored.map((c) => c.id));
-    const missingSeeds = seedCategories().filter((s) => !haveIds.has(s.id));
-    if (missingSeeds.length > 0) {
-      const merged = [...stored, ...missingSeeds];
-      writeStore(merged);
-      return merged;
-    }
     return stored;
   }
   const seed = seedCategories();
@@ -210,17 +201,15 @@ export function setCategoryActive(id: string, active: boolean): void {
 }
 
 /**
- * Permanently removes a category. Built-in categories can never be
- * hard-deleted (use {@link setCategoryActive}(id, false) instead, which
- * hides them while preserving historical requests/offers/profiles that
- * reference the ID) — only categories created via the admin panel
- * (`builtIn: false`) can actually be deleted.
+ * Permanently removes a category, including built-in ones. Any historical
+ * requests/offers/profiles that reference this ID keep the raw ID but lose
+ * the display name (falls back to showing the ID itself — see
+ * `getCategoryDisplayName`'s `fallback` param).
  */
 export function deleteCategory(id: string): { ok: boolean; reason?: string } {
   const all = getAllCategories();
   const idx = all.findIndex((c) => c.id === id);
   if (idx < 0) return { ok: false, reason: "not_found" };
-  if (all[idx].builtIn) return { ok: false, reason: "builtin_protected" };
   all.splice(idx, 1);
   writeStore(all);
   return { ok: true };
