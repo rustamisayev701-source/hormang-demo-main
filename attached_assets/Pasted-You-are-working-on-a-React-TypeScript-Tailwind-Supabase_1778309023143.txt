@@ -1,0 +1,336 @@
+You are working on a React + TypeScript + Tailwind + Supabase (or localStorage fallback) marketplace platform called Hormang.
+
+## 🎯 Goal
+
+Implement a **ONE-TIME Profile Completion Reward System** for providers.
+
+When a provider reaches:
+
+```text id="jlwm68"
+100% profile completion
+```
+
+for the FIRST TIME ONLY, they should receive:
+
+```text id="jlwm69"
++5 Tanga
+```
+
+This must be:
+
+* secure
+* impossible to exploit
+* permanent
+* tracked in Tanga history
+* visible in provider UI
+* admin visible
+
+---
+
+# 🚨 CRITICAL RULE
+
+The reward must ONLY happen:
+
+```text id="jlwm70"
+ONCE PER PROVIDER ACCOUNT
+```
+
+EVEN IF:
+
+* profile later becomes incomplete
+* provider edits profile
+* provider removes data
+* profile returns to 100% again
+
+NO second reward must EVER happen.
+
+This is the MOST IMPORTANT REQUIREMENT.
+
+---
+
+# ✅ 1. Backend Data Model
+
+Add permanent field to provider/user model:
+
+```ts id="jlwm71"
+profileCompletionRewardGranted: boolean
+```
+
+Default:
+
+```ts id="jlwm72"
+false
+```
+
+---
+
+# Add optional metadata:
+
+```ts id="jlwm73"
+profileCompletionRewardGrantedAt
+```
+
+---
+
+# ✅ 2. Profile Completion Detection
+
+Use existing profile completion calculation.
+
+When:
+
+```ts id="jlwm74"
+profileCompletion === 100
+```
+
+THEN:
+
+Check:
+
+```ts id="jlwm75"
+if (!provider.profileCompletionRewardGranted)
+```
+
+ONLY THEN:
+
+* grant reward
+* mark as rewarded permanently
+
+---
+
+# ✅ 3. Reward Logic
+
+When eligible:
+
+```ts id="jlwm76"
+provider.tanga += 5;
+provider.profileCompletionRewardGranted = true;
+provider.profileCompletionRewardGrantedAt = new Date().toISOString();
+```
+
+---
+
+# ✅ 4. Tanga History Integration
+
+Add transaction entry:
+
+```ts id="jlwm77"
+{
+  type: "profile_completion_reward",
+  amount: 5,
+  createdAt,
+  description: "Profil 100% to‘ldirilgani uchun bonus"
+}
+```
+
+---
+
+# Provider should see it in:
+
+* Tanga history
+* wallet history
+* monetization history
+
+---
+
+# ✅ 5. Provider UI Celebration (IMPORTANT)
+
+When reward triggers FIRST TIME:
+
+Show clean celebration modal/toast.
+
+Example:
+
+```text id="jlwm78"
+🎉 Tabriklaymiz!
+
+Profilingiz 100% to‘ldirildi.
+Sizga 5 Tanga bonus berildi.
+```
+
+---
+
+# Add:
+
+* subtle confetti
+* success animation
+* NOT overly gamified
+
+---
+
+# ✅ 6. Profile UI Enhancements
+
+Inside provider profile completion card:
+
+If NOT rewarded yet:
+
+Show:
+
+```text id="jlwm79"
+100% to‘ldiring va 5 Tanga bonus oling
+```
+
+---
+
+# After reward granted:
+
+Replace with:
+
+```text id="jlwm80"
+✅ 5 Tanga bonusi olindi
+```
+
+---
+
+# ✅ 7. Admin Panel Integration
+
+Inside Users section:
+
+Add column:
+
+```text id="jlwm81"
+Profil bonusi
+```
+
+---
+
+# Show:
+
+```text id="jlwm82"
+✅ Berilgan
+```
+
+OR
+
+```text id="jlwm83"
+⏳ Kutilmoqda
+```
+
+---
+
+# Optional:
+
+Show reward date.
+
+---
+
+# ✅ 8. Safeguards (VERY IMPORTANT)
+
+Reward must NEVER trigger:
+
+* on frontend only
+* on every login
+* on every profile save
+* multiple times
+
+---
+
+# Backend MUST validate:
+
+```ts id="’wini84"
+if (profileCompletion === 100 && !rewardGranted)
+```
+
+before rewarding.
+
+---
+
+# ✅ 9. Anti-Exploit Protection
+
+Prevent:
+
+* deleting profile data
+* re-completing repeatedly
+* duplicate reward creation
+* duplicate history entries
+
+---
+
+# IMPORTANT
+
+The boolean:
+
+```text id="’wini85"
+profileCompletionRewardGranted
+```
+
+must NEVER reset automatically.
+
+---
+
+# ✅ 10. Suggested Completion Requirements
+
+If not already strict enough, 100% should require:
+
+* profile photo
+* full name
+* location
+* service categories
+* about/bio
+* portfolio photos
+* experience
+* phone/contact
+
+NOT just name + avatar.
+
+---
+
+# ✅ 11. Optional Nice Upgrade
+
+Add small reward badge in provider profile:
+
+```text id="’wini86"
+🎖 Profil bonusi olingan
+```
+
+---
+
+# 🎨 UI Rules
+
+* clean
+* rewarding
+* professional
+* not childish
+* subtle blue/violet success styles
+
+---
+
+# ⚠️ DO NOT
+
+* Do NOT allow repeated rewards
+* Do NOT calculate only frontend-side
+* Do NOT grant on every profile update
+* Do NOT create duplicate Tanga history
+
+---
+
+# 🎯 Expected Result
+
+Providers now have:
+
+* strong incentive to fully complete profiles
+* better quality public profiles
+* higher marketplace trust
+
+Admins:
+
+* can track reward distribution
+* prevent abuse
+
+Platform:
+
+* improves provider quality organically
+
+---
+
+## Deliver
+
+1. Permanent reward tracking field
+2. One-time-only reward logic
+3. Automatic 5 Tanga grant
+4. Tanga history integration
+5. Celebration UI
+6. Provider profile messaging
+7. Admin visibility
+8. Anti-exploit safeguards
+
+Build production-ready and fully integrated with existing Tanga + provider profile systems.

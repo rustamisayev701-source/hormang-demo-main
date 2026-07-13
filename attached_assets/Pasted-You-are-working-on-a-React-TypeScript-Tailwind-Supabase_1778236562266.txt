@@ -1,0 +1,460 @@
+You are working on a React + TypeScript + Tailwind + Supabase (or localStorage fallback) marketplace platform called Hormang.
+
+## 🎯 Goal
+
+Completely upgrade and reimagine the **Tanga Plan Creation System** inside the Admin Panel.
+
+IMPORTANT:
+
+* DO NOT radically redesign the provider-side plan cards/UI.
+* Existing provider purchase experience should remain familiar.
+* Focus on:
+
+  * smarter monetization logic
+  * campaign controls
+  * fair discount rules
+  * admin power tools
+  * scalable pricing system
+
+The current system is too simplistic and has abuse issues.
+
+---
+
+# 🚨 Critical Problem to Fix
+
+Current logic:
+
+```text id="jlwm47"
+Chegirma limiti = 10
+```
+
+allows ONE provider to purchase all 10 discounted plans.
+
+This is WRONG.
+
+---
+
+# ✅ New Monetization Architecture
+
+Split discount logic into TWO systems:
+
+---
+
+# 1. Global Campaign Limit
+
+Rename:
+
+```text id="jlwm48"
+Chegirma limiti
+```
+
+to:
+
+```text id="jlwm49"
+Umumiy aksiya limiti
+```
+
+Meaning:
+
+* total discounted purchases available globally
+
+Example:
+
+```text id="jlwm50"
+100 discounted purchases
+```
+
+---
+
+# 2. Per-Provider Purchase Limit (IMPORTANT)
+
+Add NEW field:
+
+```text id="jlwm51"
+Bir foydalanuvchi limiti
+```
+
+Examples:
+
+* 1
+* 2
+* unlimited
+
+This prevents one provider from consuming entire campaign stock.
+
+---
+
+# ✅ 3. Rebuild Plan Creator Structure
+
+The current form feels:
+
+* flat
+* outdated
+* too form-heavy
+
+Reorganize into professional grouped sections.
+
+---
+
+# ✅ SECTION A — Basic Information
+
+Fields:
+
+* Plan name
+* Tanga amount
+* Description
+* Badge (optional)
+
+---
+
+# ✅ SECTION B — Pricing
+
+Fields:
+
+* Original price
+* Discounted price
+* Bonus Tanga
+
+---
+
+# Live Calculation Preview
+
+Show dynamically:
+
+```text id="jlwm52"
+50 Tanga + 10 bonus
+```
+
+```text id="jlwm53"
+Jami: 60 Tanga
+```
+
+and:
+
+```text id="jlwm54"
+20% tejash
+```
+
+---
+
+# ✅ SECTION C — Campaign Rules
+
+Fields:
+
+* Umumiy aksiya limiti
+* Bir foydalanuvchi limiti
+* Start date
+* Expiration date
+
+---
+
+# Auto Validation
+
+Prevent:
+
+* negative prices
+* discounted price > original price
+* invalid limits
+
+---
+
+# ✅ SECTION D — Visibility & Targeting
+
+Add visibility controls:
+
+```text id="jlwm55"
+Kimlarga ko‘rinadi?
+```
+
+Options:
+
+* All providers
+* New providers only
+* Active providers only
+* Referral users only
+
+---
+
+# Add plan statuses:
+
+```ts id="jlwm56"
+draft
+active
+scheduled
+expired
+archived
+```
+
+---
+
+# ✅ SECTION E — Highlighting
+
+Optional controls:
+
+* ⭐ Tavsiya etilgan
+* 🔥 Hot offer
+* 🎁 Bonusli reja
+
+These affect provider-side badges only.
+
+---
+
+# ✅ 4. Expiration Automation
+
+When expiration date passes:
+
+Automatically:
+
+* disable purchases
+* hide discount
+* mark as expired
+
+---
+
+# ✅ 5. Purchase Validation Logic (CRITICAL)
+
+Before purchase:
+
+Validate:
+
+* plan active
+* campaign stock remaining
+* provider limit not exceeded
+
+---
+
+# Example:
+
+```ts id="jlwm57"
+const userPurchases = purchases.filter(
+  p =>
+    p.userId === user.id &&
+    p.planId === plan.id
+);
+```
+
+---
+
+# Validation:
+
+```ts id="jlwm58"
+if (userPurchases.length >= plan.perUserLimit)
+```
+
+→ block discounted purchase.
+
+---
+
+# ✅ 6. Campaign Stock Logic
+
+Track:
+
+```text id="jlwm59"
+remainingCampaignUses
+```
+
+---
+
+# Example UI:
+
+```text id="jlwm60"
+23 ta qoldi
+```
+
+---
+
+# If sold out:
+
+```text id="jlwm61"
+Aksiya tugagan
+```
+
+Disable purchase button.
+
+---
+
+# ✅ 7. Provider-Side UI (IMPORTANT)
+
+DO NOT radically redesign.
+
+Keep:
+
+* same overall plan card structure
+* same visual familiarity
+
+BUT enhance with:
+
+* better badges
+* countdown
+* remaining stock
+* bonus visualization
+
+---
+
+# Example Enhancements
+
+```text id="jlwm62"
+🔥 Chegirma
+```
+
+```text id="jlwm63"
+⏳ 2 kun qoldi
+```
+
+```text id="jlwm64"
+🎁 +10 bonus
+```
+
+---
+
+# ✅ 8. Monetization Analytics (Admin)
+
+Upgrade monetization dashboard.
+
+Update and add if needed:
+
+* total revenue
+* active campaigns
+* top-selling plans
+* conversion rates
+* discounted vs normal purchases
+
+---
+
+# Add mini analytics card per plan:
+
+```text id="jlwm65"
+47 sotilgan
+1.9M so‘m revenue
+```
+
+---
+
+# ✅ 9. Transactions Improvements
+
+Current Transactions section is too basic.
+
+Add:
+
+* provider avatar
+* provider name
+* payment status
+* purchase source
+
+---
+
+# Purchase source examples:
+
+```text id="jlwm66"
+referral_bonus
+discount_campaign
+normal_purchase
+admin_grant
+```
+
+---
+
+# ✅ 10. Future-Proof Data Model
+
+Upgrade plan schema:
+
+```ts id="jlwm67"
+{
+  id,
+  name,
+  tangaAmount,
+  bonusTanga,
+
+  originalPrice,
+  discountedPrice,
+
+  totalCampaignLimit,
+  remainingCampaignUses,
+
+  perUserLimit,
+
+  startsAt,
+  expiresAt,
+
+  visibilityTarget,
+
+  badge,
+  featured,
+
+  status,
+
+  totalPurchases,
+  revenueGenerated,
+
+  createdAt
+}
+```
+
+---
+
+# ✅ 11. UX Improvements
+
+Use:
+
+* grouped cards
+* cleaner spacing
+* sticky save footer
+* live preview
+* modern admin feel
+
+Maintain:
+
+* existing Hormang admin visual language
+
+---
+
+# ⚠️ IMPORTANT RULES
+
+DO NOT:
+
+* radically redesign provider-side cards
+* allow unlimited discounted purchases
+* allow expired campaign purchases
+* allow negative values
+* allow purchase without validation
+
+---
+
+# 🎯 Expected Result
+
+Hormang monetization becomes:
+
+* scalable
+* fair
+* campaign-driven
+* resistant to abuse
+* psychologically optimized
+
+Admins can:
+
+* run real campaigns
+* control discounts professionally
+* track monetization performance
+
+Providers:
+
+* still recognize familiar UI
+* get clearer offers
+* trust fairness of campaigns
+
+---
+
+## Deliver
+
+1. Reimagined admin plan creator
+2. Grouped section UI
+3. Global campaign limits
+4. Per-provider purchase limits
+5. Plan statuses
+6. Visibility targeting
+7. Campaign automation
+8. Provider-side enhancements
+9. Monetization analytics
+10. Purchase validation safeguards
+
+Build production-ready and fully integrated with existing Tanga system.

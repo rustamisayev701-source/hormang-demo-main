@@ -1,0 +1,194 @@
+You are working on a React + TypeScript + Tailwind + Framer Motion project in Replit.
+
+## 🎯 Goal
+
+Enhance the **"Kategoriyalar" CTA button** in `/customer-home by adding a **subtle vertical rolling (ticker) animation** on the right side that cycles through service categories.
+
+This should feel **premium, smooth, and non-distracting**.
+
+---
+
+# 🧠 UX Requirements
+
+* Animation must be:
+
+  * slow
+  * smooth
+  * subtle (no flashy effects)
+* Must NOT distract from main CTA
+* Must NOT break layout
+* Must feel like **live content preview**
+
+---
+
+# ✅ 1. Create Reusable Component
+
+Create a new component:
+
+```text
+/components/ui/RollingCategories.tsx
+```
+
+---
+
+## Component Requirements:
+
+### Props:
+
+```ts
+type Props = {
+  items: string[];
+  interval?: number; // default 3000ms
+};
+```
+
+---
+
+## Behavior:
+
+* Display ONE category at a time
+* Every `interval` ms:
+
+  * next category appears
+* Loop infinitely
+* When clicked one of the props navigate to survey with automatically choosing that selected category.
+---
+
+## Animation:
+
+Use **Framer Motion**
+
+### Effect:
+
+* New item slides **from bottom → up**
+* Old item fades/slides out
+
+---
+
+## Implementation (Required Behavior):
+
+* Container:
+
+  * fixed height (prevent layout shift)
+  * `overflow-hidden`
+
+* Animated item:
+
+  * `position: absolute`
+
+---
+
+# ✅ 2. Example Implementation Logic
+
+* Use `useState` for index
+* Use `useEffect` with `setInterval`
+* Cleanup interval on unmount
+
+---
+
+# 🎨 3. Styling Rules
+
+* Small text under appropriate icon (`text-xs` or `text-sm`)(use same icons as in questionnaire)
+* Medium weight (`font-semibold`)
+* Blue accent (`text-blue-600`)
+* Optional:
+
+  * light background (`bg-blue-50`)
+  * rounded (`rounded-md`)
+  * padding (`px-2 py-1`)
+
+---
+
+# ⚠️ 4. Animation Constraints
+
+* Duration: ~0.3–0.5s
+* Interval: default 3000ms
+* No bounce
+* No scaling
+* No flashing colors
+
+---
+
+# ✅ 5. Integrate into Kategoriyalar button
+
+Locate the existing card in `/dashboard`:
+
+```text
+Kategoriyalar
+Barcha xizmatlar
+```
+
+---
+
+## Update Layout:
+
+Make card content:
+
+```tsx
+flex items-center justify-between
+```
+
+---
+
+## Structure:
+
+LEFT:
+
+* Title: "Kategoriyalar"
+* Subtitle: "Barcha xizmatlar"
+* Navigates to questionnaire
+RIGHT:
+
+* RollingCategories component
+* Navigates to survey with automatically selecting the chosen category
+---
+
+## Example:
+
+```tsx
+<RollingCategories
+  items={[
+    "Tozalash",
+    "Avto xizmat",
+    "Ta’mirlash",
+    "Ko‘chirish",
+    "Go‘zallik"
+  ]}
+/>
+```
+
+---
+
+# ✅ 6. Optional Enhancements (if simple)
+
+* Pause animation on hover (desktop only)
+* Slight fade-in effect
+* Smooth easing (`easeInOut`)
+
+---
+
+# 🚫 Do NOT
+
+* Do NOT create heavy animations
+* Do NOT change card layout drastically
+* Do NOT affect performance
+* Do NOT use large fonts
+* Do NOT make it flashy
+
+---
+
+# 🎯 Expected Result
+
+* Right side of the "Kategoriyalar" card shows rotating service names
+* Animation is smooth and subtle
+* UI feels more dynamic and premium
+* No layout shift or distraction
+
+---
+
+## Deliver
+
+1. `RollingCategories` component
+2. Integrated into Kategoriyalar card
+3. Clean animation with proper timing
+4. No regressions in layout or performance

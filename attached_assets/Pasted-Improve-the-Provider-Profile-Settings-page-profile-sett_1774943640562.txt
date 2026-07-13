@@ -1,0 +1,58 @@
+Improve the Provider Profile Settings page (`/profile/settings`) to make it more advanced, polished, and professional.
+
+### Current Issues to Fix:
+- Profile completion percentage is not fully dynamic (many fields are ignored in calculation).
+- Saving logic is fragmented between auth, providerProfile, and localProfile.
+- No "Public Profile Preview" feature.
+- Portfolio images have no captions/descriptions.
+- Back button navigation is not ideal.
+- Missing advanced features that make providers stand out.
+
+### Required Improvements:
+
+1. **Dynamic Profile Completion**  
+   - Make `getCompletionPct` calculate based on real weights:
+     - Photo: 20%
+     - Full name: 10%
+     - Region/District: 15%
+     - Selected Services (at least 1): 20%
+     - Bio (min 50 characters): 15%
+     - Experience: 10%
+     - Working hours: 5%
+     - Portfolio (at least 2 images): 5%
+   - Show the top 3–4 missing items with direct "Add now" buttons where possible.
+
+2. **Add Public Profile Preview**  
+   - Add a prominent button "Profilimni ko'rish" (Public Preview) at the top.
+   - When clicked, open a modal that shows how the public profile will look to customers (clean card with photo, name, categories, bio, portfolio grid, etc.).
+
+3. **Improve Portfolio Section**  
+   - Allow adding short caption/description for each portfolio image (e.g. "Oshxona remonti — oldin/keyin").
+   - Make portfolio images draggable to reorder.
+   - Show image count clearly (e.g. 3/6).
+
+4. **Better Saving & Real-time Updates**  
+   - Auto-save changes with debounce (especially for bio, experience, working hours).
+   - On successful save, update both `providerProfile` and local profile consistently.
+   - Show optimistic UI updates (changes appear immediately).
+
+5. **Polish & UX Improvements**
+   - Add subtle "This helps you get more orders" helper text under important sections.
+   - Improve the circular progress with better animation and color.
+   - Make the back button consistently go to `/provider-home` for providers.
+   - Add loading states during photo/portfolio upload.
+   - Clean up unused imports and improve code organization.
+
+6. **Keep Existing Good Parts**
+   - Keep the beautiful UI style, violet gradient, animations, phone modal, etc.
+   - Keep the 9 service categories list.
+
+### Technical Requirements:
+- Use existing contexts (`useAuth`, `useToast`).
+- Continue using `local-profile` helpers where appropriate.
+- Make sure changes to photo, categories, bio, etc. immediately affect the completion %.
+- All text in Uzbek (Latin script).
+
+Implement these improvements cleanly. Focus first on making completion % truly dynamic and adding the Public Profile Preview modal, then improve the portfolio section.
+
+Start now and make the Provider Profile Settings page much more advanced and conversion-friendly.

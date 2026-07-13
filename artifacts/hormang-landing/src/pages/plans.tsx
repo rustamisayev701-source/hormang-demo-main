@@ -1,0 +1,269 @@
+import { useState, useEffect } from "react";
+import { useLocation } from "wouter";
+import { motion, AnimatePresence } from "framer-motion";
+import { Sparkles, Check, Zap } from "lucide-react";
+import { useStoreRefresh } from "@/hooks/use-store-refresh";
+import { BottomNav } from "@/components/bottom-nav";
+import { useAuth } from "@/contexts/auth-context";
+import { useToast } from "@/hooks/use-toast";
+import logoImg from "/hormang-logo.png";
+import { getTangaBalance } from "@/lib/tanga-store";
+import { getWallet, createWalletOrder, type WalletTier } from "@/lib/wallet-client";
+import { ApiError } from "@/lib/api-client";
+import { ReferralCard } from "@/components/referral-card";
+import { isUserSuspended, SUSPENDED_MESSAGE } from "@/lib/safety-store";
+import { useI18n } from "@/contexts/i18n-context";
+import { tFormat } from "@/lib/i18n";
+
+const GOLD_GRAD = "linear-gradient(135deg, #f59e0b 0%, #d97706 100%)";
+const GOLD_DARK = "linear-gradient(135deg, #f59e0b 0%, #92400e 100%)";
+
+/* ─── Coin Icon ──────────────────────────────────────────────────── */
+export function CoinIcon({ size = 20, className = "" }: { size?: number; className?: string }) {
+  return (
+    <img
+      src="/tanga-coin.jpg"
+      alt="Tanga"
+      draggable={false}
+      className={className}
+      style={{
+        width: size,
+        height: size,
+        borderRadius: "50%",
+        objectFit: "cover",
+        flexShrink: 0,
+        boxShadow: "0 2px 6px rgba(217,119,6,0.35)",
+      }}
+    />
+  );
+}
+
+/* ─── Tanga Balance Chip ─────────────────────────────────────────── */
+export function TangaChip({ userId, onClick }: { userId: string; onClick?: () => void }) {
+  useStoreRefresh();
+  const balance = getTangaBalance(userId);
+  return (
+    <button
+      onClick={onClick}
+      className="flex items-center gap-1.5 px-2.5 py-1 rounded-xl border border-amber-200 bg-amber-50 hover:bg-amber-100 active:scale-95 transition-all"
+    >
+      <CoinIcon size={16} />
+      <span className="text-xs font-bold text-amber-700 leading-none">{balance}</span>
+    </button>
+  );
+}
+
+/* ─── Plan Card ──────────────────────────────────────────────────── */
+function PlanCard({
+  tier, buying, bought, onBuy,
+}: {
+  tier: WalletTier;
+  buying: boolean;
+  bought: boolean;
+  onBuy: () => void;
+}) {
+  const { t, locale } = useI18n();
+  const tt = t.plansPage;
+  const tierName = locale === "ru" ? tier.nameRu : tier.nameUz;
+  const totalTokens = tier.credits + tier.bonusTokens;
+
+  if (bought) {
+    return (
+      <div className="bg-emerald-50 border-2 border-emerald-200 rounded-2xl p-5 flex flex-col items-center justify-center min-h-[220px] gap-2">
+        <div className="w-12 h-12 rounded-full bg-emerald-100 flex items-center justify-center">
+          <Check className="w-6 h-6 text-emerald-600" />
+        </div>
+        <p className="font-extrabold text-emerald-700 text-sm">{tt.successTitle}</p>
+        <p className="text-xs text-emerald-600">{tFormat(tt.successDescTpl, { n: totalTokens })}</p>
+      </div>
+    );
+  }
+
+  if (buying) {
+    return (
+      <div className="bg-white border border-gray-100 rounded-2xl p-5 flex flex-col items-center justify-center min-h-[220px] gap-3">
+        <div className="w-10 h-10 rounded-full border-[3px] border-amber-400 border-t-transparent animate-spin" />
+        <p className="text-xs font-semibold text-gray-400">{tt.buying}</p>
+      </div>
+    );
+  }
+
+  return (
+    <div className="bg-white rounded-2xl border border-amber-100 overflow-hidden shadow-sm">
+      <div className="h-1.5 w-full" style={{ background: GOLD_GRAD }} />
+      <div className="p-4">
+        <div className="flex items-start justify-between gap-2 mb-3">
+          <p className="font-extrabold text-sm text-gray-900">{tierName}</p>
+          {tier.bonusTokens > 0 && (
+            <span className="flex-shrink-0 flex items-center gap-0.5 text-[10px] font-bold text-white bg-emerald-500 px-2 py-0.5 rounded-full whitespace-nowrap">
+              <Zap className="w-2.5 h-2.5" />+{tier.bonusTokens}
+            </span>
+          )}
+        </div>
+
+        <div className="flex items-center gap-2.5 mb-3">
+          <CoinIcon size={32} />
+          <div>
+            <p className="text-3xl font-black text-gray-900 leading-none">{tier.credits}</p>
+            {tier.bonusTokens > 0 && (
+              <p className="text-[11px] font-bold text-emerald-600 mt-0.5">
+                {tFormat(tt.bonusTotalTpl, { bonus: tier.bonusTokens, total: totalTokens })}
+              </p>
+            )}
+          </div>
+        </div>
+
+        <div className="flex items-baseline gap-2 mb-3">
+          <span className="text-lg font-extrabold text-gray-900">
+            {tier.priceSom.toLocaleString()} {tt.sumSuffix}
+          </span>
+        </div>
+
+        <button
+          onClick={onBuy}
+          className="w-full h-10 rounded-xl font-bold text-sm text-white transition-all active:scale-[.98] shadow-sm mt-1"
+          style={{ background: GOLD_DARK }}
+        >
+          {tt.buyBtn}
+        </button>
+      </div>
+    </div>
+  );
+}
+
+/* ─── Main Page ──────────────────────────────────────────────────── */
+export default function PlansPage() {
+  useStoreRefresh();
+  const { t } = useI18n();
+  const tt = t.plansPage;
+  const { user } = useAuth();
+  const [, setLocation] = useLocation();
+  const { toast } = useToast();
+
+  const userId = user?.id ?? "";
+  const balance = userId ? getTangaBalance(userId) : 0;
+
+  const [tiers, setTiers] = useState<WalletTier[]>([]);
+  const [tiersLoading, setTiersLoading] = useState(true);
+  const [buying, setBuying] = useState<string | null>(null);
+  const [bought, setBought] = useState<string | null>(null);
+
+  useEffect(() => {
+    let cancelled = false;
+    getWallet()
+      .then((res) => { if (!cancelled) setTiers(res.tiers); })
+      .catch(() => { if (!cancelled) setTiers([]); })
+      .finally(() => { if (!cancelled) setTiersLoading(false); });
+    return () => { cancelled = true; };
+  }, []);
+
+  async function handleBuy(tier: WalletTier) {
+    if (!userId || buying) return;
+    if (isUserSuspended(userId)) {
+      toast({ title: SUSPENDED_MESSAGE, variant: "destructive" });
+      return;
+    }
+    setBuying(tier.id);
+    try {
+      const { checkoutUrl } = await createWalletOrder(tier.id, "payme");
+      window.location.href = checkoutUrl;
+    } catch (err) {
+      setBuying(null);
+      const message = err instanceof ApiError ? err.message : tt.errTierNotFound;
+      toast({ title: tt.purchaseFailedTitle, description: message, variant: "destructive" });
+    }
+  }
+
+  return (
+    <div className="min-h-screen bg-gray-50 pb-24">
+      {/* Header */}
+      <div className="bg-white border-b border-gray-100 sticky top-0 z-10 card-shadow">
+        <div className="max-w-lg mx-auto px-4 py-3 flex items-center gap-3">
+          <button onClick={() => setLocation("/provider-home")} className="flex items-center flex-shrink-0">
+            <img src={logoImg} alt="Hormang" className="w-8 h-8 object-contain" />
+          </button>
+          <div className="flex-1">
+            <h1 className="font-extrabold text-sm text-gray-900">{tt.headerTitle}</h1>
+            <p className="text-xs text-gray-400">{tt.headerSubtitle}</p>
+          </div>
+          <CoinIcon size={30} />
+        </div>
+      </div>
+
+      <div className="max-w-lg mx-auto px-4 py-5">
+        {/* Balance hero */}
+        <motion.div
+          initial={{ opacity: 0, y: -8 }}
+          animate={{ opacity: 1, y: 0 }}
+          className="rounded-2xl p-5 mb-6 text-white relative overflow-hidden shadow-md"
+          style={{ background: GOLD_DARK }}
+        >
+          <div
+            className="absolute inset-0 opacity-20 pointer-events-none"
+            style={{ backgroundImage: "radial-gradient(circle at 80% 10%, white 0%, transparent 55%)" }}
+          />
+          <p className="text-sm font-semibold text-amber-100 mb-3">{tt.walletLabel}</p>
+          <div className="flex items-center gap-4">
+            <img
+              src="/tanga-coin.jpg"
+              alt="Tanga"
+              draggable={false}
+              className="w-18 h-18 rounded-2xl object-cover flex-shrink-0"
+            />
+            <div>
+              <p className="text-5xl font-black text-white leading-none">{balance}</p>
+              <p className="text-amber-200 text-xs font-semibold mt-1">{tt.tangaLabel}</p>
+            </div>
+          </div>
+          <p className="text-amber-200/70 text-[10px] mt-3">
+            {tt.walletNote}
+          </p>
+          <button
+            onClick={() => setLocation("/provider/tanga-history")}
+            className="mt-3 flex items-center gap-1.5 text-[11px] font-bold text-amber-100 hover:text-white transition-colors"
+          >
+            {tt.historyLink}
+          </button>
+        </motion.div>
+
+        {/* Plans */}
+        {!tiersLoading && tiers.length === 0 ? (
+          <div className="text-center py-16">
+            <div className="w-16 h-16 rounded-2xl bg-amber-50 flex items-center justify-center mx-auto mb-4">
+              <Sparkles className="w-8 h-8 text-amber-400" />
+            </div>
+            <p className="font-bold text-gray-600 mb-1">{tt.emptyTitle}</p>
+            <p className="text-sm text-gray-400">{tt.emptyDesc}</p>
+          </div>
+        ) : (
+          <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+            <AnimatePresence>
+              {tiers.map((tier, i) => (
+                <motion.div
+                  key={tier.id}
+                  initial={{ opacity: 0, y: 10 }}
+                  animate={{ opacity: 1, y: 0 }}
+                  transition={{ delay: i * 0.06 }}
+                >
+                  <PlanCard
+                    tier={tier}
+                    buying={buying === tier.id}
+                    bought={bought === tier.id}
+                    onBuy={() => handleBuy(tier)}
+                  />
+                </motion.div>
+              ))}
+            </AnimatePresence>
+          </div>
+        )}
+
+        {/* Referral card */}
+        <div className="mt-6">
+          <ReferralCard title={tt.referralTitle} />
+        </div>
+      </div>
+
+      <BottomNav />
+    </div>
+  );
+}

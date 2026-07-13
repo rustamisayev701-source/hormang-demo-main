@@ -1,0 +1,79 @@
+Design and implement a comprehensive web-based admin dashboard and platform management system for internal marketplace operations. The system must provide secure, role-based access with a single system administrator account (username: hormangVIP, password: ourhormang123) and deliver complete oversight of marketplace activities.
+
+**Core Requirements:**
+
+**Data Models Specification:**
+- User: Profile data, authentication status, role assignments, activity history
+- Order: Transaction details, status tracking, fulfillment data, customer/provider relationships
+- Payment: Payment methods, transaction records, refund processing, payout schedules
+- Review: Rating systems, content moderation status, dispute associations
+- MonetizationPlan: Credit pricing tiers, subscription models, promotional campaigns, revenue sharing rules
+- AdminLog: Comprehensive audit trail of all administrative actions with timestamps and user attribution
+- ModerationAction: Content review decisions, enforcement actions, appeal status tracking
+
+**Dashboard Implementation:**
+- Real-time metrics visualization showing active users, order volumes, revenue trends, and regional distribution
+- Interactive charts with drill-down capabilities for detailed analysis
+- Customizable date ranges and comparison periods
+- Alert system for unusual activity patterns or threshold breaches
+
+**User/Provider Management Interface:**
+- Advanced search and filtering capabilities across all user attributes
+- Bulk operations for account status changes (suspend, reactivate, verify)
+- Detailed user profiles with transaction history and communication logs
+- Provider verification workflow with document upload and review system
+
+**Order Management System:**
+- Multi-status order pipeline with visual workflow indicators
+- Advanced filtering by date, status, value, provider, and customer segments
+- Order detail views with timeline tracking and communication history
+- Integration with shipping and fulfillment systems
+
+**Payment & Payout Management:**
+- Transaction reconciliation dashboard with dispute tracking
+- Automated payout scheduling with manual override capabilities
+- Refund processing workflow with approval chains
+- Financial reporting with exportable statements
+
+**Monetization Control Panel:**
+- Dynamic pricing configuration for credits and subscriptions
+- A/B testing framework for promotional campaigns
+- Revenue sharing rule management with impact modeling
+- Commission structure adjustments with historical tracking
+
+**Technical Specifications:**
+
+**API Architecture:**
+- RESTful endpoints with JWT-based authentication
+- Role-based access control enforcing admin-only permissions
+- Comprehensive filtering, sorting, and pagination on all list endpoints
+- CSV/Excel export functionality with scheduled report generation
+- Rate limiting and request throttling for system protection
+
+**UI/UX Requirements:**
+- Responsive design optimized for desktop operations
+- Data tables with inline editing, sorting, and multi-select capabilities
+- Color-coded status badges with customizable thresholds
+- Bulk action panels with confirmation workflows
+- Keyboard shortcuts for power users
+
+**Security & Compliance:**
+- Multi-factor authentication requirement for admin accounts
+- Session management with automatic timeout and concurrent login restrictions
+- Comprehensive audit logging capturing user identification, IP addresses, and action details
+- Data encryption for sensitive information storage
+- Regular security audit procedures and penetration testing requirements
+
+**Performance & Scalability:**
+- Sub-second response times for dashboard metrics
+- Support for 10,000+ concurrent admin users
+- Real-time data synchronization across all modules
+- Automated backup and disaster recovery procedures
+
+**Deliverables:**
+- Complete technical specification document with API documentation
+- Database schema designs with relationship diagrams
+- Wireframes and mockups for all core screens
+- Security assessment checklist and compliance requirements
+- Deployment guide with environment configuration
+- Testing strategy including unit, integration, and user acceptance testing protocols

@@ -1,0 +1,59 @@
+We need to remove **ALL demo, mock, fake, and example data** from the entire website right now. The app should start completely clean with no pre-filled requests, offers, chats, services, or users (except the currently logged-in user).
+
+### Actions to Perform:
+
+1. **Remove all hardcoded demo data**
+   - Delete any arrays/objects that contain fake requests, offers, chats, upcoming services, or users.
+   - Remove any functions that auto-generate demo data on app load or role switch.
+   - Remove any "seedData", "mockData", "demoChats", "sampleRequests", etc.
+
+2. **Clean localStorage**
+   - On app initialization (in App.js or a useEffect in the root), clear all previous demo keys:
+     ```js
+     localStorage.removeItem('requests');
+     localStorage.removeItem('offers');
+     localStorage.removeItem('chats');
+     localStorage.removeItem('upcomingServices');
+     localStorage.removeItem('users'); // keep only current user if needed
+     // or simply: localStorage.clear(); but be careful with auth
+
+After clearing, initialize empty arrays for:
+requests: []
+offers: []
+chats: []
+upcomingServices: []
+
+
+
+Update Data Loading Logic
+All pages (Provider Home, So'rovlar, Mening so'rovlarim, Suhbatlarim, Dashboard, etc.) must now handle empty states gracefully.
+Show nice empty state messages like:
+"Hozircha so'rovlar yo'q"
+"Yangi takliflar yo'q"
+"Suhbatlar hali yo'q"
+"Yaqinlashayotgan xizmatlar yo'q"
+
+
+Keep Real Functionality
+The centralized data hook (useAppData or similar) should still work.
+Users can create real requests (from questionnaire) and real offers.
+Data created during testing must persist normally via localStorage.
+Profile data for the current user should remain (do not delete the logged-in user's profile).
+
+Role Switching for Testing
+Keep a simple role switcher (Customer / Provider) for development/testing.
+When switching roles, do not load any demo data — only use real data from localStorage.
+
+Final Cleanup
+Remove any auto-respond logic, fake average response times that were hardcoded, and any placeholder cards.
+Ensure that when the app loads fresh, both customer and provider sides show clean/empty states until the user creates real content.
+
+
+Empty State Design (keep it clean)
+
+Use friendly Uzbek text with subtle illustration or icon.
+Include a call-to-action button where appropriate (e.g. "Birinchi so'rovni yaratish" for customers, "Mavjud so'rovlarni ko'rish" for providers).
+
+Implement this complete cleanup now. Start by clearing localStorage keys and removing all mock data generation code. Then update all relevant pages to show proper empty states.
+Make the app completely demo-free and ready for real testing.
+text

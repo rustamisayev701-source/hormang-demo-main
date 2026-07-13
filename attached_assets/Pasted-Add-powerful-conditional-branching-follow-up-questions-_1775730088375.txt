@@ -1,0 +1,44 @@
+Add powerful conditional branching (follow-up questions) to the Question Editor in the Admin Questions Page.
+
+### New Feature:
+For any "single-select" or "multi-select" question, add a new section in the editor modal called:
+
+**"Shartli savollar (Conditional Follow-ups)"**
+
+Behavior:
+- The admin sees all options of the current question.
+- Next to each option there is a button "Follow-up savollar qo'shish" or "Tahrirlash".
+- Clicking it opens the **same question editor** recursively, allowing the admin to add any number of follow-up questions that will only appear if that specific option is selected by the customer.
+- Support unlimited nesting (follow-up questions can also have their own conditional follow-ups).
+- Show a small visual indicator in the main question list if a question has conditional branches (e.g. "3 ta shartli filial").
+
+### Storage:
+Update the Question type to support:
+```ts
+interface Question {
+  id: string;
+  label: string;
+  type: QuestionType;
+  // ... existing fields
+  conditionalBranches?: Record<string, Question[]>;  // key = option value, value = array of follow-up questions
+}
+In the Customer Questionnaire Form:
+
+When the user selects an option that has conditional branches, automatically show the follow-up questions right below it (with nice indentation or a sub-card).
+When the user changes their selection, hide/show the corresponding follow-up questions instantly.
+All answers from conditional branches must be saved correctly in the answers object.
+
+UI Requirements:
+
+Keep the editor clean and not overwhelming.
+In the options list, show a small badge if an option has follow-up questions (e.g. "3 savol").
+Make the recursive editor modal clearly show the current branch (e.g. "Avtomobil uchun shartli savollar").
+Add a "Remove all follow-ups" button per option if needed.
+
+Important:
+
+This feature should only appear for single-select and multi-select questions.
+Do not break any existing questions or the simple "Boshqa" logic we added earlier.
+Keep the rest of the editor exactly as it is now.
+
+Implement this conditional branching system now. Make it powerful but user-friendly for the admin.

@@ -1,0 +1,211 @@
+You are working on a React + TypeScript + Tailwind + Supabase service marketplace project in Replit.
+
+## 🎯 Goal
+
+Refactor the service request question flow and location matching logic.
+
+Currently location is handled as two separate questions:
+
+1. "Xizmat qayerda kerak?"
+
+* example option:
+* Toshkent shahri
+
+2. Conditional follow-up:
+
+* "Toshkent shahri tumani"
+* district variants
+
+There are also separate regional options like:
+
+* Angren
+* Bekobod
+* etc.
+
+This two-step system should be replaced with **one unified location question**, while preserving provider-customer matching logic.
+
+---
+
+## ✅ Replace Existing Location Questions With One Smart Question
+
+Remove old 2-step question dependency and replace with a single question:
+
+**Question label:**
+
+```text id="w1txmq"
+Manzilni kiriting...
+```
+
+---
+
+## New Question UX
+
+Show two main options:
+
+### Option A (default selected)
+
+Use customer saved address from profile
+
+Display as:
+
+```text id="ktak4u"
+📍 Mening manzilim (saved profile address)
+```
+
+Requirements:
+
+* Pull from customer profile address data
+* Pre-selected by default if available
+* User can keep it or change it
+
+---
+
+## Option B
+
+```text id="v6vrdu"
+Boshqa manzil
+```
+
+When clicked, expand unified location selector.
+
+---
+
+## Expanded Selector Structure
+
+Use TWO-LEVEL selector inside same question (not separate question flow).
+
+### First dropdown:
+
+Choose region:
+
+* Toshkent shahri
+* Toshkent viloyati
+
+---
+
+### If "Toshkent shahri":
+
+show district dropdown:
+
+Examples:
+
+* Yunusobod
+* Chilonzor
+* Mirzo Ulug'bek
+* Shayxontohur
+* etc (all 12 districts if available)
+
+---
+
+### If "Toshkent viloyati":
+
+show subregion dropdown:
+
+Examples:
+
+* Angren
+* Bekobod
+* Chirchiq
+* Olmaliq
+* Yangiyo‘l
+* etc (use all existing variants already in system)
+
+---
+
+## Important:
+
+This must behave as ONE question in question builder.
+
+Not:
+Question 1 -> triggers Question 2
+
+Instead:
+Single question component with nested selectors.
+
+---
+
+## Matching Logic (CRITICAL)
+
+Do NOT break provider-location matching.
+
+Refactor matching logic so selected location is stored in structured format like:
+
+```json id="8ob5fv"
+{
+  "regionType": "Toshkent shahri",
+  "subregion": "Yunusobod"
+}
+```
+
+or
+
+```json id="32j2cc"
+{
+  "regionType": "Toshkent viloyati",
+  "subregion": "Angren"
+}
+```
+
+Use this for existing provider-customer location matching.
+
+Preserve:
+
+* provider service area filtering
+* request matching
+* lead routing logic
+* existing location search behavior
+
+Update matching logic if needed to consume new unified structure.
+
+---
+
+## Question Editor Changes (/admin integrated section)
+
+Update question editor so old:
+
+* Xizmat qayerda kerak
+* Toshkent shahri tumani
+
+are replaced by one configurable smart question block:
+
+* Location Selector
+
+Admin should be able to manage:
+
+* city options
+* district options
+* region options
+
+from one place.
+
+---
+
+## UX Requirements
+
+Mobile-first UI.
+
+Prefer:
+
+* radio for "Mening manzilim / Boshqa manzil"
+* expandable nested selectors
+* searchable dropdown if simple to add
+
+Flow should feel very fast.
+
+---
+
+## Reuse Existing Data
+
+Do NOT recreate districts manually if existing data already exists.
+Reuse current region/subregion datasets from old question system.
+
+---
+
+## Deliver
+
+Refactor:
+
+1. Question flow → one unified location question
+2. Matching logic → compatible with new structure
+3. Admin question editor → replace old two-question setup
+4. Keep everything backward-safe and do not break provider matching

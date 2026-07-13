@@ -1,0 +1,53 @@
+Fix the specific issue in the provider side regarding request statistics and naming.
+
+### Critical Correction for Mavjud So'rovlar section:
+
+In the Provider Home (/provider-home or /dashboard) "Mavjud So'rovlar" area:
+
+- Change the third stat from **"Yuborilgan takliflar"** to **"Taklif olmagan so'rovlar"**
+- The number should represent **requests that have received 0 offers from any providers** so far.
+
+Update the three stats to be:
+- **Jami** → Total available requests
+- **Yangi so'rovlar** → New/unseen requests (with red dot)
+- **Taklif olmagan so'rovlar** → Requests that still have 0 offers from any providers
+
+### Global Change Throughout the App:
+Everywhere a request is displayed (both for providers and customers), **add the number of offers** it has received:
+
+Examples:
+- "Takliflar: 3 ta"
+- "0 ta taklif" (especially highlight when zero)
+- "7 ta taklif olgan"
+
+Update these locations:
+- Provider Home → Mavjud So'rovlar cards
+- /provider/requests (So'rovlar page) – both sliding cards and list view
+- Customer side → Mening so'rovlarim (show how many offers each request has)
+- Any request preview or detail view
+
+### Visual Reference
+Follow the style from the uploaded screenshot for the stats row in Provider Home:
+- Three columns with big numbers
+- "Jami", "Yangi so'rovlar", "Taklif olmagan so'rovlar"
+- Keep the clean card design with location, time ago, and pagination dots at the bottom.
+
+### Additional Improvements:
+- When showing "Taklif olmagan so'rovlar", make the number and label clearly visible.
+- In the request cards, show "Takliflar: X ta" prominently (make 0 offers stand out, perhaps in red or with different styling).
+- Ensure the data is consistent across customer and provider views (offers count must match in localStorage).
+
+### Technical
+- Update the logic that calculates statistics:
+  - Total requests
+  - New requests
+  - Requests with 0 offers
+- Make sure offer count updates in real-time (after a provider submits an offer, the count should increase immediately for everyone).
+- Keep all text in Uzbek (Latin script).
+
+Fix the naming and statistics logic now:
+1. Change third metric to "Taklif olmagan so'rovlar"
+2. Add "Takliflar: X ta" information to every request display throughout the app
+3. Make sure the numbers are calculated correctly from localStorage data
+
+Implement these changes cleanly.

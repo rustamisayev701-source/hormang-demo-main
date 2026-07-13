@@ -1,0 +1,341 @@
+
+## 🎯 Goal
+
+Implement a full **User Report System** where both customers and providers can report inappropriate users directly from the **Public Profile Preview Modal (PPP Modal)**.
+
+The system must include:
+
+* report UI inside PPP modal
+* reporting modal/drawer
+* backend storage logic
+* admin moderation page
+* safeguards against abuse
+* clean, professional UX
+
+---
+
+# 🧠 Core UX Principle
+
+Reporting should feel:
+
+* contextual
+* subtle
+* serious
+* easy to access
+
+DO NOT make it visually aggressive.
+
+---
+
+# ✅ 1. Add "Report User" Action to PPP Modal
+
+## Location:
+
+Public Profile Preview Modal (everywhere except in profile settings page)
+
+---
+
+## Add top-right report button near X(dismiss) button using:
+
+* rounded-xl
+* subtle hover states
+* neutral styling
+
+---
+
+# ✅ 2. Open Report Drawer / Modal
+
+When clicking:
+
+```text id="31c28d"
+Report user
+```
+
+Open:
+
+* slide-up mobile sheet OR
+* right-side drawer/modal
+
+Reuse existing modal/drawer patterns if available.
+
+---
+
+# ✅ 3. Report Form UI
+
+## Header:
+
+```text id="1jlwm5"
+Foydalanuvchi haqida shikoyat
+```
+
+---
+
+## Section 1 — Reason Selection
+
+### Required radio/select options:
+
+* Spam
+* Soxta profil
+* Qo'pol muomala
+* Firibgarlik
+* Nomaqul kontent
+* Xizmatdan tashqari aloqa
+* Boshqa
+
+---
+
+# ✅ 4. Optional Description
+
+Textarea:
+
+```text id="ckp4w8"
+Qo‘shimcha izoh...
+```
+
+Max:
+
+* 500 chars
+
+---
+
+# ✅ 5. Evidence Upload (IMPORTANT)
+
+Allow uploading:
+
+* images
+* screenshots
+
+Max:
+
+* 3 files
+
+Reuse existing upload component if possible.
+
+---
+
+# ✅ 6. Submit Button
+
+Primary button:
+
+```text id="0gl4jq"
+Shikoyatni yuborish
+```
+
+---
+
+## After successful submit:
+
+* close modal
+* show toast:
+
+```text id="j1wjlwm"
+Shikoyatingiz yuborildi ✅
+```
+
+---
+
+# ✅ 7. Backend Data Structure
+
+Create new entity/table:
+
+```text id="rg3a1m"
+user_reports
+```
+
+DO NOT merge with generic feedback system.
+
+---
+
+## Suggested schema:
+
+```ts id="9dhnjj"
+{
+  id: string,
+  reporterUserId: string,
+  reportedUserId: string,
+
+  reason:
+    | "spam"
+    | "fake_profile"
+    | "abuse"
+    | "fraud"
+    | "inappropriate_content"
+    | "outside_contact"
+    | "other",
+
+  description?: string,
+
+  attachments?: string[],
+
+  status:
+    | "new"
+    | "in_review"
+    | "resolved"
+    | "dismissed",
+
+  adminNote?: string,
+
+  createdAt: string
+}
+```
+
+---
+
+# ✅ 8. Safeguards (VERY IMPORTANT)
+
+## Prevent self-reporting
+
+```ts id="5b9s4j"
+if (reporterUserId === reportedUserId)
+```
+
+Block submission.
+
+---
+
+## Prevent spam reports
+
+If same user reports same target within 24h:
+
+* prevent duplicate report
+
+---
+
+## Require authentication
+
+Only logged-in users can report.
+
+---
+
+# ✅ 9. Admin Panel Integration
+
+Create new admin page:
+
+```text id="ehm7rm"
+/admin/reports
+```
+
+---
+
+# Admin Table Columns
+
+| Reported user | Reporters(store them all there) | Reason | View details | Date | Status
+
+---
+
+# Reporter & Reported User Cells
+
+Use:
+
+* avatar
+* name
+* role badge
+
+NO raw IDs.
+
+---
+
+# ✅ 10. Admin Actions
+
+Admin should be able to:
+
+* mark as:
+
+  * in_review
+  * resolved
+  * dismissed
+
+* write internal admin note
+
+---
+
+# ✅ 11. User Risk Indicators (IMPORTANT)
+
+In admin users table:
+
+If user has many reports:
+
+```text id="4ivnqv"
+⚠️ 5 reports
+```
+
+---
+
+## Logic:
+
+Count:
+
+```ts id="lr9tm5"
+user_reports.filter(r => r.reportedUserId === user.id)
+```
+
+---
+
+# ✅ 12. Optional Block User Feature
+
+Inside report modal actions:
+
+```text id="jlwm4x"
+Block user
+```
+
+Behavior:
+
+* hide chats
+* hide offers
+* prevent interactions
+
+Store blocked users locally or in DB.
+The block should affect interactions with only the user who blocked them.
+---
+
+# 🎨 13. UI Style Rules
+
+Use:
+
+* neutral colors
+* subtle red/amber accents
+* compact modern cards
+* rounded-2xl
+* mobile-first
+
+DO NOT create overly aggressive “danger UI”.
+
+---
+
+# ⚠️ 14. DO NOT
+
+* Do NOT expose report counts publicly
+* Do NOT notify reported users
+* Do NOT allow anonymous reports
+* Do NOT use raw IDs in admin UI
+
+---
+
+# 🎯 Expected Result
+
+Users can:
+
+* report inappropriate users directly from profile preview
+* attach evidence
+* feel safe using the platform
+
+Admins can:
+
+* moderate reports efficiently
+* identify problematic users
+* track abuse patterns
+
+---
+
+## Deliver
+
+1. PPP modal actions menu
+2. Report drawer/modal
+3. Report backend storage logic
+4. `/admin/reports`
+5. Moderation actions
+6. User risk indicators
+7. Safeguards against abuse
+
+Build it clean, scalable, and production-ready.

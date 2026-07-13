@@ -1,0 +1,150 @@
+1. User Roles and Flow Overview
+Hormang has two main user roles:
+Buyer (customer who needs services or products).
+Provider (service provider who sells services or small goods).
+There is also an optional admin role (for platform management, not for the public landing).
+Flow overview (high level):
+User goes to Authentication Screen (Entry Screen).
+Chooses: Buyer or Provider (one‑time role selection at registration).
+Goes through Registration (email/phone + password + basic profile).
+On next visits: Login via email/phone + password or other secure methods.
+After login: redirected to the main app/home based on role.
+
+
+2. Registration Flow (Buyer)
+Goal: make registration quick, clear, and minimal.
+Step 1: Choose role
+Title: “How would you like to use Hormang?”
+Options:
+“I’m looking for services” (Buyer).
+“I provide services” (Provider).
+This choice is stored in role field and cannot be changed later without admin support (or via simple “switch” UI later if you decide).
+Step 2: Contact and basic info (Buyer)
+Data collected:
+First name (required).
+Last name (required).
+Email or phone (user can choose):
+If email: standard email validation.
+If phone: format validation (e.g., Uzbek number format + country code).
+Password (with strong guidelines: 8+ chars, upper/lower, digit/special symbol).
+Optional: Avatar (photo, can be uploaded later in profile).
+Optional: Geolocation permission (asked on app‑level, not registration screen itself).
+UX details:
+One screen or segmented steps (e.g., “Step 1: Contact”, “Step 2: Password”).
+Real‑time validation: show “invalid email/phone”, “weak password” instantly.
+“Terms of Service” and “Privacy Policy” links with checkbox: “I agree to Hormang Terms and Privacy Policy.”
+Backend requirements (conceptual):
+Create User model with: id, email, phone, password_hash, role, created_at, updated_at.
+Password is stored as hashed (bcrypt or Argon2).
+If user provides both email and phone, store both, but allow login via either.
+After successful registration (Buyer):
+Show a success confirmation (e.g., “Welcome to Hormang, [Name]!”).
+Optional: short onboarding screen explaining “Your role: Buyer. You can now search services, send requests, chat with providers, and leave reviews.”
+Redirect to Home / Services Feed.
+
+
+3. Registration Flow (Provider / Service Seller)
+Goal: same simplicity, but add a bit more profile info because provider is a “seller”.
+Step 1: Choose role
+Same as Buyer: user selects “I provide services”.
+Step 2: Contact and basic info (same as Buyer)
+First name, last name, email/phone, password.
+Validation, UX, and backend requirements identical to Buyer (same User model).
+Step 3: Provider profile (core part)
+Data collected:
+Services categories (multi‑select from predefined list, e.g., “Cleaning”, “Repairs”, “Nanny”, “Cooking”, “Delivery”, “Crafts”, etc.).
+Short description (bio): “Tell us about yourself and what you can do (1–2 sentences).”
+Portfolio (at least 1–3 photos or files, depending on service type).
+Optional:
+Working hours / availability (e.g., “Available: 10:00–20:00”).
+Preferred location / radius (for home‑based services, e.g., “Tashkent, max 10 km”).
+UX details:
+Clear step labels:
+“Step 1: Contact Info”
+“Step 2: Services & Profile”
+File upload: drag‑and‑drop or “Choose files” button, with previews and remove option.
+Optional: helper text: “These photos will be shown in your profile to help buyers trust you.”
+Backend requirements (conceptual):
+Create ProviderProfile model linked to User (one‑to‑one).
+Fields: categories, bio, portfolio_images, is_verified (optional, later).
+Referential integrity: user_id → ProviderProfile.
+After successful registration (Provider):
+Show success message: “Your profile is ready. You can now receive requests and start earning.”
+Optional onboarding: short explanation of “Requests, Orders, Chats, and Payments.”
+Redirect to Provider Home / Requests List.
+
+
+4. Login Flow (for both Buyer and Provider)
+Goal: fast, secure, intuitive login.
+Login screen elements:
+Input: Email or phone (same as registration).
+Input: Password.
+Optional: Remember me checkbox (stores refresh token securely).
+Link: “Forgot password?”.
+Button: “Log in”.
+Alternative: text “New user? Register now” linking to Registration.
+UX details:
+If user starts typing phone/email, hint: “Use the same email/phone you used when registering.”
+Strong password indicator on login (tooltip: “Enter the password you created during registration”).
+Error handling:
+“User not found” (generic, avoid “email not found” for security).
+“Invalid password” (no detail leaks).
+Unified message: “Incorrect email/phone or password.”
+Backend authentication logic (conceptual):
+Verify email/phone + password via User model.
+On success:
+Generate JWT access token and refresh token.
+Store last_login_at in User model.
+On failure: rate limiting (max 5 attempts, then temporary lock/OTP ask).
+Role‑based redirection:
+role = buyer → send to Buyer Home.
+ContextMenu = provider → send to Provider Home / Requests.
+
+
+5. Session and Security Details
+Session management:
+Access token expiration: 1 hour (can be configured).
+Refresh token: 7–30 days, stored in HTTP‑only, secure cookie or secure storage (mobile app).
+Logout: invalidate tokens on server side.
+Security measures:
+HTTPS for all endpoints.
+Hashed passwords, no plain text.
+Rate limiting on login and registration (prevent brute‑force).
+CORS config to allow only trusted origins.
+JWT‑based role checks on all protected API endpoints.
+Optional: OTP / 2FA on login if user opts‑in (email/phone‑based one‑time code).
+User privacy:
+Explicit consent for data usage in TOS/Privacy Policy.
+No sensitive data (e.g., ID, passport) stored unless absolutely required and encrypted.
+
+
+6. Error Handling and UX
+Error messages (user‑friendly):
+“Please check your email/phone and password.”
+“Something went wrong. Please try again later.” (generic for backend errors).
+“Too many attempts. Please wait a few minutes.” (rate limit).
+Loading states:
+Show loading spinner during login/registration.
+Disable submit button once clicked to prevent multiple requests.
+Accessibility:
+Proper labels on inputs (for screen readers).
+Color‑blind friendly UI (contrast, not only color‑based indicators).
+
+
+7. Optional Advanced Features (conceptual)
+If you want the system to be even more professional and future‑proof:
+Phone/email verification at registration:
+Send OTP to phone/email, ask user to confirm before account is fully active.
+SSO (email/Google/Apple/Telegram):
+Allow login with OAuth providers (Google, Apple, Telegram) as alternative to email/phone + password.
+Multi‑device login management:
+“Active sessions” list in profile (logout other devices).
+
+
+Now, generate a detailed, professional, but creative and UX‑conscious specification for the Hormang authentication system based on this prompt.
+Include:
+Clear user flows (wireframe‑style step‑by‑step).
+Required data fields.
+Validation and error messages.
+Backend‑side logic at a high level.
+Make sure the final design feels simple, fast, secure, and uniquely aligned with Hormang’s brand and local market (Uzbekistan).

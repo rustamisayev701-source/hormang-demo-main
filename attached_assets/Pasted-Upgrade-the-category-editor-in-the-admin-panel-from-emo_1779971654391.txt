@@ -1,0 +1,313 @@
+Upgrade the category editor in the admin panel from emoji-based selection to a premium mobile-first icon + color + preview system.
+
+Goal
+
+Replace the current emoji picker in category create/edit modal.
+
+Current:
+
+emoji: "🔧"
+
+New:
+
+icon?: string
+iconFamily?: string
+color?: string
+gradient?: string | null
+emoji?: string // legacy fallback only
+1. Icon library
+
+Use:
+
+Primary
+
+Phosphor Icons React
+
+Install:
+
+npm install @phosphor-icons/react
+Optional future support
+
+Prepare structure compatible with:
+
+Iconify
+
+but do not fully migrate to it now.
+
+Meaning DB should support:
+
+iconFamily: "phosphor"
+
+for now.
+
+This keeps future extensibility.
+
+2. Replace emoji picker with curated icon picker
+
+Replace:
+
+EMOJI
+🔧 🧹 🚗 ...
+
+with:
+
+IKONA
+
+Grid layout:
+
+6 columns mobile
+rounded-xl buttons
+icon centered
+subtle border
+hover scale
+selected state highlighted
+3. Include ~30 curated icons
+Priority 9 — most important for current Hormang categories
+Wrench
+Broom
+Car
+Truck
+Sparkle
+BookOpen
+Hammer
+Heartbeat
+PaintBrush
+
+These map to:
+
+Ta’mirlash → Wrench
+Tozalash → Broom
+Avto xizmat → Car
+Ko‘chirish → Truck
+Go‘zallik → Sparkle
+Ta’lim → BookOpen
+Qurilish → Hammer
+Hamshiralik → Heartbeat
+Bo‘yoq / dizayn → PaintBrush
+Additional 21 future-ready icons
+Scissors
+Camera
+Laptop
+Package
+Gift
+CookingPot
+Dog
+Baby
+Flower
+Sofa
+Plug
+PaintRoller
+ShieldCheck
+MapPin
+Storefront
+Briefcase
+Basket
+Shower
+Fan
+House
+DeviceMobile
+4. Color system upgrade
+
+Keep existing color picker but improve it.
+
+Solid colors
+
+Keep selectable circles.
+
+Examples:
+
+#3B82F6
+#6366F1
+#10B981
+#F59E0B
+#EC4899
+#8B5CF6
+#EF4444
+#14B8A6
+#64748B
+Add gradient presets
+
+New optional section:
+
+Gradient
+
+Preset chips:
+
+Blue → Indigo
+Sky → Cyan
+Emerald → Green
+Amber → Orange
+Pink → Rose
+Purple → Violet
+Slate → Gray
+
+Store as:
+
+gradient?: "blue-indigo"
+
+or null.
+
+If gradient exists:
+prefer gradient over solid color.
+
+5. Live category preview (important)
+
+Below icon + color picker add:
+
+Preview
+
+Live card preview updates instantly while editing.
+
+Example UI:
+
+[gradient circle icon]   Ta’mirlash
+                         Xizmat kategoriyasi
+
+Preview updates when admin changes:
+
+icon
+color
+gradient
+name
+6. Rendering rules across platform
+
+Everywhere categories appear:
+
+customer homepage
+provider home
+category cards
+category badges
+request preview
+filters
+admin lists
+
+Render using:
+
+<CategoryIcon />
+
+central shared component.
+
+CategoryIcon component
+
+Accept:
+
+icon
+iconFamily
+color
+gradient
+size
+Render style
+
+Wrapper:
+
+rounded-full
+flex
+items-center
+justify-center
+
+Background:
+
+solid color OR gradient
+
+Icon:
+
+white
+
+Optional:
+
+shadow-sm
+7. Backward compatibility
+
+Do not break old categories.
+
+If category has:
+
+emoji
+
+but no icon:
+
+fallback render:
+
+emoji
+
+If icon exists:
+
+always use icon.
+
+8. Migration
+
+On category edit:
+
+if only emoji exists:
+
+auto-suggest closest icon:
+
+Example:
+
+🔧 → Wrench
+🧹 → Broom
+🚗 → Car
+🚚 → Truck
+🎨 → PaintBrush
+
+Admin can adjust manually.
+
+No forced migration.
+
+9. UX polish
+
+Selected icon state:
+
+blue border
+soft blue background
+slight scale
+
+Hover:
+
+scale-105
+transition-all
+
+Selected gradient:
+
+show small check badge.
+
+10. Do not change customer/provider category card layouts
+
+Important:
+
+Do NOT redesign the visual layout of category cards on customer/provider side.
+
+Only upgrade the visual asset inside them:
+
+emoji → premium icon chip
+
+Keep:
+
+card sizes
+spacing
+navigation
+interactions
+
+unchanged.
+
+Acceptance checklist
+
+✅ emoji picker removed from admin editor
+
+✅ 30 curated Phosphor icons available
+
+✅ top 9 fit current Hormang categories
+
+✅ solid colors remain
+
+✅ gradient presets added
+
+✅ live preview card added
+
+✅ old emoji categories still work
+
+✅ categories render via shared CategoryIcon component
+
+✅ customer/provider UI unchanged except improved icon visuals
+
+Goal: make Hormang categories feel premium, consistent, mobile-native, and scalable while preserving existing platform structure.

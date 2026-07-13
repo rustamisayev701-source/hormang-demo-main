@@ -1,0 +1,290 @@
+You are working on a React + TypeScript + Tailwind + Supabase (or localStorage fallback) service marketplace project in Replit.
+
+## 🎯 Goal
+
+Implement a **full Audit Log System** that tracks meaningful system actions, stores them, and displays them in an admin UI.
+
+This system must include:
+
+* storage layer (Supabase or localStorage fallback)
+* reusable logging utility (hooks/functions)
+* automatic tracking for key actions
+* admin UI with filters and details
+
+---
+
+# 🧠 Core Principle
+
+Log only **high-value, traceable actions**:
+
+* Admin actions
+* Marketplace lifecycle events
+* Financial (Tanga) changes
+* Referral events
+* Risk/flag actions
+
+DO NOT log UI interactions (clicks, scrolls, etc.)
+
+---
+
+# ✅ 1. Data Model
+
+Create AuditLog type:
+
+```ts id="audit_type"
+type AuditLog = {
+  id: string;
+  actorId: string;
+  actorRole: "admin" | "provider" | "customer" | "system";
+  action: string;
+  targetId?: string;
+  targetType?: "user" | "request" | "offer" | "referral" | "tanga";
+  description: string;
+  metadata?: Record<string, any>;
+  createdAt: string;
+};
+```
+
+---
+
+# ✅ 2. Storage Layer
+
+## Option A: Supabase (preferred)
+
+Create table:
+
+```sql id="audit_sql"
+audit_logs (
+  id uuid primary key,
+  actor_id text,
+  actor_role text,
+  action text,
+  target_id text,
+  target_type text,
+  description text,
+  metadata jsonb,
+  created_at timestamp
+)
+```
+
+---
+
+## Option B: localStorage fallback
+
+Key:
+
+```ts id="audit_ls"
+auditLogs: AuditLog[]
+```
+
+---
+
+# ✅ 3. Logging Utility (CRITICAL)
+
+Create reusable function:
+
+```ts id="log_fn"
+function logAction(log: Omit<AuditLog, "id" | "createdAt">) {
+  const newLog: AuditLog = {
+    ...log,
+    id: crypto.randomUUID(),
+    createdAt: new Date().toISOString(),
+  };
+
+  // Save to Supabase OR localStorage
+}
+```
+
+---
+
+## Create hook:
+
+```ts id="hook"
+export function useAuditLog() {
+  return { logAction };
+}
+```
+
+---
+
+# ✅ 4. Integrate Logging (Tracking Hooks)
+
+Add logging to these actions:
+
+---
+
+## Admin Actions
+
+* ban/unban user
+* verify user
+* add admin note
+* delete request
+* remove offer
+
+Example:
+
+```ts id="admin_log"
+logAction({
+  actorId: admin.id,
+  actorRole: "admin",
+  action: "USER_BANNED",
+  targetId: user.id,
+  targetType: "user",
+  description: `Admin banned user ${user.name}`,
+});
+```
+
+---
+
+## Marketplace Events
+
+* request created
+* offer submitted
+* offer accepted
+* job completed
+
+---
+
+## Financial (Tanga)
+
+* referral reward
+* manual adjustment
+
+---
+
+## Referral Events
+
+* referral created
+* referral completed
+* reward granted
+
+---
+
+## Risk Events
+
+* user flagged
+* suspicious behavior
+
+---
+
+# ✅ 5. Admin UI
+
+Route:
+
+```text id="audit_route"
+/admin/audit-log
+```
+
+---
+
+## Table Layout
+
+Columns:
+
+* Time
+* Actor
+* Action
+* Target
+* Description
+
+Example:
+
+```text id="audit_example"
+10:45 | Admin | USER_BANNED | Ali | Admin banned user Ali
+```
+
+---
+
+# ✅ 6. Filters (IMPORTANT)
+
+Add filter controls:
+
+* Actor role (admin / provider / customer / system)
+* Action type (dropdown)
+* Target type (user / request / offer)
+* Date range
+
+---
+
+# ✅ 7. Expandable Details
+
+Each row expandable:
+
+Show:
+
+* metadata JSON
+* old → new values (if applicable)
+
+Example:
+
+```text id="expand"
+Status: Active → Banned
+```
+
+---
+
+# ✅ 8. Grouping / Categories
+
+Add tabs or labels:
+
+* Admin Actions
+* Marketplace
+* Financial
+* Referrals
+* Risk
+
+---
+
+# ✅ 9. Performance
+
+* paginate logs
+* lazy load
+* limit initial fetch (e.g. latest 50)
+
+---
+
+# ✅ 10. UX Requirements
+
+* clean admin-style UI
+* readable timeline feel
+* highlight important actions:
+
+  * red = bans
+  * green = rewards
+  * yellow = warnings
+
+---
+
+# ✅ 11. Optional (Bonus)
+
+If easy, add:
+
+* export logs (CSV)
+* search by keyword
+* click actor/target → open related entity
+
+---
+
+# 🎯 Expected Result
+
+* All important system actions are tracked
+* Admin can audit marketplace activity
+* Logs are searchable, filterable, and readable
+* System is reusable and scalable
+
+---
+
+## Deliver
+
+1. AuditLog data model
+2. Storage (Supabase or localStorage)
+3. logAction utility + hook
+4. Integration into key system events
+5. `/admin/audit-log` UI
+6. Filters + expandable details
+
+Do not break:
+
+* existing flows
+* performance
+* user interactions

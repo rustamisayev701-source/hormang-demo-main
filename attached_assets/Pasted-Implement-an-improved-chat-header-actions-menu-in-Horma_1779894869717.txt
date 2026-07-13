@@ -1,0 +1,245 @@
+Implement an improved chat header actions menu (⋯) in Hormang with tightly integrated actions.
+
+🎯 Goal
+
+Expand the existing chat header menu.
+
+Current:
+
+🧹 Suhbatni tozalash
+
+New menu should include:
+
+👤 Profilni ko‘rish
+📄 So‘rov / Taklif tafsilotlari
+🚩 Foydalanuvchini shikoyat qilish
+🚫 Foydalanuvchini bloklash
+🧹 Suhbatni tozalash
+
+Keep the UI minimal and consistent with current chat header.
+
+1. View Profile
+
+Add:
+
+👤 Profilni ko‘rish
+Behavior
+
+Opens the existing Public Profile Preview Modal of the other participant.
+
+Use the exact same modal already used elsewhere in Hormang.
+
+Do NOT create a new profile modal.
+
+Must work for:
+
+customer viewing provider
+provider viewing customer
+2. Request / Offer Details
+
+Add:
+
+📄 So‘rov / Taklif tafsilotlari
+Behavior
+
+Open the existing read-only modal already used in chat.
+
+Do not rebuild UI.
+
+Reuse current request-offer details component.
+
+Should show:
+
+request title
+category
+request description
+budget
+location
+offer price
+offer note if exists
+status
+
+This menu item should simply trigger the same existing modal.
+
+3. Report User (shared with PPP modal)
+
+Add:
+
+🚩 Foydalanuvchini shikoyat qilish
+CRITICAL
+
+Must be fully interconnected with reporting from Public Profile Preview Modal.
+
+Meaning:
+
+Both places use same source:
+same report creation logic
+same DB/storage
+same report schema
+same admin panel reports queue
+
+No duplicated report systems.
+
+Behavior
+
+If user reports from chat:
+
+prefill:
+
+source: "chat"
+chatId
+reportedUserId
+reportedById
+
+Optional:
+
+lastMessageId
+
+if available.
+
+If reported from PPP modal:
+
+source: "profile"
+
+Everything goes to same admin panel report list.
+
+4. Block User (shared with PPP modal)
+
+Add:
+
+🚫 Foydalanuvchini bloklash
+CRITICAL
+
+Must share exact same block logic as PPP modal.
+
+One source of truth.
+
+No separate chat-only block state.
+
+If user is blocked from:
+
+chat header
+OR
+Public Profile Preview Modal
+
+both should immediately reflect blocked state.
+
+Behavior after block
+
+Blocked user:
+
+❌ cannot send new messages
+
+❌ cannot start new chats
+
+Optional:
+❌ cannot send offers
+
+Existing history remains visible.
+
+UI state
+
+If already blocked:
+
+show:
+
+🔓 Blokdan chiqarish
+
+instead of block.
+
+Unblocking updates both:
+
+chat menu
+PPP modal button state
+
+instantly.
+
+5. Clear Conversation
+
+Keep existing:
+
+🧹 Suhbatni tozalash
+
+No behavior change.
+
+Continue:
+
+clears only for current user
+does not delete for other participant
+Menu order
+
+Recommended order:
+
+👤 Profilni ko‘rish
+📄 So‘rov / Taklif tafsilotlari
+────────────
+🚩 Foydalanuvchini shikoyat qilish
+🚫 Foydalanuvchini bloklash / 🔓 Blokdan chiqarish
+────────────
+🧹 Suhbatni tozalash
+
+Use separators for clarity.
+
+UI design
+
+Use existing dropdown/menu component.
+
+Style:
+
+rounded-xl
+white background
+subtle shadow
+hover gray-50
+red text for:
+report
+block
+clear
+
+Icons from Lucide React:
+
+User
+FileText
+Flag
+Ban
+Trash2
+Live sync requirements
+
+Very important.
+
+Changes made in chat menu must reflect immediately in PPP modal.
+
+Changes made in PPP modal must reflect immediately in chat menu.
+
+Without page refresh.
+
+Examples:
+
+Block in chat menu
+
+→ PPP modal button becomes:
+
+Blokdan chiqarish
+Unblock in PPP modal
+
+→ chat menu updates to:
+
+Foydalanuvchini bloklash
+Report submitted from chat
+
+→ visible in admin reports exactly same as profile report
+
+Acceptance checklist
+
+✅ profile preview opens from chat
+
+✅ request/offer details modal opens from chat
+
+✅ report action shares same report system as PPP modal
+
+✅ block/unblock shares same state with PPP modal
+
+✅ changes sync instantly both directions
+
+✅ clear conversation remains unchanged
+
+Do not redesign chat header—only extend existing action menu and connect to current Hormang components/state.

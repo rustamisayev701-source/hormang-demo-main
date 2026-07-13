@@ -1,0 +1,55 @@
+We want every interaction in the app to work in real-time using only localStorage. No more stale data after actions.
+
+### Core Requirement: Create a centralized localStorage-based state system
+
+1. **Data Keys in localStorage** (standardize these):
+   - `users` — array of users (with role: customer/provider, profile data, completion %)
+   - `requests` — all service requests (with offersCount, status: active/inactive, etc.)
+   - `offers` — all offers (linked to requestId and providerId)
+   - `chats` — chat conversations (array of messages per request+provider pair)
+   - `upcomingServices` — accepted jobs for providers
+
+2. **Create a custom hook `useAppData`** (or Context + custom hook) that:
+   - Loads all data from localStorage on app start
+   - Provides functions to update any data (addRequest, addOffer, updateRequestStatus, addMessage, markServiceDone, etc.)
+   - Automatically saves to localStorage after every change
+   - Forces React components to re-render when relevant data changes (useState + useEffect pattern)
+
+3. **Make these interactions fully functional and instant**:
+   - **Provider submits an offer** → 
+     - Offer saved
+     - Request's `offersCount` increases immediately
+     - Customer's "Olingan takliflar" updates instantly
+     - "Taklif olmagan so'rovlar" count decreases if it was 0
+   - **Customer accepts/rejects an offer** → 
+     - Offer status updates
+     - Request moves to "Yakunlangan" if needed
+     - Provider's "Yaqinlashayotgan xizmatlar" updates
+   - **Provider marks service as "Bajarildi"** → removes from upcoming, updates history
+   - **Provider ignores a request** → adds to ignored section
+   - **Sending a chat message** → appears instantly for both sides (simulate by switching roles)
+   - **Profile updates** (photo, info) → reflects everywhere (dashboard, header, public profile, completion %)
+
+4. **Real-time feel across role switching**
+   - Add a simple role switcher (for testing): "Switch to Customer" / "Switch to Provider" button in header or footer during development.
+   - After any action as one role, switching to the other role should show updated data immediately (no refresh needed).
+
+5. **UI Updates**
+   - After any action, relevant pages (So'rovlar, Takliflar, Suhbatlarim, Dashboard, Upcoming Services) must refresh their data automatically.
+   - Use the centralized hook in all major components (MyRequests, ProviderRequests, Offers, Chats, Dashboard, etc.).
+   - Add success toasts for actions (e.g. "Taklif yuborildi!", "Xizmat bajarildi").
+
+6. **Fix remaining bugs while doing this**
+   - Ensure offer count ("Takliflar: X ta") updates everywhere correctly.
+   - "Taklif olmagan so'rovlar" must reflect real zero-offer requests.
+   - Profile picture and completion % must update live.
+
+### Implementation Tips
+- Use a single source of truth via custom hook or Context + useReducer for complex updates.
+- Wrap every setItem with proper JSON.stringify and error handling.
+- Listen to 'storage' event if possible for multi-tab feel (bonus).
+- Keep everything in Uzbek UI text.
+
+Start by creating the centralized `useAppData` hook or data manager, then update the key pages (Provider So'rovlar, Customer Takliflar, Dashboard, Chat) to use it so all interactions feel live.
+
+Make the app fully interactive and testable in real-time now.

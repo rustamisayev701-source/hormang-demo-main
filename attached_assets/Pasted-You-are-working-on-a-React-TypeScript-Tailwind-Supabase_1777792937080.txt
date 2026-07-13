@@ -1,0 +1,352 @@
+You are working on a React + TypeScript + Tailwind + Supabase (or localStorage fallback) service marketplace project in Replit.
+
+## 🎯 Goal
+
+Build an **Advanced Users Management System** inside `/admin/users` that acts as a **control center for customers and providers**, not just a list.
+
+This system must support:
+
+* user monitoring
+* performance tracking
+* trust/risk management
+* admin actions
+* referral visibility
+
+---
+
+# 🧠 Core Concept
+
+Users = ALL participants:
+
+* Customers
+* Providers
+* Dual-role users
+
+Use ONE unified system with role-based data.
+
+---
+
+# ✅ 1. Main Users Table
+
+Route:
+
+```text
+/admin/users
+```
+
+Create a powerful table with columns:
+
+### Identity
+
+* Name
+* Phone
+* Role (Customer / Provider / Both)
+
+### Activity
+
+* Last active
+* Created date
+
+### Performance (Provider only)
+
+* Rating (⭐)
+* Jobs completed
+* Response rate (if available)
+
+### Marketplace Value
+
+* Total earned (provider)
+* Total spent (customer)
+
+### Referral
+
+* Referral code
+* Referred by
+* Total referrals
+* Tanga earned from referrals
+
+### Trust / Risk
+
+* Verification status (verified / not)
+* Flags count
+* Cancellation rate
+
+---
+
+# ✅ 2. Filters (Very Important)
+
+Add filter panel:
+
+### Role
+
+* All
+* Customers
+* Providers
+* Both
+
+### Activity
+
+* Active last 7 days
+* Inactive
+* New users
+
+### Performance
+
+* Top providers
+* Low rating (<3.5)
+* No completed jobs
+
+### Risk
+
+* Flagged users
+* High cancellation
+* Suspicious activity
+
+### Referral
+
+* Top referrers
+* No referrals
+
+---
+
+# ✅ 3. Search
+
+Global search:
+
+* name
+* phone
+* referral code
+
+---
+
+# ✅ 4. User Detail Panel (CRITICAL)
+
+Click user → open full detail panel (modal or page)
+
+---
+
+## A. Overview
+
+* Name
+* Phone
+* Role
+* Verification status
+* Rating
+* Referral code
+* Referred by
+
+---
+
+## B. Activity Timeline
+
+```text
+User signed up
+Created request
+Received offers
+Completed job
+Left review
+```
+
+---
+
+## C. Requests (if customer)
+
+* list of requests
+* status
+* providers hired
+
+---
+
+## D. Offers (if provider)
+
+* offers sent
+* accepted / rejected
+* pricing patterns
+
+---
+
+## E. Reviews
+
+* received (provider)
+* given (customer)
+
+---
+
+## F. Referral Section
+
+* invited users list
+* pending vs completed
+* total Tanga earned
+
+---
+
+## G. Tanga History
+
+* full transaction list
+* referral rewards clearly labeled
+
+---
+
+# ✅ 5. Admin Actions (IMPORTANT)
+
+Add control buttons:
+
+### Account Control
+
+* Suspend / Ban user
+* Reactivate user
+* Verify user manually
+
+---
+
+### Trust / Moderation
+
+* Flag user
+* Remove flag
+* Add admin note
+
+---
+
+# ✅ 6. Internal Notes System
+
+Admins can write notes:
+
+```text
+"Provider often cancels"
+"Customer reliable"
+```
+
+Stored in:
+
+```ts
+user.adminNotes: string[]
+```
+
+NOT visible to users.
+
+---
+
+# ✅ 7. Tags / Labels System
+
+Allow tagging users:
+
+Examples:
+
+* VIP Customer
+* Top Provider
+* High Risk
+* New User
+
+Display as colored badges.
+
+---
+
+# ✅ 8. Top Section Metrics
+
+At top of `/admin/users`:
+
+* Total users
+* Active users
+* Providers vs Customers
+* New users today
+* Flagged users
+
+---
+
+# ✅ 9. Alerts / Smart Signals
+
+Show warnings:
+
+* Providers not responding
+* Customers spamming requests
+* High cancellation users
+* Suspicious behavior
+
+---
+
+# ✅ 10. Referral Integration
+
+In table + detail panel:
+
+Show:
+
+* referralCode
+* referredBy
+* total invited
+* total earned Tanga
+
+Highlight:
+
+```text
+Top Referrer
+```
+
+---
+
+# ✅ 11. Data Model Updates
+
+Extend User type:
+
+```ts
+type User = {
+  id: string;
+  name: string;
+  phone: string;
+  role: "customer" | "provider" | "both";
+  createdAt: string;
+  lastActive?: string;
+
+  rating?: number;
+  jobsCompleted?: number;
+
+  referralCode?: string;
+  referredBy?: string;
+
+  tangaBalance?: number;
+
+  isVerified?: boolean;
+  flags?: number;
+  cancellationRate?: number;
+
+  adminNotes?: string[];
+  tags?: string[];
+};
+```
+
+---
+
+# ✅ 12. UX Requirements
+
+* Fast loading
+* Clean admin layout
+* Responsive
+* Table + detail panel combo
+* Avoid clutter (use tabs inside detail panel)
+
+---
+
+# 🎯 Expected Result
+
+* Admin can fully understand each user
+* Admin can control risky users
+* Admin can identify top providers
+* Referral system is visible and actionable
+* Users section becomes operational tool (not just data table)
+
+---
+
+## Deliver
+
+1. Advanced `/admin/users` page
+2. Filters + search
+3. User detail panel
+4. Admin actions
+5. Notes + tags system
+6. Referral integration
+7. Metrics + alerts
+
+Do not break:
+
+* authentication
+* referral system
+* existing user data

@@ -1,0 +1,285 @@
+Create an upgraded Message Delete System in Hormang chats with time-based delete behavior.
+
+🎯 Goal
+
+Update the current singular message delete function.
+
+Right now:
+
+Delete message
+
+removes the message for both users at any time.
+
+This is risky because users can erase old conversation history after agreements were already made.
+
+New delete rules
+Rule 1 — First 5 minutes after sending
+
+Sender can:
+
+Delete for everyone
+
+This is intended for:
+
+accidental sends
+typo
+wrong attachment
+wrong chat
+Behavior
+
+If:
+
+Date.now() - message.createdAt <= 5 minutes
+
+show:
+
+Delete for everyone
+Delete for me
+Delete for everyone
+
+When clicked:
+
+Remove message from both users’ chat history.
+
+Or preferred:
+
+Soft-delete and replace with:
+
+Xabar o‘chirildi
+
+or
+
+Сообщение удалено
+
+depending on current app language.
+
+This preserves timeline spacing.
+
+Suggested storage
+deletedForEveryone: true
+deletedAt: timestamp
+
+instead of hard deleting.
+
+Preferred over full deletion.
+
+Rule 2 — After 5 minutes
+
+Sender can NO LONGER delete for everyone.
+
+Only:
+
+Delete for me
+Behavior
+
+After:
+
+> 5 minutes
+
+hide:
+
+Delete for everyone
+
+Show only:
+
+Delete for me
+Delete for me
+
+Only removes message from current user's chat view.
+
+Other user keeps full message.
+
+Store via:
+
+deletedForUsers: string[]
+
+Example:
+
+["customerId"]
+
+or:
+
+["providerId"]
+Data model update
+
+Extend existing ChatMessage:
+
+type ChatMessage = {
+  id: string
+  senderId: string
+  receiverId: string
+  text: string
+  createdAt: string
+
+  deletedForEveryone?: boolean
+  deletedAt?: string | null
+
+  deletedForUsers?: string[]
+}
+UI behavior
+
+Long press / kebab menu on message:
+
+Own message within 5 min
+
+Show:
+
+Delete for everyone
+Delete for me
+Copy
+Own message after 5 min
+
+Show:
+
+Delete for me
+Copy
+Incoming message
+
+Show:
+
+Delete for me
+Copy
+Report
+
+No "delete for everyone".
+
+Deleted for everyone rendering
+
+If:
+
+message.deletedForEveryone === true
+
+render:
+
+<div className="italic text-xs text-gray-400">
+  Xabar o‘chirildi
+</div>
+
+or localized equivalent.
+
+No text content visible.
+
+No attachments visible.
+
+Keep timestamp.
+
+Optional:
+
+You deleted this message
+
+for sender.
+
+Deleted for me rendering
+
+If:
+
+message.deletedForUsers.includes(currentUser.id)
+
+Do not render for that user only.
+
+Other participant sees message normally.
+
+Live sync
+
+Delete-for-everyone should update immediately for both users:
+
+without refresh.
+
+Trigger existing chat state update or:
+
+window.dispatchEvent(
+  new CustomEvent("chat:message_deleted")
+)
+
+or existing message subscription.
+
+Important safeguards
+Prevent abuse
+
+After 5 minutes:
+
+Delete for everyone impossible
+
+strictly enforced in backend too.
+
+Not only UI.
+
+Validate:
+
+if (now - message.createdAt > 5min) {
+  blockDeleteForEveryone()
+}
+Never delete these silently
+
+Do not fully hard-delete:
+
+messages tied to disputes
+complaint evidence
+report evidence
+
+Soft delete placeholder preferred.
+
+Audit log
+
+Optional:
+
+Track:
+
+Message deleted for everyone
+
+and
+
+Message deleted for self
+
+with:
+
+messageId
+userId
+chatId
+timestamp
+
+Useful for moderation.
+
+Edge cases to test
+Case 1
+
+Delete after 2 min
+
+→ both users see:
+
+Message deleted
+Case 2
+
+Delete after 10 min
+
+→ sender no longer sees message
+
+→ receiver still sees original
+
+Case 3
+
+Receiver already read message
+
+Delete-for-everyone still works if under 5 min.
+
+Case 4
+
+Refresh browser
+
+Deletion persists.
+
+Expected Result
+
+Hormang chat now supports:
+
+✅ accidental-message undo window (5 min)
+
+✅ delete for everyone
+
+✅ delete for me
+
+✅ preserved conversation integrity after 5 min
+
+✅ safer moderation/report history
+
+Do not redesign chat UI—upgrade existing message action menu + storage logic only.

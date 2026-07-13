@@ -1,0 +1,54 @@
+Implement a complete **Tanga costing system** for sending offers. Providers must spend Tanga to send any offer — it should be impossible to send offers for free.
+
+### Core Rules (must be followed):
+- Simple sum of costs from all selected options.
+- Every question can contribute to the cost (if no weight is set on an option → cost = 0).
+- Base cost per category (editable in admin).
+- Minimum total cost = 2 Tanga (even if calculated cost is lower).
+- Multi-select: add costs of all selected options.
+- Conditional follow-up questions: their selected options' costs must also be included.
+- The system must remain stable when new questions, options, or conditional branches are added in the future.
+
+### 1. Admin Question Editor Changes (Most Important)
+In the question editor (for single-select and multi-select questions):
+
+- When adding/editing each option, add a field: **"Tanga narxi"** (number input, default 0).
+- For every category, add a field at the top of the category panel: **"Base cost for this category"** (number, default 0 or 5).
+
+Save these values properly in the question/option structure.
+
+### 2. Cost Calculation Logic
+Create a reusable function `calculateOfferCost(request)` that:
+- Takes the full request (with answers and selected options).
+- Adds:
+  - Base cost of the request’s category
+  - Sum of `tangaCost` of every selected option across all questions (including conditional branches that were triggered)
+- Applies minimum: if total < 2 → set to 2.
+- Return the final cost in Tanga.
+
+This function must be robust and continue working even when new question types or deeper nesting are added later.
+
+### 3. Provider Side Implementation
+- In the **offer form** (when provider clicks "Taklif yuborish"):
+  - Clearly show: **"Bu taklif yuborish uchun X Tanga sarflanadi"**
+  - If provider’s current Tanga balance < required cost → disable the send button + show message: "Yetarli Tanga yo‘q. Sotib oling" with a button that redirects to `/plans`.
+  - If enough Tanga → allow sending. When offer is successfully sent, deduct the exact cost from provider’s Tanga balance.
+
+- Show current Tanga balance in:
+  - Provider header (near profile picture, clickable → goes to /plans)
+  - Provider homepage
+  - Requests page
+
+### 4. Storage & Sync
+- Store provider token balance in `provider_tokens` (or similar key).
+- Make sure balance updates in real-time across pages.
+- Plans from admin (`hormang_pricing_tiers`) remain as they are for purchasing tokens.
+
+### 5. Future-proofing
+- The cost calculation must not break when new questions or conditional branches are added.
+- Keep the logic centralized in one main `calculateOfferCost` function.
+
+Implement this Tanga costing system completely and cleanly. 
+Focus especially on correct cost calculation from selected options + base cost + minimum 2 Tanga.
+
+Start coding now.

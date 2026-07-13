@@ -1,0 +1,327 @@
+You are working on a React + TypeScript + Tailwind + Supabase (or localStorage fallback) marketplace platform called Hormang.
+
+## 🎯 Goal
+
+Implement a **Customer Request Cooldown System** to prevent spam requests, fake demand generation, and marketplace abuse.
+
+Customers should NOT be able to create unlimited requests rapidly.
+
+The system must:
+
+* protect providers from spam
+* maintain request quality
+* still allow normal users to use platform comfortably
+* integrate cleanly with existing request creation flow
+
+---
+
+# 🧠 Core Marketplace Rule
+
+After creating a request, customer must wait before creating another one.
+
+---
+
+# ✅ Recommended Cooldown Rules
+
+## Default cooldown:
+
+```text id="jlwm13"
+5 minutes
+```
+
+between request creations.
+
+---
+
+# Additional protection:
+
+If customer creates many requests quickly:
+
+```text id="q8jlwm"
+3 requests within 24h
+```
+
+→ activate longer cooldown:
+
+```text id="jlwm14"
+30 minutes cooldown
+```
+
+---
+
+# 🚀 Why This Works
+
+This prevents:
+
+* fake request spam
+* providers wasting Tanga
+* artificial marketplace inflation
+* testing abuse
+* low-quality users
+
+WITHOUT harming normal users.
+
+---
+
+# ✅ 1. Backend Logic (CRITICAL)
+
+Before creating request:
+
+Find customer's latest request.
+
+Example:
+
+```ts id="jlwm15"
+const latestRequest = requests
+  .filter(r => r.customerId === user.id)
+  .sort((a, b) =>
+    new Date(b.createdAt).getTime() -
+    new Date(a.createdAt).getTime()
+  )[0];
+```
+
+---
+
+# Validation
+
+```ts id="jlwm16"
+const cooldownMs = 5 * 60 * 1000;
+
+if (
+  latestRequest &&
+  Date.now() - new Date(latestRequest.createdAt).getTime() < cooldownMs
+) {
+  throw new Error("So'rovlar oralig'ida kutish vaqti mavjud");
+}
+```
+
+---
+
+# ✅ 2. Advanced Anti-Spam Layer
+
+Count requests in last 24h:
+
+```ts id="jlwm17"
+const recentRequests = requests.filter(
+  r =>
+    r.customerId === user.id &&
+    Date.now() - new Date(r.createdAt).getTime() < 24 * 60 * 60 * 1000
+);
+```
+
+---
+
+# If count >= 3
+
+Activate extended cooldown:
+
+```text id="jlwm18"
+30 minutes
+```
+
+---
+
+# Suggested logic:
+
+```ts id="jlwm19"
+const cooldownMs =
+  recentRequests.length >= 3
+    ? 30 * 60 * 1000
+    : 5 * 60 * 1000;
+```
+
+---
+
+# ✅ 3. Frontend UX (VERY IMPORTANT)
+
+DO NOT simply block silently.
+
+Customers must clearly understand:
+
+* why
+* how long left
+
+---
+
+# If cooldown active:
+
+Disable request creation CTA everywhere.
+
+---
+
+## Example button text:
+
+```text id="jlwm20"
+Yangi so‘rovlar oralig'ida kutish vaqti mavjud
+```
+
+---
+
+# Show timer:
+
+```text id="jlwm21"
+Keyingi so‘rov: X daqiqa Y soniya qoldi
+```
+(Timer should be live as it counts seconds as well)
+---
+
+# ✅ 4. Request Creation Page
+
+Before showing questionnaire:
+
+Validate cooldown.
+
+---
+
+# If blocked:
+
+Show clean state:
+
+```text id="jlwm22"
+Yangi so‘rovlar oralig'ida kutish vaqti mavjud. 
+```
+
+---
+
+# Add countdown timer UI.
+
+---
+
+# ✅ 5. Dashboard Integration
+
+Inside customer dashboard:
+
+Add compact info card:
+
+```text id="jlwm23"
+Yangi so‘rov yaratishgacha X daqiqa Y soniya qoldi
+```
+
+with live countdown.
+
+---
+
+# ✅ 6. Admin Panel Integration
+
+Inside admin users section, user preview modal:
+
+Detect and auto flag user if he has more than 5 requests within 24 hours
+* suspicious activity
+
+---
+
+# Example:
+
+```text id="jlwm25"
+⚠️ 5 requests today
+```
+
+---
+
+# ✅ 7. Anti-Abuse Smart Rules (IMPORTANT)
+
+Cooldown should NOT apply if:
+
+* previous request was cancelled by system
+* draft not submitted
+* request failed technically
+
+Only count:
+
+```text id="jlwm26"
+successfully published requests
+```
+
+---
+
+# ✅ 8. Optional Quality Upgrade (Recommended)
+
+If customer:
+
+* repeatedly creates requests
+* never accepts offers
+* abandons requests
+
+Increase cooldown automatically and notify admin.
+
+Example:
+
+```text id="jlwm27"
+Low-quality users → 3h cooldown
+```
+
+---
+
+# ✅ 9. Marketplace Protection Logic
+
+This cooldown system must work together with:
+
+* offer limits
+* Tanga economy
+* provider protection systems
+
+Goal:
+
+* fewer but higher-quality requests
+
+NOT:
+
+* high spam volume
+
+---
+
+# 🎨 10. UI Rules
+
+* subtle warning colors
+* clean countdown display
+* compact info
+* mobile-first
+
+DO NOT create harsh “punishment” UI.
+
+---
+
+# ⚠️ 11. DO NOT
+
+* Do NOT silently fail request creation
+* Do NOT allow bypass through frontend only
+* Do NOT cooldown drafts
+* Do NOT cooldown technical failures
+
+---
+
+# 🎯 Expected Result
+
+Hormang marketplace becomes:
+
+* harder to spam
+* higher quality
+* fairer for providers
+* more trustworthy
+
+Providers:
+
+* see more serious customers
+
+Customers:
+
+* still use platform comfortably
+* understand restrictions clearly
+
+Admins:
+
+* can identify suspicious behavior
+
+---
+
+## Deliver
+
+1. Backend cooldown validation
+2. Dynamic cooldown duration logic
+3. Frontend disabled states
+4. Countdown UI
+5. Dashboard cooldown indicator
+6. Admin visibility
+7. Anti-abuse protection logic
+
+Build production-ready and integrate fully with existing request creation flow.

@@ -1,0 +1,55 @@
+Implement a full **Tanga** token system for providers (Tanga = coin in Uzbek).
+
+### Core Requirements:
+- Token name: **Tanga** (icon: golden coin — use a simple golden circle with "T" or coin emoji, keep it clean and attractive).
+- Providers can buy plans to get Tanga tokens.
+- Tokens are stored per user and updated in real-time.
+
+### Plan Structure (must match and extend the existing admin MonetizationSection):
+Each plan must have:
+- Plan name (e.g. "Starter", "Pro", "Unlimited")
+- Description / additional info
+- Token count (e.g. 50 tanga)
+- Regular price (so'm)
+- Optional: Sale price (if filled, show strikethrough on regular price)
+- Optional: Bonus tokens (e.g. "+15 free" shown as green badge)
+- Optional: Timer / validity (date until the plan is available — show countdown timer on the card)
+
+### Admin Panel Changes (MonetizationSection):
+- Update the existing plan cards to support all new fields above.
+- When admin creates/edits/deletes plans, changes must appear **immediately** on the provider side (use existing store-events or storage listener).
+- Keep the current revenue charts and commission display.
+
+### Provider Side New Features:
+
+1. **New page `/plans`**  
+   - Clean, attractive grid of all active plans (cards with golden coin icon).
+   - Show current Tanga balance at the top (large golden number).
+   - Each plan card must show: name, description, token count, price (with sale if any), bonus, and countdown timer if set.
+   - "Sotib olish" button on each card (for now just simulate purchase: add tokens to user balance and show success message).
+
+2. **Token balance display** (real-time):
+   - Dashboard header (near profile picture) — clickable, redirects to `/plans`
+   - Provider homepage (`/provider-home`)
+   - Requests page (`/provider/requests`)
+   - Show as: golden coin icon + current balance number (e.g. "124 Tanga")
+
+3. **Storage**:
+   - Use `provider_tokens` key for balance (number).
+   - Use the same `hormang_pricing_tiers` key as admin (or update it to match new fields).
+   - Make sure balance updates instantly when a plan is purchased.
+
+### Design Requirements:
+- Very clean and attractive (use your existing violet/red theme + golden accents for tokens).
+- Golden coin icon everywhere tokens are shown.
+- Cards should look premium and modern.
+- Countdown timer should be live (if a plan has expiry).
+
+### Integration:
+- Plans created in admin must appear instantly on provider side without refresh.
+- Keep existing bottom navigation and role switching.
+- Do not break any current functionality.
+
+Implement the complete Tanga token + plan purchase system now, including all UI places and admin sync.
+
+Start coding.

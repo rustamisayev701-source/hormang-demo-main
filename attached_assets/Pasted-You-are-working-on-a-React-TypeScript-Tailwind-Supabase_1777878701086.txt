@@ -1,0 +1,266 @@
+You are working on a React + TypeScript + Tailwind + Supabase (or localStorage fallback) service marketplace project in Replit.
+
+## 🎯 Goal
+
+Refactor the refund system:
+
+❌ Remove automatic refunds on offer rejection
+✅ Add **admin-controlled refund system** based on last 10 rejected offers
+✅ Allow **one-click 50% refund** for those offers
+✅ Prevent abuse (no double refunds)
+
+---
+
+# 🧠 Core Logic
+
+A provider becomes eligible for refund if:
+
+* Their **last 10 offers**
+* Are ALL:
+
+  * `status === "rejected"`
+  * `refunded !== true`
+
+Then admin can:
+👉 refund **50% of total Tanga spent on those 10 offers**
+
+---
+
+# ✅ 1. Update Offer Model
+
+Extend offer type:
+
+```ts
+type Offer = {
+  id: string;
+  providerId: string;
+  requestId: string;
+  status: "pending" | "accepted" | "rejected";
+  tangaSpent: number;
+  createdAt: string;
+  refunded?: boolean;
+};
+```
+
+---
+
+# ✅ 2. Remove Old Refund Logic
+
+Find and REMOVE any logic like:
+
+```ts
+if (offerRejected) {
+  refundTanga(...)
+}
+```
+
+No automatic refunds should exist.
+
+---
+
+# ✅ 3. Eligibility Logic
+
+Create helper:
+
+```ts
+function getLast10RejectedOffers(providerId: string) {
+  const providerOffers = offers
+    .filter(o => o.providerId === providerId)
+    .sort((a, b) => new Date(b.createdAt).getTime() - new Date(a.createdAt).getTime())
+    .slice(0, 10);
+
+  const eligible =
+    providerOffers.length === 10 &&
+    providerOffers.every(o => o.status === "rejected" && !o.refunded);
+
+  return { providerOffers, eligible };
+}
+```
+
+---
+
+# ✅ 4. Refund Calculation
+
+```ts
+function calculateRefund(offers: Offer[]) {
+  const totalSpent = offers.reduce((sum, o) => sum + o.tangaSpent, 0);
+  return Math.floor(totalSpent * 0.5);
+}
+```
+
+---
+
+# ✅ 5. Refund Action (Admin Trigger)
+
+```ts
+function refundProvider(providerId: string, offers: Offer[]) {
+  const refundAmount = calculateRefund(offers);
+
+  // update user balance
+  provider.tangaBalance += refundAmount;
+
+  // create transaction
+  addTangaTransaction({
+    userId: providerId,
+    amount: refundAmount,
+    type: "admin_adjustment",
+    source: "refund_last_10_rejected",
+    description: "50% refund for last 10 rejected offers",
+  });
+
+  // mark offers
+  offers.forEach(o => (o.refunded = true));
+
+  saveAll();
+}
+```
+
+---
+
+# ✅ 6. Audit Log Integration
+
+Every refund must log:
+
+```ts
+logAction({
+  actorId: admin.id,
+  actorRole: "admin",
+  action: "PROVIDER_REFUND",
+  targetId: providerId,
+  targetType: "user",
+  description: `Admin refunded ${refundAmount} Tanga for 10 rejected offers`,
+});
+```
+
+---
+
+# ✅ 7. Admin UI
+
+In:
+
+```text
+/admin/users → Provider Detail Panel
+```
+
+---
+
+## Add Section:
+
+### “Offer Performance”
+
+Display:
+
+```text
+Last 10 Offers:
+❌ Rejected
+❌ Rejected
+❌ Rejected
+...
+```
+
+---
+
+## If eligible:
+
+Show alert:
+
+```text
+⚠️ Provider has 10 consecutive rejected offers
+```
+
+---
+
+## Show Button:
+
+```text
+[Refund 50% (X Tanga)]
+```
+
+---
+
+## Button Behavior:
+
+* calls refund function
+* updates UI immediately
+* disables after use
+
+---
+
+# ✅ 8. Safeguards (CRITICAL)
+
+## Prevent double refunds:
+
+Only allow refund if:
+
+```ts
+!offer.refunded
+```
+
+---
+
+## After refund:
+
+* mark all 10 offers:
+
+```ts
+refunded = true
+```
+
+---
+
+## Button should disappear after use
+
+---
+
+# ✅ 9. UI/UX Requirements
+
+* clean admin card layout
+* clear warning color (yellow/red)
+* show refund amount before click
+* confirm dialog:
+
+```text
+Are you sure you want to refund 50% for last 10 rejected offers?
+```
+
+---
+
+# ✅ 10. Edge Cases
+
+Handle:
+
+* fewer than 10 offers → no button
+* mixed statuses → no button
+* already refunded offers → exclude
+* provider not found → safe fail
+
+---
+
+# 🎯 Expected Result
+
+* No automatic refunds
+* Admin sees problematic providers
+* One-click controlled refund
+* No duplicate refunds
+* Fully tracked in:
+
+  * transactions
+  * audit log
+
+---
+
+## Deliver
+
+1. Remove old refund logic
+2. Add eligibility helper
+3. Add refund calculation
+4. Add admin UI section
+5. Add refund action
+6. Add safeguards
+7. Integrate with audit log
+
+Do not break:
+
+* offer creation
+* Tanga deduction
+* monetization flow

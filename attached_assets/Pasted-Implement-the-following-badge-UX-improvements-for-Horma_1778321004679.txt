@@ -1,0 +1,198 @@
+Implement the following badge UX improvements for Hormang.
+
+## 🎯 Goal
+
+Improve badge visibility and usability without losing compactness or clickability.
+
+Current problem:
+
+* only 2 badges are shown + `+X`
+* users cannot understand hidden badges
+* trust visibility is weakened
+
+We will solve this differently depending on UI context.
+
+---
+
+# ✅ 1. Public Profile Preview Modal (PPP Modal)
+
+## IMPORTANT CHANGE
+
+Inside PPP modal:
+
+* badges should NO LONGER collapse into `+X`
+* ALL earned badges should be visible
+
+BUT:
+
+* display them in a vertically scrollable layout
+* keep compact premium styling
+
+---
+
+# Required Layout
+
+Use:
+
+```tsx id="ux1"
+flex flex-wrap gap-2 overflow-y-auto max-h-[160px]
+```
+
+OR similar responsive implementation.
+
+---
+
+# Badge Container Rules
+
+* compact premium pills
+* wrapped rows
+* vertically scrollable if more than 2 badges
+* smooth scrolling
+* mobile-friendly
+
+---
+
+# IMPORTANT
+
+
+DO NOT remove current click behavior.
+
+---
+
+# ✅ 2. Dashboard Profile Header Card
+
+Inside provider dashboard header card:
+
+Use:
+
+* horizontal scrollable badge rail
+
+Instead of:
+
+```text id="ux2"
++X
+```
+
+show all badges inline.
+
+---
+
+# Required Layout
+
+Use:
+
+```tsx id="ux3"
+flex gap-2 overflow-x-auto no-scrollbar
+```
+
+---
+
+# Rules
+
+* badges remain compact
+* single-row horizontal scrolling
+* smooth swipe on mobile
+* no wrapping
+* preserve premium look
+
+---
+
+# IMPORTANT
+
+Badges must remain:
+
+* clickable
+* interactive
+
+---
+
+# ✅ 3. NEVER Hide Important Badges
+
+The following badges must ALWAYS remain directly visible:
+
+* Hormang tomonidan tavsiya etilgan
+* Kuzatuvda
+
+Even in limited space.
+
+Do NOT collapse them into hidden states.
+
+---
+
+# ✅ 4. Add Badge Description for "Kuzatuvda"
+
+Currently badge details are missing proper explanation.
+
+Add badge detail description:
+
+```text id="ux4"
+Ushbu foydalanuvchi platforma administratorlari tomonidan kuzatuv ostida turibdi. Bu vaqtinchalik tekshiruv yoki murojaatlar bilan bog‘liq bo‘lishi mumkin.
+```
+
+---
+
+# IMPORTANT
+
+Description tone should feel:
+
+* professional
+* neutral
+* non-aggressive
+
+Avoid:
+
+* scary wording
+* public shaming tone
+
+---
+
+
+# ✅ 5. UI/UX Rules
+
+Keep:
+
+* premium aesthetic
+* compact layouts
+* elegant spacing
+* subtle gradients
+
+Avoid:
+
+* giant badge cards
+* oversized icons
+* gaming aesthetics
+
+---
+
+# ⚠️ IMPORTANT
+
+DO NOT:
+
+* reintroduce `+X` collapsing in PPP modal
+* remove clickability
+* hide "Kuzatuvda"
+* hide "Hormang tavsiya etilgan"
+
+---
+
+# 🎯 Expected Result
+
+PPP Modal:
+
+* all badges clearly visible
+* vertically scrollable
+* trust immediately understandable
+
+Dashboard Header:
+
+* clean horizontal badge rail
+* swipeable on mobile
+* premium look
+
+Badge System:
+
+* more transparent
+* more informative
+* stronger trust signals
+
+Build fully integrated with the existing badge components and badge detail modal system.

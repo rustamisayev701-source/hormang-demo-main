@@ -1,0 +1,317 @@
+You are working on a React + TypeScript + Tailwind + Supabase (or localStorage fallback) service marketplace project in Replit.
+
+## 🎯 Goal
+
+Refactor and expand the **Monetization section** into a full **Token Economy Control Center**.
+
+This system must unify:
+
+* plan purchases (real money → Tanga)
+* Tanga spending (offers)
+* referral rewards
+* admin adjustments
+
+and provide **clear admin visibility + control**.
+
+---
+
+# 🧠 Core Concept
+
+Treat monetization as:
+
+> **Tanga Flow System**
+
+* Tanga In (purchases)
+* Tanga Out (spending)
+* Tanga Rewards (referrals)
+
+---
+
+# ✅ 1. New Structure
+
+Refactor `/admin/monetization` into:
+
+```text id="structure"
+/admin/monetization
+  → Overview
+  → Plans
+  → Transactions
+  → Provider Balances
+  → Referral Economy
+```
+
+---
+
+# ✅ 2. Data Model (Unify Transactions)
+
+Create unified transaction model:
+
+```ts id="transaction_type"
+type TangaTransaction = {
+  id: string;
+  userId: string;
+  amount: number; // + or -
+  type: "purchase" | "spend" | "referral_reward" | "admin_adjustment";
+  source?: string; // plan name, requestId, referral user, etc.
+  balanceAfter: number;
+  createdAt: string;
+};
+```
+
+---
+
+## Storage
+
+* Supabase table OR localStorage:
+
+```ts id="transaction_storage"
+tangaTransactions: TangaTransaction[]
+```
+
+---
+
+# ✅ 3. Overview Dashboard
+
+Top of `/admin/monetization`
+
+## Show:
+
+### Revenue
+
+* Total revenue
+* Revenue today / week / month
+* Avg purchase value
+
+### Token Metrics
+
+* Total Tanga sold
+* Total Tanga spent
+* Total Tanga in circulation
+
+### Marketplace Metrics
+
+* Avg Tanga per provider
+* Offers per request
+* Avg cost per offer
+
+---
+
+# ✅ 4. Plans Section (Upgrade Existing)
+
+Keep plan creation but extend:
+---
+
+## Add analytics per plan:
+
+* purchases count
+* total revenue
+
+---
+
+# ✅ 5. Transactions Section (CRITICAL)
+
+Merge all token activity into one table.
+
+## Table columns:
+
+```text id="table"
+User | Type | Amount | Balance After | Source | Date
+```
+
+---
+
+## Include ALL:
+
+* Purchase (real money)
+* Spend (offer sending)
+* Referral rewards
+* Admin adjustments
+
+---
+
+## Filters:
+
+* Type (purchase / spend / referral / admin)
+* User
+* Date range
+
+---
+
+# ✅ 6. Provider Balances Section
+
+List all providers:
+
+Columns:
+
+* Name
+* Current balance
+* Total purchased
+* Total spent
+* Referral earnings
+
+---
+
+## Filters:
+
+* Low balance (<5)
+* High spenders
+* Inactive providers
+
+---
+
+## Admin Actions:
+
+* Add Tanga
+* Remove Tanga
+
+Example:
+
+```ts id="admin_adjust"
+addTransaction({
+  type: "admin_adjustment",
+  amount: +10,
+  userId,
+});
+```
+
+---
+
+# ✅ 7. Referral Economy Section
+
+Show referral monetization impact.
+
+## Metrics:
+
+* Total Tanga given via referrals
+* Total completed referrals
+
+---
+
+## Table:
+
+```text id="ref_table"
+User | Invited | Completed | Tanga Earned
+```
+
+---
+
+## Highlight:
+
+Top referrers
+
+---
+
+# ✅ 8. Integration Points
+
+## When provider buys plan:
+
+* Add transaction:
+
+```ts id="purchase"
+type: "purchase"
+amount: +Tanga
+```
+
+---
+
+## When provider sends offer:
+
+* Deduct Tanga:
+
+```ts id="spend"
+type: "spend"
+amount: -cost
+source: requestId
+```
+
+---
+
+## When referral reward triggers:
+
+```ts id="ref_reward"
+type: "referral_reward"
+amount: +3
+```
+
+---
+
+## When admin adjusts:
+
+```ts id="admin"
+type: "admin_adjustment"
+```
+
+---
+
+# ✅ 9. Balance Calculation
+
+Always update:
+
+```ts id="balance"
+user.tangaBalance
+```
+
+after each transaction.
+
+---
+
+# ✅ 10. Audit Log Integration
+
+Every transaction must call:
+
+```ts id="audit_call"
+logAction({
+  action: "TANGA_TRANSACTION",
+  description: "...",
+});
+```
+
+---
+
+# ✅ 11. UX Requirements
+
+* Clean admin UI
+* Tabs or sidebar navigation
+* Fast filtering
+* Highlight:
+
+  * green = positive
+  * red = spending
+
+---
+
+# ✅ 12. Optional (Bonus)
+
+If simple:
+
+* CSV export
+* charts (Tanga flow over time)
+* “low balance alert” badge
+
+---
+
+# 🎯 Expected Result
+
+* Admin sees full monetization picture
+* All Tanga flow is unified
+* Easy to track spending and revenue
+* Referral impact visible
+* Providers manageable financially
+
+---
+
+## Deliver
+
+1. New `/admin/monetization` structure
+2. Unified transaction system
+3. Overview dashboard
+4. Plans analytics
+5. Provider balances view
+6. Referral economy section
+7. Full integration with existing flows
+
+Do not break:
+
+* offer sending
+* referral system
+* existing plan purchases

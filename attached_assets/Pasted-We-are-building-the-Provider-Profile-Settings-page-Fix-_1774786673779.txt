@@ -1,0 +1,60 @@
+We are building the Provider Profile Settings page. Fix the regions list according to the latest requirement.
+
+### 1. Unified Regions List (to be used across the entire app)
+Create a central constant called `regionsList` (export it so it can be reused in questionnaire, requests, profile, etc.).
+
+Structure:
+- First item: **"Toshkent shahri"** (always at the very top)
+- When "Toshkent shahri" is selected, show a second dropdown with districts **in alphabetical order**:
+  Bektemir, Chilonzor, Mirobod, Mirzo Ulug`bek, Olmazor, Sergeli, Shayxontohur, Uchtepa, Yakkasaroy, Yangihayot, Yashnobod, Yunusobod
+
+- After "Toshkent shahri", list all other cities/districts in **strict alphabetical order**:
+  Angren, Bekobod, Boʻka, Boʻstonliq, Chinoz, Chirchiq, Chorvoq, Doʻstobod, Gʻazalkent, Keles, Ohangaron, Olmaliq, Oqqoʻrgʻon, Oʻrta Chirchiq, Parkent, Piskent, Qibray, Quyi Chirchiq, Toʻytepa, Yangiobod, Yangiyoʻl, Yuqori Chirchiq, Zangiota
+
+Store this as a clean JavaScript array of objects, for example:
+```js
+const regionsList = [
+  { value: "Toshkent shahri", label: "Toshkent shahri", isCapital: true, districts: ["Bektemir", "Chilonzor", ...] },
+  { value: "Angren", label: "Angren" },
+  { value: "Bekobod", label: "Bekobod" },
+  ...
+];
+2. Provider Profile Settings Page (/profile/settings)
+Build or update the full profile settings page with:
+Profile Completion Section (top or sidebar):
+
+Circular progress bar showing completion percentage
+Text: "Profilingiz XX% toʻldirilgan"
+List of missing items with "Toʻldirish" links/buttons
+
+Main Form Fields:
+
+Profile photo upload (preview + delete)
+Ism va Familiya (required)
+Telefon raqami (Uzbekistan format)
+Hudud (Region):
+First dropdown: regionsList (Toshkent shahri first)
+If "Toshkent shahri" selected → second dropdown appears with alphabetically sorted districts
+
+Xizmatlarim (Services I offer) — multi-select from these 9 categories:
+Tozalash, Ta'mirlash, Enagalik, Tadbir xizmatlari, Ko'chirish yuk yetkazish, Go'zallik, Avto xizmat, Repetitorlar, Ustachilik
+Tajribam (years of experience) — number input
+Qisqacha ma'lumot (Bio / About me) — textarea
+Ish vaqti (Working hours / Availability)
+Portfolio rasmlari (multiple image upload, up to 6, with preview)
+Prominent Saqlash button with success message.
+
+3. Profile Completion Logic
+
+Calculate % based on key fields: photo, name, phone, region, at least one service, bio.
+Show actionable "missing items" list on both Provider Home and Settings page.
+
+4. Integration
+
+Make sure this page is reachable from Provider Home "Profile completion" card.
+Update Provider Home to show real completion percentage using the same logic.
+Export the regionsList so it can be imported in other parts of the app later.
+
+Use clean, mobile-first design. All text in Uzbek (Latin script). Save data to localStorage under the current user's profile.
+First, define the corrected regionsList with alphabetically sorted Toshkent districts.
+Then implement / update the full profile settings page.

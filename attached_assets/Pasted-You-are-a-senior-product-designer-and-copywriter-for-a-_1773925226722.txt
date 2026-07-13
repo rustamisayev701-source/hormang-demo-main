@@ -1,0 +1,313 @@
+You are a senior product designer and copywriter for a modern service and product marketplace.
+Create a single‑page landing page (Hormang landing page) for the platform Hormang — a marketplace that connects local buyers with service providers and small‑scale sellers of goods and everyday services. The platform focuses on Uzbekistan and similar local markets, where people need fast, trusted, and affordable services (repairs, cleaning, nannies, cooking, crafts, delivery, etc.).
+Goal of the page:
+
+
+Introduce Hormang in a clear, emotional, and trustworthy way.
+
+
+Show users that Hormang solves the problem of finding reliable local services quickly.
+
+
+Convince buyers (“I need help”) and providers (“I want more clients”) to register.
+
+
+Make the platform feel modern, warm, and close to real people.
+
+
+Brand style:
+
+
+Tone:
+
+
+Human‑friendly, professional, slightly warm, and confident.
+
+
+Not corporate‑cold, but not childish or over‑“cute”.
+
+
+
+
+Visual style (if generating UI):
+
+
+Clean, mobile‑first, with rounded corners and soft shadows.
+
+
+Clear visual hierarchy, intuitive layout, and smooth transitions.
+
+
+Colors: modern palette (e.g., warm blue or green as main color, with neutral background).
+
+
+
+
+Language of the page:
+
+
+Text in English (or specify your language: [insert: Uzbek/Russian/English]).
+
+
+
+
+Structure and content blocks (sections):
+
+
+Hero section (top of the page)
+
+
+A strong headline, like:
+
+
+“Find trusted local services in one tap.”
+
+
+“Hormang: Your marketplace for people who help.”
+
+
+“Connect with local professionals — fast, simple, fair.”
+
+
+
+
+Short sub‑headline explaining the core value: “Hormang connects buyers with local service providers and small businesses for everyday tasks — from home repairs to babysitting and cooking.”
+
+
+1–2 clear call‑to‑action buttons:
+
+
+“Find a service” (for buyers).
+
+
+“Become a provider” (for earners).
+
+
+
+
+Optionally: minimalist illustration or hero image of a friendly marketplace/app screen.
+
+
+
+
+Problem and solution (2–3 sentences)
+
+
+Briefly describe the pain points:
+
+
+“When you move to a new city or need urgent help, it’s hard to find honest, local professionals.”
+
+
+“Traditional marketplaces feel cold and impersonal, while word‑of‑mouth is slow.”
+
+
+
+
+Then explain:
+
+
+“Hormang connects you with verified local providers, so you can find, book, and pay for services in one place.”
+
+
+
+
+
+
+How it works (simple 3–4‑step visual flow)
+
+
+Section title: “How Hormang works” or “From request to review”.
+
+
+Show 3–4 steps as short cards or icons:
+
+
+
+
+Describe what you need (service or product).
+
+
+
+
+
+
+Browse or use AI‑search to find local providers.
+
+
+
+
+
+
+Chat, agree on price and time.
+
+
+
+
+
+
+Book, pay (card or cash), and leave a review.
+
+
+
+
+
+
+Emphasize: “It’s simple, fast, and designed for real people.”
+
+
+
+
+For buyers: “Why Hormang?”
+
+
+3–4 short benefits, e.g.:
+
+
+“Find trusted local professionals near you.”
+
+
+“See portfolios, ratings, and reviews before you choose.”
+
+
+“Chat and negotiate prices in the app.”
+
+
+“Pay online or in cash — your choice.”
+
+
+
+
+
+
+For providers: “Earn with Hormang”
+
+
+3–4 benefits, e.g.:
+
+
+“Get more clients without big marketing costs.”
+
+
+“Show your portfolio, build your reputation, and grow your business.”
+
+
+“Access leads, manage requests, and get paid easily.”
+
+
+
+
+
+
+Unique features / USP (short block)
+
+
+Highlight 1–2 key differentiators:
+
+
+“AI‑assisted search: describe your need in plain text, and Hormang finds the right provider.”
+
+
+“A local marketplace built for real people, not big corporations.”
+
+
+
+
+
+
+Testimonials or trust elements
+
+
+Use 2–3 short quotes from “buyers” and “providers”, e.g.:
+
+
+“Found a great cleaner within 10 minutes — and the price was fair.”
+
+
+“Since I joined Hormang, my client base has grown steadily.”
+
+
+
+
+Optional: badges or numbers, e.g., “Thousands of users. Hundreds of local professionals.”
+
+
+
+
+Call‑to‑action (middle/end of the page)
+
+
+Strong button: “Join Hormang today” or “Download the app”.
+
+
+Subtext: “Register as a buyer or provider and start using Hormang in minutes.”
+
+
+
+
+Footer
+
+
+Minimal footer:
+
+
+Logo.
+
+
+Links: Pricing, Help/FAQ, Contact, Privacy Policy, Terms.
+
+
+Social media icons (if applicable).
+
+
+“© 2026 Hormang. All rights reserved.”
+
+
+
+
+
+
+Technical / UX guidelines (for designers or UI generators):
+
+
+Always keep the layout clean, readable, and mobile‑responsive.
+
+
+Use clear typography with 2–3 font sizes.
+
+
+Icons should be simple and recognizable (no over‑complex illustrations).
+
+
+Buttons should be clearly visible and consistent in style.
+
+
+The page should feel modern, friendly, and trustworthy, avoiding clutter.
+
+
+Output format:
+
+
+If you are a text generator, output:
+
+
+Complete HTML‑style structure with section titles, subheadings, and full text content suitable for a landing page.
+
+
+Clear labels for each section (e.g., “HERO SECTION”, “FEATURES”, “TESTIMONIALS”).
+
+
+
+
+If you are a UI/design generator, output:
+
+
+A detailed visual description of the layout (wireframe style) and explain how elements are arranged.
+
+
+Optional: SVG/HTML/CSS‑like code for a basic responsive layout.
+
+
+
+
+Now, generate the complete landing page concept for Hormang according to this prompt.

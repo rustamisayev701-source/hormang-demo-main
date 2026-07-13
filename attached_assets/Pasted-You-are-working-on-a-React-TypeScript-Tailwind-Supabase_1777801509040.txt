@@ -1,0 +1,285 @@
+You are working on a React + TypeScript + Tailwind + Supabase (or localStorage fallback) service marketplace project in Replit.
+
+## 🎯 Goal
+
+Build a fully functional **Admin Overview Dashboard** (`/admin/overview`) that is **directly connected to real platform data** (requests, offers, users, monetization, referrals, audit logs).
+
+This is NOT a static dashboard.
+All metrics must be calculated from existing system data.
+
+---
+
+# 🧠 Core Principle
+
+Every metric must come from **actual data sources already in the app**:
+
+* requests
+* offers
+* users
+* tangaTransactions
+* referrals
+* auditLogs
+
+DO NOT hardcode or mock data.
+
+---
+
+# ✅ 1. Data Aggregation Layer (IMPORTANT)
+
+Create reusable selectors/helpers:
+
+```ts id="selectors"
+getMarketplaceStats()
+getUserStats()
+getMonetizationStats()
+getReferralStats()
+getAlertStats()
+```
+
+These functions should:
+
+* pull from Supabase OR localStorage
+* compute real metrics
+
+---
+
+# ✅ 2. Marketplace Health (TOP KPIs)
+
+Use real request + offer data.
+
+## Calculate:
+
+* Active requests (status: open)
+* Requests with 0 offers
+* Avg offers per request
+* Time to first offer
+
+---
+
+## Example logic:
+
+```ts id="market_logic"
+const activeRequests = requests.filter(r => r.status === "open");
+
+const requestsWithoutOffers = activeRequests.filter(
+  r => !offers.some(o => o.requestId === r.id)
+);
+
+const avgOffers =
+  totalOffers / totalRequests;
+```
+
+---
+
+## Display:
+
+```text id="market_ui"
+Active Requests | No Offers ⚠️ | Offers/Request | First Offer Time
+```
+
+---
+
+# ✅ 3. Activity Snapshot (Today)
+
+Use timestamps.
+
+## Calculate (today only):
+
+* new users
+* new providers
+* requests created
+* offers sent
+* jobs completed
+
+---
+
+# ✅ 4. Monetization Snapshot
+
+Use `tangaTransactions`.
+
+## Calculate:
+
+* revenue (sum of purchases)
+* Tanga sold (purchase type)
+* Tanga spent (spend type)
+* avg spend per provider
+
+---
+
+```ts id="money_logic"
+const revenue = transactions
+  .filter(t => t.type === "purchase")
+  .reduce((sum, t) => sum + t.amount, 0);
+```
+
+---
+
+# ✅ 5. Users Snapshot
+
+From users data:
+
+* total users
+* active users (last 7 days)
+* providers vs customers
+
+---
+
+## Also calculate:
+
+* providers with low balance (<3 Tanga)
+
+---
+
+# ✅ 6. Alerts Section (CRITICAL)
+
+Generate real alerts:
+
+### A. Requests with no offers
+
+* older than X hours
+
+### B. Providers with low Tanga
+
+```ts id="low_balance"
+users.filter(u => u.tangaBalance < 3)
+```
+
+### C. Flagged users
+
+* users.flags > 0
+
+### D. High cancellation users (if data exists)
+
+---
+
+## Display clearly:
+
+```text id="alerts"
+⚠️ 6 requests have no offers
+⚠️ 12 providers have low Tanga
+⚠️ 3 flagged users
+```
+
+---
+
+# ✅ 7. Referral Snapshot
+
+From referrals:
+
+* total referrals
+* completed referrals
+* Tanga given via referrals
+
+---
+
+# ✅ 8. Trends (Simple Charts)
+
+If possible:
+
+* requests over time
+* revenue over time
+* Tanga flow (in vs out)
+
+Use simple chart library or minimal implementation.
+
+---
+
+# ✅ 9. Recent Activity Feed
+
+Pull from `auditLogs`.
+
+Show latest 10–20 entries:
+
+```text id="feed"
+Admin banned user Ali
++3 Tanga referral reward
+Offer submitted
+Request completed
+```
+
+---
+
+# ✅ 10. Quick Actions
+
+Add buttons:
+
+* View no-offer requests → `/admin/marketplace?filter=no-offers`
+* View low balance providers → `/admin/users?filter=low-balance`
+* Go to monetization
+* Go to marketplace
+
+---
+
+# ✅ 11. Layout
+
+## Structure:
+
+Top:
+
+* Marketplace KPIs
+
+Middle:
+
+* Activity | Monetization | Users (3 columns)
+
+Below:
+
+* Alerts (full width)
+
+Bottom:
+
+* Charts + Activity feed
+
+---
+
+# ✅ 12. Performance
+
+* Do NOT fetch everything repeatedly
+* Cache or memoize calculations
+* Limit audit log fetch
+
+---
+
+# ✅ 13. UX Requirements
+
+* clean admin UI
+* highlight:
+
+  * red = problems
+  * green = healthy
+* responsive
+
+---
+
+# 🎯 Expected Result
+
+* Overview reflects REAL platform state
+* Admin can instantly:
+
+  * detect problems
+  * see growth
+  * understand money flow
+* Fully connected to:
+
+  * marketplace
+  * users
+  * monetization
+  * referrals
+  * audit logs
+
+---
+
+## Deliver
+
+1. `/admin/overview` page
+2. Data aggregation helpers
+3. Real-time KPI calculations
+4. Alerts system
+5. Activity feed
+6. Quick navigation actions
+
+Do not break:
+
+* existing admin panel structure
+* performance
+* existing data models

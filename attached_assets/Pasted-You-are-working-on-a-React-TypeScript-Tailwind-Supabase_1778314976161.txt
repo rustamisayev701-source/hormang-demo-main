@@ -1,0 +1,578 @@
+You are working on a React + TypeScript + Tailwind + Supabase (or localStorage fallback) marketplace platform called Hormang.
+
+## 🎯 Goal
+
+Implement a complete **Provider Badge System** for Hormang.
+
+The system should:
+
+* automatically grant badges when conditions are met
+* support admin-only badges
+* support warning badges
+* improve trust and marketplace quality
+* visually feel premium and professional
+
+IMPORTANT:
+
+* All positive badges are ONLY for providers
+* ONLY the warning badge can be granted to BOTH providers and customers
+* Badge visuals should feel:
+
+  * minimal
+  * elegant
+  * premium
+  * marketplace-oriented
+* Avoid gaming aesthetics or childish medal systems
+
+Replit may decide exact UI implementation, but follow all visual directions below.
+
+---
+
+# 🏆 BADGES TO IMPLEMENT
+
+# 1. Tasdiqlangan ijrochi
+
+## Type:
+
+Automatic
+
+## Conditions:
+
+* phone verified
+* profile completion = 100%
+
+## Suggested Visual Style:
+
+* soft blue shield
+* subtle glow
+* white checkmark
+* rounded premium pill
+
+Feel:
+
+```text id="p1"
+verified & trustworthy
+```
+
+---
+
+# 2. Top ijrochi
+
+## Type:
+
+Automatic
+
+## Conditions:
+
+* rating >= 4.7
+* completed jobs >= 50
+
+## Suggested Visual Style:
+
+* gold gradient
+* elegant star icon
+* subtle shine effect
+
+Feel:
+
+```text id="p2"
+elite provider
+```
+
+---
+
+# 3. Ishonchli ijrochi
+
+## Type:
+
+Automatic
+
+## Conditions:
+
+* rating >= 4.7
+* all 3 review sliders >= 80%
+
+Use actual review metrics.
+
+## Suggested Visual Style:
+
+* emerald/green shield
+* trust-oriented
+* minimal polished border
+
+Feel:
+
+```text id="p3"
+safe & reliable
+```
+
+---
+
+# 4. Tajribali ijrochi
+
+## Type:
+
+Automatic
+
+## Conditions:
+
+* account age >= 1 year
+* completed jobs >= 50
+
+## Suggested Visual Style:
+
+* dark indigo
+* elegant outlined badge
+* subtle trophy/accent
+
+Feel:
+
+```text id="p4"
+experienced professional
+```
+
+---
+
+# 5. Premium ijrochi
+
+## Type:
+
+Automatic
+
+## Conditions:
+
+* acquired/purchased more than 500 total Tanga
+
+Use cumulative acquired Tanga, NOT current balance.
+
+## Suggested Visual Style:
+
+* violet premium glassmorphism
+* premium glow
+* subtle diamond/crown accent
+
+Feel:
+
+```text id="p5"
+premium member
+```
+
+---
+
+# 6. Kuchli Portfolio
+
+## Type:
+
+Automatic
+
+## Conditions:
+
+* 5+ albums
+* each album has 10+ photos
+
+Must use real portfolio data.
+
+## Suggested Visual Style:
+
+* gradient purple-blue
+* photo/gallery accent
+* soft layered effect
+
+Feel:
+
+```text id="p6"
+high-quality portfolio
+```
+
+---
+
+# 7. Hormang tomonidan tavsiya etilgan
+
+## Type:
+
+ADMIN ONLY
+
+## Conditions:
+
+Only admins can grant/remove.
+
+## Suggested Visual Style:
+
+* premium gold + white
+* subtle Hormang accent
+* refined recommendation feel
+
+MOST PRESTIGIOUS badge.
+
+Feel:
+
+```text id="p7"
+officially recommended by Hormang
+```
+
+IMPORTANT:
+This badge should visually stand above all others.
+
+---
+
+# 8. Kuzatuvda
+
+## Type:
+
+ADMIN ONLY
+
+## IMPORTANT:
+
+This is the ONLY badge that can be granted to BOTH:
+
+* providers
+* customers
+
+## Purpose:
+
+* suspicious activity
+* complaint investigation
+* moderation review
+
+## Suggested Visual Style:
+
+* subtle outlined red
+* minimal warning aesthetic
+* professional moderation style
+
+DO NOT make it:
+
+* humiliating
+* aggressive
+* scary
+
+Feel:
+
+```text id="p8"
+under moderation review
+```
+
+---
+
+# ✅ 1. Badge System Architecture
+
+Create scalable badge engine.
+
+Suggested structure:
+
+```ts id="p9"
+type BadgeType =
+  | "verified"
+  | "top_provider"
+  | "trusted_provider"
+  | "experienced_provider"
+  | "premium_provider"
+  | "strong_portfolio"
+  | "recommended_by_hormang"
+  | "under_review";
+```
+
+---
+
+# Badge object:
+
+```ts id="p10"
+{
+  type,
+  grantedAt,
+  grantedBy?,
+  source,
+  visible
+}
+```
+
+---
+
+# IMPORTANT
+
+Only:
+
+```text id="p11"
+under_review
+```
+
+can belong to BOTH:
+
+* providers
+* customers
+
+All others:
+
+* providers only
+
+---
+
+# ✅ 2. Automatic Badge Evaluation Engine
+
+Automatic badges must:
+
+* auto grant
+* auto remove if conditions no longer met
+
+Recalculate after:
+
+* review updates
+* profile updates
+* portfolio updates
+* completed jobs
+* Tanga changes
+
+---
+
+# Admin badges:
+
+* persist until manually removed
+
+---
+
+# ✅ 3. Public Badge Visibility
+
+Badges must appear prominently in:
+
+# REQUIRED
+
+## Public Profile Preview Modal
+
+MOST IMPORTANT location.
+
+Display in third column which currently has raw "Tasdiqlangan" checkmark":
+
+* compact horizontal row
+* responsive wrap
+* premium appearance
+
+---
+
+## Provider Dashboard Header Card
+
+Display:
+
+* provider badges under review/completed services section
+
+---
+
+# OPTIONAL
+
+Also show in:
+
+* offer cards
+* provider cards
+* provider reviews
+
+ONLY if UI remains clean.
+
+---
+
+# ✅ 4. Empty Badge Area
+
+Even if provider has NO badges:
+
+Still show badge section.
+
+Purpose:
+
+* motivate providers
+* educate progression
+
+---
+
+# Empty state example:
+
+```text id="p12"
+Profil nishonlarini qo‘lga kiriting
+```
+
+---
+
+# Show hints like:
+
+* Profilni 100% to‘ldiring
+* 50+ buyurtma bajaring
+* Kuchli portfolio yarating
+
+---
+
+# IMPORTANT
+
+This should feel:
+
+* motivational
+* premium
+* elegant
+
+NOT gamified.
+
+---
+
+# ✅ 5. Admin Badge Controls
+
+Inside admin Users section:
+
+Add:
+
+```text id="p13"
+Badge boshqaruvi
+```
+
+Admins can:
+
+* grant admin badges
+* remove badges
+* view automatic badge reasons
+
+---
+
+# Admin manageable badges:
+
+* Hormang tomonidan tavsiya etilgan
+* Kuzatuvda
+* Remaining conditional badges
+---
+
+# IMPORTANT
+
+"Kuzatuvda" should be assignable to:
+
+* providers
+* customers
+
+---
+
+# ✅ 6. Badge Metadata
+
+Store:
+
+* grantedAt
+* grantedBy
+* auto/manual
+* lastEvaluatedAt
+
+Useful for:
+
+* audit logs
+* moderation
+* future analytics
+
+---
+
+# ✅ 7. Badge Sorting Priority
+
+Display badges in this order:
+
+1. Hormang tomonidan tavsiya etilgan
+2. Top ijrochi
+3. Ishonchli ijrochi
+4. Tasdiqlangan ijrochi
+5. Tajribali ijrochi
+6. Premium ijrochi
+7. Kuchli Portfolio
+8. Kuzatuvda
+
+---
+
+# IMPORTANT
+
+* warning badge always visible
+* recommendation badge highest prestige
+
+---
+
+# ✅ 8. Audit Log Integration
+
+Track:
+
+* badge grants
+* badge removals
+* admin actions
+
+Example:
+
+```text id="p14"
+Admin granted 'Kuzatuvda'
+```
+
+---
+
+# ✅ 9. UI/UX Requirements
+
+Badge system must feel:
+
+* premium
+* trustworthy
+* modern
+* subtle
+
+Avoid:
+
+* gaming badges
+* cartoon medals
+* flashy animations
+* NFT aesthetics
+
+---
+
+# Recommended UI direction:
+
+* compact premium pills
+* shield aesthetics
+* soft gradients
+* elegant typography
+* small accent icons
+* minimal glow
+
+---
+
+# ⚠️ IMPORTANT RULES
+
+DO NOT:
+
+* manually hardcode automatic badges
+* fake portfolio counts
+* create childish visuals
+* hide empty badge area
+* allow non-provider positive badges
+
+---
+
+# 🎯 Expected Result
+
+Hormang now has:
+
+* professional trust system
+* visible provider reputation
+* quality differentiation
+* moderation visibility
+* stronger marketplace credibility
+
+Customers:
+
+* trust providers more easily
+
+Providers:
+
+* improve profiles and service quality
+
+Admins:
+
+* gain moderation & recommendation tools
+
+---
+
+## Deliver
+
+1. Full badge engine
+2. Automatic badge evaluation
+3. Admin badge controls
+4. Public badge display
+5. Empty badge progression area
+6. Portfolio/review integration
+7. Warning badge support for providers/customers
+8. Audit log integration
+9. Responsive premium UI
+
+Build production-ready and fully integrated with existing provider/profile/review/admin systems.

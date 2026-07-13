@@ -1,0 +1,57 @@
+kind = "design"
+  previewPath = "/__mockup"
+  title = "Component Preview Server"
+  version = "1.0.0"
+  id = "XegfDyZt7HqfW2Bb8Ghoy"
+
+  [[services]]
+  localPort = 8081
+  name = "Component Preview Server"
+  paths = ["/__mockup"]
+
+  [services.env]
+  PORT = "8081"
+  BASE_PATH = "/__mockup"
+
+  [services.development]
+  run = "pnpm --filter @workspace/mockup-sandbox run dev"
+
+  [[canvas.shapes]]
+  id = "label-section"
+  type = "text"
+  x = 200
+  y = 40
+  width = 1200
+  height = 60
+  content = "ReferralCard — 3 variantni solishtiring"
+
+  [[canvas.shapes]]
+  id = "iframe-variant-a"
+  type = "iframe"
+  x = 40
+  y = 140
+  width = 430
+  height = 780
+  url = "/__mockup/preview/ReferralCardVariantA"
+  label = "A — Milestone Slots"
+
+  [[canvas.shapes]]
+  id = "iframe-variant-b"
+  type = "iframe"
+  x = 510
+  y = 140
+  width = 430
+  height = 780
+  url = "/__mockup/preview/ReferralCardVariantB"
+  label = "B — Split Panel"
+
+  [[canvas.shapes]]
+  id = "iframe-variant-c"
+  type = "iframe"
+  x = 980
+  y = 140
+  width = 430
+  height = 780
+  url = "/__mockup/preview/ReferralCardVariantC"
+  label = "C — Voucher Style"
+  

@@ -1,0 +1,295 @@
+You are upgrading the Hormang admin panel question editor and multilingual content management architecture.
+
+IMPORTANT:
+
+* The platform now supports ONLY:
+
+  * Uzbek (uz)
+  * Russian (ru)
+* Keep existing UI design language.
+* Mobile-first responsive admin UI.
+* Do NOT redesign unrelated pages.
+
+Build a scalable multilingual question/content editor system for:
+
+* survey questions
+* categories
+* plans
+* FAQ
+* onboarding texts
+* dynamic admin-created content
+
+The system must be:
+
+* future database compatible
+* translation-friendly
+* scalable
+* reusable
+
+Dynamic content MUST NOT use static i18n translation files.
+
+Instead use multilingual database-ready objects.
+
+DO NOT USE:
+
+* questionUz
+* questionRu
+* titleUz
+* titleRu
+
+USE THIS STRUCTURE EVERYWHERE:
+
+{
+question: {
+uz: "Nechta xona?",
+ru: "Сколько комнат?"
+}
+}
+
+Create reusable localization types.
+
+Example:
+
+type LocalizedText = {
+uz?: string;
+ru?: string;
+};
+
+Create reusable helper:
+
+getLocalizedText(field, currentLanguage)
+
+Behavior:
+
+1. Return requested language
+2. If missing:
+   fallback to Uzbek
+3. Never crash UI
+
+Example:
+
+getLocalizedText(question.title, "ru")
+
+Create a full multilingual question editor.
+
+The editor should feel like a mini CMS.
+
+Example structure:
+
+{
+id: "room_count",
+
+type: "select",
+
+question: {
+uz: "Nechta xona?",
+ru: "Сколько комнат?"
+},
+
+placeholder: {
+uz: "Tanlang",
+ru: "Выберите"
+},
+
+options: [
+{
+id: "1",
+
+```
+  label: {
+    uz: "1 xona",
+    ru: "1 комната"
+  }
+}
+```
+
+],
+
+required: true
+}
+
+Prepare architecture for:
+
+* text
+* textarea
+* select
+* multi-select
+* number
+* slider
+* boolean
+* date
+* image upload
+* price
+* location
+
+Even if some are not used yet.
+
+IMPORTANT:
+DO NOT use ugly translation popups.
+
+DO NOT use:
+Question UZ
+Question RU
+
+Instead create LANGUAGE TABS.
+
+Top of editor:
+
+[ O'Z ] [ РУС ]
+
+When switching tabs:
+
+* all fields switch language
+* admin edits naturally
+
+Layout:
+
+Question Type
+[ Select ▼ ]
+
+Language Tabs
+[ O'Z ] [ РУС ]
+
+Question
+[input]
+
+Placeholder
+[input]
+
+Options
+[dynamic option list]
+
+Validation
+
+* required
+* min/max
+* limits
+
+Conditional Logic
+(collapsible advanced section)
+
+Live Preview
+(mobile-style preview card)
+
+VERY IMPORTANT:
+
+Options themselves MUST support translations.
+
+Example:
+
+options: [
+{
+value: "small",
+
+```
+label: {
+  uz: "Kichik",
+  ru: "Маленький"
+}
+```
+
+}
+]
+
+Prepare architecture for future conditional questions.
+
+Example:
+
+If:
+property_type == apartment
+
+Then:
+show room_count
+
+Structure example:
+
+showIf: {
+questionId: "property_type",
+equals: "apartment"
+}
+
+Add translation completeness indicators.
+
+Example:
+
+O'Z ✅
+РУС ⚠️
+
+If Russian translation missing:
+show warning badge.
+
+Add:
+"Copy from Uzbek"
+
+Behavior:
+Copies Uzbek text into Russian fields.
+
+Useful for fast editing.
+
+Right side or bottom preview card.
+
+Shows:
+
+* actual rendered question
+* current language preview
+* option appearance
+* validation appearance
+
+Should resemble real app UI.
+
+Since database does not exist yet:
+
+Store all dynamic content in structured mock data files.
+
+Folder structure:
+
+src/
+├── data/
+│   ├── questions.ts
+│   ├── categories.ts
+│   ├── plans.ts
+│   └── faq.ts
+│
+├── lib/
+│   └── localization/
+│       ├── getLocalizedText.ts
+│       └── localizationTypes.ts
+
+The structure MUST already resemble future API/database responses.
+
+This allows:
+Later replacing:
+mock data → real backend
+
+WITHOUT frontend rewrite.
+
+Continue using existing i18n system ONLY for:
+
+* buttons
+* menus
+* static labels
+* navigation
+* settings
+
+Dynamic/admin-created content MUST use multilingual objects.
+
+Keep existing Hormang design language:
+
+* rounded corners
+* soft shadows
+* premium mobile feel
+* modern spacing
+* smooth animations
+
+Do NOT redesign unrelated admin pages.
+
+This task is NOT just translation support.
+
+This is building:
+
+* multilingual CMS architecture
+* future-proof admin panel
+* scalable dynamic content system
+* database-ready localization structure
+
+The final system should scale cleanly when backend/database is added later.

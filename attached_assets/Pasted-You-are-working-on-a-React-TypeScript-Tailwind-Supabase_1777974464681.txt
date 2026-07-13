@@ -1,0 +1,205 @@
+You are working on a React + TypeScript + Tailwind + Supabase (or localStorage fallback) service marketplace project.
+
+## 🎯 Goal
+
+Restructure the **/feedback page** into a clean, professional **Support Center UI** by:
+
+* Separating **feedback history** and **submission flow**
+* Adding a clear **primary CTA button**
+* Moving the form into a **modal/drawer OR separate page**
+* Improving overall UX clarity and usability
+
+---
+
+# 🧠 Core UX Principle
+
+DO NOT show form + history together.
+
+👉 Default view = **History (passive)**
+👉 Action = **Button → opens form (active)**
+
+---
+
+# ✅ 1. Update `/feedback` Page (Main View)
+
+## Replace current layout with:
+
+### Header:
+
+```text
+Takliflar va shikoyatlar
+```
+
+### Primary CTA (top-right or below title):
+
+```text
+[ + Yangi murojaat ]
+```
+
+---
+
+## Below → Feedback History List:
+
+```text
+Mening murojaatlarim
+```
+
+---
+
+## Each item should show:
+
+* Type badge:
+
+  * Muammo / Shikoyat / Taklif
+* Title
+* Status badge
+* Date
+
+---
+
+## Status colors:
+
+* new → gray
+* in_review → blue
+* resolved → green
+* rejected → red
+
+---
+
+## Behavior:
+
+* Click item → open **detail modal or page**
+
+---
+
+# ✅ 2. Create Submission Flow
+
+## Option A (Preferred): Drawer / Modal
+
+* Reuse existing drawer pattern (like admin forms)
+* Slide from right
+* Overlay background
+
+---
+
+## Option B (Alternative):
+
+Create new route:
+
+```text
+/feedback/new
+```
+
+---
+
+## Form = existing implementation (reuse it)
+
+BUT:
+
+* Remove it from `/feedback`
+* Only render it inside modal/page
+
+---
+
+# ✅ 3. CTA Behavior
+
+When user clicks:
+
+```text
++ Yangi murojaat
+```
+
+→ Open:
+
+* Drawer OR navigate to `/feedback/new`
+
+---
+
+# ✅ 4. After Submission
+
+On successful submit:
+
+* Close modal OR redirect to `/feedback`
+* Show success toast:
+
+```text
+Murojaatingiz yuborildi ✅
+```
+
+* Refresh list
+
+---
+
+# ✅ 5. Empty State (IMPORTANT)
+
+If no feedback exists:
+
+```text
+Hali murojaatlar yo‘q
+
+[ + Birinchi murojaatni yuboring ]
+```
+
+---
+
+# ✅ 6. Detail View
+
+When user clicks a feedback item:
+
+Show:
+
+* Title
+* Description
+* Type
+* Status
+* Attachments
+* Admin note (if exists)
+
+---
+
+# ✅ 7. UI Rules
+
+* Clean cards (`rounded-2xl`)
+* Good spacing
+* Compact list (no large blocks)
+* Primary button visually dominant
+* Mobile-first
+
+---
+
+# ⚠️ 8. DO NOT
+
+* Do NOT show full form on main page
+* Do NOT mix form + history
+* Do NOT break existing submission logic
+* Do NOT duplicate components
+
+---
+
+# 🎯 Expected Result
+
+* `/feedback` becomes a **support inbox**
+* Users clearly see:
+
+  * their submissions
+  * their statuses
+* New submission is:
+
+  * intentional
+  * easy to access
+* UI feels clean and professional
+
+---
+
+## Deliver
+
+1. Updated `/feedback` page (history-based)
+2. CTA button added
+3. Form moved to modal or `/feedback/new`
+4. Submission flow preserved
+5. Detail view working
+6. Empty state implemented
+
+---
+
+Build it clean, minimal, and production-ready.

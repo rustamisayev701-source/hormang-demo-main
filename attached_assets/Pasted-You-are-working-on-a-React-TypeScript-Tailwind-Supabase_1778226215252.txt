@@ -1,0 +1,417 @@
+You are working on a React + TypeScript + Tailwind + Supabase (or localStorage fallback) marketplace platform called Hormang.
+
+## 🎯 Goal
+
+Implement a protected and scalable **Offer Limiting System** that prevents customer abuse and protects providers from wasting Tanga.
+
+The platform rule is:
+
+```text id="jlwm7h"
+One customer request can accept ONLY ONE provider.
+```
+
+The new system must include:
+
+* active offer limit
+* lifetime offer limit
+* auto-closing after acceptance
+* provider-side visibility
+* anti-abuse protections
+* proper Tanga validation order
+
+---
+
+# 🧠 Core Marketplace Rules
+
+## Rule 1 — Active Offer Limit
+
+Each request can have maximum:
+
+```text id="jlwm8m"
+5 ACTIVE offers
+```
+
+Active statuses:
+
+* pending
+* negotiating
+* accepted
+
+---
+
+# Rule 2 — Lifetime Offer Limit
+
+Each request can receive maximum:
+
+```text id="l4okmc"
+10 TOTAL offers EVER
+```
+
+INCLUDING:
+
+* rejected
+* cancelled
+* expired
+
+This prevents customers from endlessly cycling offers.
+
+---
+
+# Rule 3 — One Accepted Offer Only
+
+When customer accepts one provider:
+
+```text id="g4wteq"
+request.status = "matched"
+```
+
+OR:
+
+```text id="z1d8oz"
+request.acceptedOfferId = offer.id
+```
+
+Then:
+
+* request permanently closes for new offers
+
+* all other pending offers receive:
+
+  * Mijoz boshqa ijrochi taklifini qabul qildi
+
+* no new providers can apply
+
+---
+
+# ✅ 1. Backend Validation Logic (CRITICAL)
+
+Before creating an offer:
+
+## Step 1 — Check request status
+
+If request:
+
+* matched
+* completed
+* cancelled
+* closed
+
+→ block new offer creation.
+
+---
+
+## Step 2 — Count active offers
+
+```ts id="jlwm9t"
+const activeOffers = offers.filter(
+  o =>
+    o.requestId === request.id &&
+    ["pending", "negotiating", "accepted"].includes(o.status)
+);
+```
+
+---
+
+## Validation:
+
+```ts id="h2uvlu"
+if (activeOffers.length >= 5) {
+  throw new Error("Active offer limit reached");
+}
+```
+
+---
+
+# ✅ 2. Lifetime Offer Protection
+
+Count ALL offers ever created for request:
+
+```ts id="0w2xyu"
+const totalOffers = offers.filter(
+  o => o.requestId === request.id
+);
+```
+
+---
+
+## Validation:
+
+```ts id="mjlwm7"
+if (totalOffers.length >= 10) {
+  throw new Error("Lifetime offer limit reached");
+}
+```
+
+---
+
+# ✅ 3. Acceptance Lock System (VERY IMPORTANT)
+
+When customer accepts an offer:
+
+```ts id="wzjlwm"
+request.status = "matched";
+request.acceptedOfferId = offer.id;
+request.closedForOffers = true;
+```
+
+---
+
+## Then automatically:
+
+Update all other active offers:
+
+```ts id="jlwm0n"
+status = "closed_by_match"
+```
+"Mijoz boshqa ijrochi taklifini qabul qildi"
+---
+
+# ✅ 4. Provider UX (IMPORTANT)
+
+Providers must clearly understand WHY they cannot apply.
+
+---
+
+## Case 1 — Active limit reached
+
+Show:
+
+```text id="f7mjlwm"
+5 ta faol taklif mavjud
+```
+
+---
+
+## Case 2 — Lifetime limit reached
+
+Show:
+
+```text id="5jlwm1"
+Takliflar limiti tugagan
+```
+
+---
+
+## Case 3 — Customer already accepted provider
+
+Show:
+
+```text id="qjlwm2"
+Mijoz boshqa ijrochi taklifini qabul qilgan
+```
+
+---
+
+# ✅ 5. Disable Offer Submission
+
+In:
+
+* request cards
+* request details
+* offer modal
+
+Disable:
+
+* send offer button
+* Tanga deduction
+
+---
+
+## Disabled button examples
+
+```text id="jlwm3p"
+Taklif yuborib bo‘lmaydi
+```
+
+OR
+
+```text id="jlwm4r"
+So‘rov yopilgan
+```
+
+---
+
+# ⚠️ 6. IMPORTANT — Tanga Protection
+
+NEVER deduct Tanga before validation.
+
+Correct order:
+
+1. Validate request state
+2. Validate active limit
+3. Validate lifetime limit
+4. Validate provider eligibility
+5. Create offer
+6. THEN deduct Tanga
+
+---
+
+# ✅ 7. Request Card UI
+
+Show compact counters:
+
+```text id="jlwm5x"
+3 faol · 7 jami
+```
+
+Meaning:
+
+* 3 active offers
+* 7 total lifetime offers used
+
+---
+
+# If request closed:
+
+Show badge:
+
+```text id="jlwm6y"
+🔒 Yopilgan
+```
+
+---
+
+# ✅ 8. Customer UX
+
+Inside request details:
+
+Show:
+
+```text id="jlwm7z"
+5 ta faol taklif
+```
+
+and:
+
+```text id="8jlwm8"
+7 / 10 jami taklif
+```
+
+---
+
+# After acceptance:
+
+```text id="9jlwm9"
+Ijrochi tanlangan
+```
+
+---
+
+# ✅ 9. Admin Panel Integration
+
+In marketplace/admin requests table:
+
+Update columns:
+
+| Faol takliflar | Jami takliflar | Status |
+| -------------- | -------------- | ------ |
+
+---
+
+## Example:
+
+```text id="jlwm10"
+4 / 5
+8 / 10
+```
+
+---
+
+If matched:
+
+```text id="jlwm11"
+🔒 Matched
+```
+
+---
+
+# ✅ 10. Offer Statuses
+
+Support these statuses:
+
+```ts id="jlwm12"
+type OfferStatus =
+  | "pending"
+  | "negotiating"
+  | "accepted"
+  | "rejected"
+  | "cancelled"
+  | "expired"
+  | "closed_by_match";
+```
+
+---
+
+# ✅ 11. Optional Anti-Abuse Upgrade (Recommended)
+
+When customer rejects offer:
+
+Require reason:
+
+* Narx ma'qul kelmadi
+* Ijrochi taklifi mos kelmadi
+* Tajriba yetarli emas
+* Boshqa
+
+This discourages spam rejection behavior.
+
+---
+
+# 🎨 12. UI Rules
+
+* compact indicators
+* subtle warnings
+* mobile-first
+* no aggressive red blocking UI
+* informative disabled states
+
+---
+
+# ⚠️ 13. DO NOT
+
+* Do NOT reopen unlimited cycles
+* Do NOT allow offers after acceptance
+* Do NOT deduct Tanga before validation
+* Do NOT hide reasons from providers
+* Do NOT count only active offers
+
+---
+
+# 🎯 Expected Result
+
+Hormang marketplace now becomes:
+
+* protected against customer abuse
+* fair for providers
+* scalable
+* controlled
+* trust-based
+
+Providers:
+
+* stop wasting Tanga
+* understand request availability clearly
+
+Customers:
+
+* still receive enough competition
+* cannot exploit the system infinitely
+
+Admins:
+
+* can monitor request saturation and quality
+
+---
+
+## Deliver
+
+1. Active offer limit logic (5)
+2. Lifetime offer limit logic (10)
+3. Acceptance lock system
+4. Provider-side disabled states
+5. Request counter UI
+6. Admin visibility
+7. Proper Tanga validation order
+8. Auto-close logic after acceptance
+
+Build it production-ready and fully integrated with existing request/offer systems.

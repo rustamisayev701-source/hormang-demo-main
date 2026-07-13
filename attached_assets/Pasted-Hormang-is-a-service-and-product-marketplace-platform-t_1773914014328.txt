@@ -1,0 +1,25 @@
+Hormang is a **service and product marketplace platform** that connects local buyers with service providers and small‑scale sellers in a single app. It covers both **goods** (products) and **services** (like home cleaning, repairs, nannies, cooking, and other everyday tasks), allowing users to post requests, browse providers, chat, book, pay, and review in one flow.  
+
+Key aspects that are not yet included in the list above but are important for a complete project description:
+
+- **Core idea**:  
+  Hormang solves the problem of finding trusted, affordable local services quickly, especially when someone is new to a city or needs a non‑corporate, “human‑scale” provider. It focuses on **local, informal‑to‑semi‑formal micro‑businesses** and individual experts.
+
+- **Target users**:  
+  - **Buyers**: residents who need fast, reliable services or local products (e.g., moving, home help, last‑minute help with guests, repairs, food, etc.).  
+  - **Providers**: freelancers, artisans, small business owners, homemakers, and others who want an easy way to showcase their work and get clients without big marketing investments.
+
+- **Main product flows (user journeys)**:  
+  - Buyer: register → browse/search → send request or choose a provider → chat → book/order → pay (card or cash) → rate.  
+  - Provider: register → publish services/products → receive requests/leads → bid or accept → chat → complete job → get paid → earn reputation.  
+  - Admin: monitor, moderate, and manage users, orders, payments, and monetization rules.
+
+- **Market context and differentiation**:  
+  Hormang competes conceptually with platforms like Ustabor.uz, Naimi.kz, and Soomgo, but focuses on being **simple, mobile‑first, and close to local communities** in Uzbekistan and similar markets. It combines a classic marketplace with **AI‑assisted search** (“smart matching”) to help users describe their needs in plain text and get relevant providers automatically.
+
+- **Business and operating model**:  
+  - Revenue is mainly **B2P (business‑to‑provider)**: providers pay for **leads/credits**, **subscriptions for unlimited leads**, and **promotion** (top‑listing, badges).  
+  - Buyers can pay services via **card** (through the platform) or **cash** (directly to the provider), which makes the platform attractive for local cash‑dominant markets.
+
+- **Technology stance**:  
+  Hormang is built as a **mobile‑first platform** (web + Android/iOS or cross‑platform like Flutter), with a **REST/WS‑based backend**, role‑based auth, and an **AI support layer** for search and recommendations. The current structure you listed already covers almost all core **functional modules**; what’s missing from the description is this **high‑level product story**, target geography, and business‑model overview that sit **on top** of the technical split.

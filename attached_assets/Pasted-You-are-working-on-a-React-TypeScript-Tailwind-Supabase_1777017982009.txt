@@ -1,0 +1,220 @@
+You are working on a React + TypeScript + Tailwind + Supabase service marketplace project in Replit.
+
+## 🎯 Goal
+
+Extend the recent unified customer location refactor and update **provider service area selection** to match the new location structure.
+
+Current provider location selection is inconsistent with the new customer location model and needs redesign.
+
+This change MUST preserve provider-customer location matching logic.
+
+---
+
+## Current Problems
+
+Current provider selection:
+
+* Toshkent shahri (too broad, automatically receives all district requests)
+* Toshkent viloyati regions chosen separately
+
+Problems:
+
+* inconsistent with new unified customer location selector
+* too simplistic for providers
+* no easy multi-select district coverage
+* matching logic now needs aligned structures
+
+---
+
+# ✅ Redesign Provider Service Area Selection
+
+Refactor provider location/service area selection UI into a simpler but more flexible selector matching customer location structure.
+
+Use two collapsible groups:
+
+## 1. Toshkent shahri
+
+Provider can choose:
+
+### Options:
+
+* Select All districts (receives all city requests)
+* Single district
+* Multiple districts
+
+Use multi-select checklist UI.
+
+Example:
+
+Toshkent shahri
+☑ Select All
+
+or
+
+☐ Yunusobod
+☐ Chilonzor
+☐ Mirzo Ulug'bek
+☐ Shayxontohur
+etc.
+
+Behavior:
+
+* If "Select All" checked:
+  all district boxes auto-selected or district matching treated as full city coverage.
+* If individual districts selected:
+  only those districts matched.
+
+---
+
+## 2. Toshkent viloyati
+
+Same pattern.
+
+Use multi-select checklist:
+
+☑ Select All
+
+or choose one/many:
+☐ Angren
+☐ Bekobod
+☐ Chirchiq
+☐ Olmaliq
+etc.
+
+Provider can:
+
+* serve all viloyat
+* one region
+* several regions
+
+---
+
+## Provider Can Select From BOTH Groups
+
+Allow combinations like:
+
+* All Toshkent shahri + only Angren
+* Only Yunusobod + Bekobod + Chirchiq
+* All city + all viloyat
+
+Do not force one or the other.
+
+---
+
+# Data Model (Important)
+
+Refactor provider service areas into structured format aligned with customer request location.
+
+Example:
+
+```json id="gb4ca2"
+{
+  "toshkent_city": {
+    "all": false,
+    "districts": ["Yunusobod","Chilonzor"]
+  },
+  "toshkent_region": {
+    "all": true,
+    "regions": []
+  }
+}
+```
+
+If "all" true:
+regions list can be empty or ignored.
+
+---
+
+# Matching Logic (CRITICAL)
+
+Update location matching so it works with:
+
+* customer unified location question
+* provider district multi-select
+* provider "select all"
+
+Examples:
+
+Customer:
+Toshkent shahri → Yunusobod
+
+Matches providers with:
+
+* all city selected
+  OR
+* Yunusobod selected
+
+---
+
+Customer:
+Toshkent viloyati → Angren
+
+Matches providers with:
+
+* all viloyat selected
+  OR
+* Angren selected
+
+Maintain all current request routing logic.
+
+Do not break lead matching.
+
+---
+
+# UI Requirements
+
+Keep UI less sophisticated and easier than current setup.
+
+Prefer:
+
+* accordion or collapsible sections
+* checkbox multi-select
+* "Select All" sticky at top
+* simple clean admin/settings-style UI
+
+Avoid complex map UI.
+
+Mobile friendly.
+
+---
+
+# Update Related Areas
+
+Apply new provider location selector in:
+
+* provider onboarding
+* provider profile edit settings
+* any provider service area forms
+* admin/provider management views if applicable
+
+Use same shared location data source as customer questionnaire.
+
+Do not duplicate datasets.
+
+---
+
+# Bonus UX
+
+If provider selects "Select All"
+show small badge:
+"All Toshkent shahri covered"
+
+If multiple districts:
+show summary:
+"3 districts selected"
+
+---
+
+## Deliver
+
+Implement:
+
+1. New provider service area selector
+2. Update provider location data model
+3. Update matching logic to support:
+
+   * all
+   * one
+   * many selections
+4. Keep compatibility with new customer unified location question
+5. Preserve request-provider matching

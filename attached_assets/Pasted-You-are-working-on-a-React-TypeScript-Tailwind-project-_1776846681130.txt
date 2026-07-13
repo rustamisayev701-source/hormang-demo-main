@@ -1,0 +1,158 @@
+You are working on a React + TypeScript + Tailwind project.
+
+## 🎯 Goal
+
+Improve the **review system UI/UX and functionality** across:
+
+1. Public Profile Preview (PPP) Modal
+2. `/provider-reviews` page
+
+---
+
+## 🧩 Tasks
+
+### 1. Make Reviews Accessible from PPP Modal
+
+* In the Public Profile Preview Modal, there is a **star rating section**.
+* When user clicks the stars (or rating area):
+  → Navigate to `/provider-reviews`
+  → Pass the correct `providerId`
+
+#### Requirements:
+
+* Use React Router navigation (`useNavigate`)
+* Entire rating section should be clickable (not just stars)
+* Cursor should be `pointer`
+
+---
+
+### 2. Fix Star Rating Rendering (IMPORTANT)
+
+### ❌ Current Problem:
+
+* Ratings are rounded down (e.g. 3.3 → only 3 stars filled)
+
+### ✅ Expected Behavior:
+
+* Support **partial star filling**
+* Example:
+
+  * 3.3 → 3 full stars + 30% of 4th star
+  * 4.7 → 4 full stars + 70% of 5th star
+
+---
+
+### ✅ Implementation Requirements:
+
+Create reusable component:
+
+```tsx
+<StarRating rating={number} />
+```
+
+### Logic:
+
+* Total stars = 5
+* For each star:
+
+  * If index < floor(rating) → full
+  * If index === floor(rating) → partial fill
+  * Else → empty
+
+---
+
+### 💡 UI Implementation (IMPORTANT)
+
+Each star should:
+
+* Have gray background (empty state)
+* Overlay a filled star with **width = percentage**
+
+Example logic:
+
+```tsx
+const percentage = (rating - index) * 100;
+```
+
+Use:
+
+* `overflow-hidden`
+* `position: absolute`
+
+---
+
+### 3. Apply StarRating Everywhere
+
+Replace all star displays with the new component:
+
+#### Locations:
+
+* PPP Modal
+* `/provider-reviews` hero card
+* Any review cards
+
+---
+
+### 4. Fix Hero Card Star Display
+
+### ❌ Current:
+
+* Shows number (e.g. 4.0) but stars are missing or incorrect
+
+### ✅ Fix:
+
+* Show:
+
+  * Rating number
+  * StarRating component next to it
+  * Review count
+
+Example layout:
+
+```tsx
+4.3 ★★★★☆ (3 ta sharh)
+```
+
+---
+
+### 5. Keep UI Consistent
+
+* Use same star size everywhere (e.g. `w-4 h-4`)
+* Use:
+
+  * Filled: `text-amber-400`
+  * Empty: `text-gray-300`
+
+---
+
+### 6. Code Quality
+
+* TypeScript safe (no `any`)
+* Reusable components
+* No duplication
+
+---
+
+## 🎯 Expected Result
+
+* Clicking stars in PPP modal → opens `/provider-reviews`
+* Star ratings show **precise fractional fill**
+* UI looks consistent across app
+* Hero card correctly displays stars + rating
+
+---
+
+## ⚠️ Do NOT:
+
+* Use external star rating libraries
+* Round ratings
+* Break existing layout
+
+---
+
+## ✅ Deliver:
+
+* New `StarRating.tsx` component
+* Updated PPP modal
+* Updated `/provider-reviews` page
+* Clean, reusable code

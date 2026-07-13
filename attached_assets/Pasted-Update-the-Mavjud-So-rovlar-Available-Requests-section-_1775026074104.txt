@@ -1,0 +1,53 @@
+Update the "Mavjud So'rovlar" (Available Requests) section in the Provider Home page (/provider-home or /dashboard).
+
+### Current Changes Required:
+
+1. **Remove Tabs**
+   - Completely remove the "All | New | Seen" tabs.
+
+2. **Make Stats Row Clickable**
+   - Keep the three-stat row exactly like the screenshot style:
+     - **Jami** (Total requests)
+     - **Yangi so'rovlar** (New requests) — with a small red dot when there are unseen requests
+     - **Taklif olmagan so'rovlar** (Requests with 0 offers)
+
+   - Make each of the three stats **clickable**:
+     - Clicking **"Barcha so'rovlar"** → opens a modal/pop-up showing **all matching requests** (filtered by provider’s selected categories).
+     - Clicking **"Yangi so'rovlar"** → opens a modal showing **only unseen/new requests** (filtered by provider’s selected categories). 
+       - Show a **red dot** on this stat when there are new/unseen requests. The dot should disappear when there are no new requests.
+     - Clicking **"Taklif olmagan so'rovlar"** → opens a modal showing **requests that have received 0 offers** from any provider (also filtered by the current provider’s selected categories).
+
+3. **Modal / Pop-up Design**
+   - Create a clean, full-screen or large modal for each click.
+   - Inside each modal:
+     - Show requests as cards or list (similar to the sliding cards you already have).
+     - Each request card must show: category, location, budget, urgency, time ago, number of offers ("Takliflar: X ta").
+     - Include "Respond" button on each card that opens the existing Offer Form.
+   - Add a close button (X) at the top.
+   - Title the modals appropriately:
+     - "Barcha mos keladigan so'rovlar"
+     - "Yangi so'rovlar"
+     - "Taklif olmagan so'rovlar"
+
+4. **Category Matching**
+   - All three modals must **only show requests** that match the current provider’s `selectedCategories`.
+   - If no matching requests, show a nice empty state: "Sizning kategoriyalaringiz bo'yicha so'rovlar yo'q".
+
+5. **Real-time Behavior**
+   - The red dot on "Yangi so'rovlar" must update in real-time.
+   - When a provider submits an offer, the "Taklif olmagan so'rovlar" count should update immediately (that request should disappear from this section).
+   - Use the centralized data hook / localStorage listener so changes reflect instantly.
+
+### Technical Requirements:
+- Use existing modal pattern or create a reusable Modal component if needed.
+- Keep the beautiful red-themed design consistent with the rest of the app.
+- All text in Uzbek (Latin script).
+- Make sure clicking the stats does not navigate away — use modals only.
+
+Priority order:
+1. Remove the old tabs.
+2. Make the three stats clickable with proper modals.
+3. Implement the red dot logic for "Yangi so'rovlar".
+4. Ensure category filtering works correctly in all modals.
+
+Implement these changes now. Start by modifying the stats row in the provider home page.

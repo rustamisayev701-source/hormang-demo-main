@@ -1,0 +1,369 @@
+You are working on a React + TypeScript + Tailwind + Supabase (or localStorage fallback) service marketplace project in Replit.
+
+## 🎯 Goal
+
+Build a **clean, modern, fully functional Customer Dashboard** at:
+
+```text
+/dashboard
+```
+
+This will replace the current landing page for **logged-in customers** and must be fully connected to real platform data (NO mock data).
+
+---
+
+# 🧠 Core Principles
+
+* Mobile-first design
+* Blue theme (primary: `#3B82F6`)
+* Clean spacing, rounded cards (`rounded-2xl`)
+* Fast and responsive
+* Action-oriented UX (help user take next step quickly)
+
+---
+
+# 🎨 1. Global UI Requirements
+
+## Color Theme:
+
+* Primary: blue (`#3B82F6`)
+* Light backgrounds: `bg-blue-50`
+* Accents: indigo / lighter blues
+
+---
+
+## Layout:
+
+* vertical scroll
+* sections separated with spacing (`space-y-4`)
+* consistent card style
+
+---
+
+# 🔻 2. Bottom Navigation (UPDATE EXISTING)
+
+Must have EXACTLY 5 items:
+
+```text
+Bosh sahifa → /dashboard
+Kategoriyalar → /categories (or survey entry)
+So'rovlarim → /my-requests
+Suhbatlarim → /chats
+Profil → /profile
+```
+
+## Behavior:
+
+* Highlight active route
+* Persistent across customer pages
+
+---
+
+# 🔐 3. Role-Based Routing (CRITICAL)
+
+After login:
+
+```ts
+if (user.role === "customer") → redirect to /dashboard
+if (user.role === "provider") → redirect to /provider-home
+```
+
+---
+
+# 🧩 4. Data Connections (MANDATORY)
+
+ALL sections must use REAL data:
+
+## Requests:
+
+```ts
+requests.filter(r => r.userId === currentUser.id)
+```
+
+## Active Requests:
+
+```ts
+status !== "completed"
+```
+
+## Offers:
+
+```ts
+offers.filter(o =>
+  userRequests.some(r => r.id === o.requestId)
+)
+```
+
+## Chats:
+
+* conversations involving current user
+* sorted by last message
+
+
+---
+
+# 🧱 5. Page Structure
+
+---
+
+## 🟦 5.1 Header
+
+### Layout:
+
+* Left: Hormang logo
+* Center: Greeting:
+
+```text
+Assalomu alaykum, [First Name]!
+```
+
+* Right:
+
+  * Profile image (click → profile preview/page)
+  * Notification bell
+
+---
+
+## 🟦 5.2 Profile Quick Card
+
+Blue gradient background:
+
+* Profile photo
+* Name
+* Location
+* Profile completion %
+
+### Logic:
+
+* calculate completion based on filled fields
+
+### CTA:
+
+```text
+Profilni to'ldirish
+```
+
+---
+
+## 🟦 5.3 Quick Stats (Horizontal Scroll)
+
+3 cards:
+
+1. Faol so'rovlarim
+2. Kutilayotgan takliflar
+3. Yakunlangan buyurtmalar
+
+---
+
+## Logic:
+
+```ts
+activeRequests = requests.filter(r => r.status !== "completed")
+completedRequests = requests.filter(r => r.status === "completed")
+
+pendingOffers = offers.filter(o => o.status === "pending")
+
+---
+
+## 🟦 5.4 My Active Requests
+
+### Title:
+
+```text
+Mening faol so'rovlarim
+```
+
+### Display:
+
+* max 5 items
+* use existing RequestCard component
+
+### Each card:
+
+* title
+* status badge
+* offer count
+
+### Click:
+
+→ open request detail page
+
+---
+
+## Empty State:
+
+```text
+Hozircha faol so'rovlar yo'q
+[Yangi so'rov yaratish]
+```
+
+---
+
+## 🟦 5.5 New Offers (IMPORTANT)
+
+### Title:
+
+```text
+Yangi takliflar
+```
+
+### Logic:
+
+* latest offers for user's requests
+* sort by newest
+* limit 5
+
+---
+
+### UI:
+
+* horizontal scroll cards
+* show:
+
+  * provider photo
+  * name
+  * price
+  * rating
+
+---
+
+### Click:
+
+→ open offers list for that request
+
+---
+
+## Empty State:
+
+```text
+Hozircha takliflar yo'q
+```
+
+---
+
+## 🟦 5.6 Recent Chats
+
+### Title:
+
+```text
+Oxirgi suhbatlar
+```
+
+### Logic:
+
+* last 5 conversations
+* sort by last message
+
+---
+
+### UI:
+
+* avatar
+* name
+* last message
+* unread badge
+
+---
+
+### Click:
+
+→ open chat
+
+---
+
+## Empty State:
+
+```text
+Suhbatlar hali mavjud emas
+```
+
+---
+
+## 🟦 5.7 Quick Actions (2x2 Grid)
+
+Buttons:
+
+1. ➕ Yangi so'rov yaratish (PRIMARY)
+2. 📂 Kategoriyalarni ko'rish
+3. 📄 Barcha so'rovlarim
+
+---
+
+## 🟦 5.8 Recommended Services
+
+### Logic:
+
+* based on:
+
+  * user's past requests categories
+    OR
+  * popular categories
+
+---
+
+### UI:
+
+* horizontal scroll
+* category cards
+
+---
+
+# ⚡ 6. Performance Rules
+
+* limit all lists to max 5 items
+* sort by newest
+* avoid unnecessary re-renders
+* use memoization if needed
+
+---
+
+# 🎯 7. UX Requirements
+
+* smooth scrolling
+* responsive
+* consistent spacing
+* clear hierarchy
+* fast loading
+
+---
+
+# 🧪 8. Edge Cases
+
+Handle:
+
+* no requests
+* no offers
+* no chats
+* missing profile info
+
+---
+
+# 🎯 Expected Result
+
+* Customer lands on `/dashboard` after login
+* Sees personalized, real data
+* Can:
+
+  * create requests
+  * view offers
+  * open chats
+* UI feels modern, clean, and fast
+
+---
+
+# 📦 Deliver
+
+1. `/dashboard` page
+2. Updated bottom navigation
+3. Role-based routing
+4. Fully connected data logic
+5. All sections implemented with real data
+6. Empty states handled
+
+---
+
+Do NOT:
+
+* use mock data
+* break existing components
+* duplicate logic unnecessarily

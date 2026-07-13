@@ -1,0 +1,41 @@
+Implement the correct behavior when a customer accepts an offer.
+
+### Exact Rules to Enforce:
+
+1. **When Customer Accepts an Offer**:
+   - Only **one offer** per request can be accepted (other "Accept" buttons must disappear or become disabled immediately).
+   - The accepted offer status changes to "accepted".
+   - All other offers on the same request remain visible but cannot be accepted.
+
+2. **Notification to Other Providers**:
+   - Providers who **already sent an offer** on this request:
+     - In their chat with the customer, show a clear system message:  
+       **"Xaridor boshqa ijrochi taklifini qabul qildi"**
+   - Providers who **did not send an offer**:
+     - The request must completely disappear from their "Mavjud So'rovlar", modals, and all request lists.
+
+3. **Customer Confirmation Modal** (before accepting):
+   - When customer clicks "Accept" on an offer, show a warning modal with:
+     - Title: "Taklifni qabul qilish"
+     - Text:
+       "Ijrochi taklifini qabul qilishdan oldin quyidagilar bilan tanishib chiqing:
+        - 1 ta so'rovga faqat 1 ta taklif qabul qilish mumkin;
+        - Taklifni qabul qilishdan oldin qolgan ijrochilar bilan batafsil muhokama qilishingiz mumkin;"
+     - Required checklist (customer must check all boxes):
+       - Men taklif tafsilotlarini (narx, muddat, shartlar) to'liq o'qib chiqdim va tushundim
+       - Men kelishilgan narxni to'lashga roziman
+       - Men ijrochi bilan hurmat va ochiqlik bilan muloqot qilaman
+       - Men ijrochi uchun kerakli ma'lumot va kirish imkoniyatini taqdim etaman
+       - Men taklifni qabul qilgandan keyin bekor qilish qiyin bo'lishini tushunaman
+     - Buttons: "Bekor qilish" and "Qabul qilaman" (disabled until all checkboxes are checked)
+
+### Technical Requirements:
+- Use existing offer status logic.
+- Update offer status in the shared "offers" key so it reflects instantly for everyone.
+- Ensure real-time updates (storage listener) for all affected providers.
+- Keep the request visible to the provider whose offer was accepted.
+- Hide the request from providers who didn't send an offer.
+
+Implement this complete flow now.
+
+Start with the customer-side accept confirmation modal and the logic that hides the request from non-offering providers.

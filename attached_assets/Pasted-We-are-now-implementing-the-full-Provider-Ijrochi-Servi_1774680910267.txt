@@ -1,0 +1,86 @@
+We are now implementing the full **Provider (Ijrochi / Service Provider)** view of the app. The customer side already exists.
+
+### Role-Based Bottom Navigation
+- Detect current user role (`customer` or `provider` / `ijrochi`). Use the existing user context / auth state.
+- Show **different** bottom navigation depending on the role:
+  - **For Provider (Ijrochi)**:
+    1. **Bosh sahifa** (Home icon) → Provider home page
+    2. **So'rovlar** (List icon) → Requests page
+    3. **Smart-Hormang** (Star / Spark icon) → Disabled / "Tez orada" (coming soon). Make it greyed out and not clickable.
+    4. **Suhbatlarim** (Message icon) → Chat page
+    5. **Profil** (User icon) → Profile page
+- Only show bottom nav for logged-in users. Hide it on login/register pages.
+- Highlight the active tab based on current route.
+- Add padding-bottom to main content so bottom nav doesn't overlap.
+
+### Provider Home Page (`/provider-home` or keep as `/` for providers)
+When a provider logs in, their "Bosh sahifa" should contain these sections:
+
+1. **Profile Completion**
+   - Circular progress indicator (e.g. 65% complete)
+   - Text: "Profilingiz 65% to'ldirilgan"
+   - List of missing items (e.g. "Rasm qo'shing", "Xizmat turlarini belgilang", "Tajriba qo'shing", "Shahar tanlang")
+   - Whole section is clickable and navigates to `/profile/settings`
+
+2. **Upcoming Services (Calendar)**
+   - Simple calendar view or list of upcoming accepted services
+   - Show date, service title, customer name, time
+   - Buttons to add new service, edit, or mark as done
+
+3. **Events** – Show "Tez orada" (Coming soon) placeholder for now.
+
+4. **Available Requests**
+   - Tabs: All | New | Seen
+   - Display requests in recency order (newest first)
+   - Show requests as horizontal swipeable cards or with Next / Back buttons
+   - Each card shows: category, short description, budget, urgency, location, time posted
+
+5. **Share My Profile**
+   - Title: "Profilimni ulashing"
+   - Two buttons:
+     - **Copy link** → copies current profile URL to clipboard + success toast
+     - **Telegram** → copies URL and opens Telegram (use `window.open('https://t.me/share/url?url=...')` or similar)
+
+### So'rovlar Page (`/so'rovlar`)
+- Top: **Unseen requests** badge (e.g. "Yangi so'rovlar: 7")
+- Clicking the unseen section opens **fullscreen sliding cards**:
+  - One request per screen
+  - Swipe or Next/Back buttons
+  - Show full request information
+  - Bottom buttons: **Ignore** (red) and **Respond** (green)
+- Below the sliding area: scrollable list of all requests
+  - Filter by service category (chips or dropdown)
+  - When a category is selected, show only matching requests
+  - Each list item shows basic info + "Respond" button
+
+### Smart-Hormang (3rd tab)
+- Disabled / greyed out
+- On click: show toast "Tez orada mavjud bo'ladi"
+
+### Suhbatlarim Page (`/suhbatlarim`)
+- Simple chat list
+- Search bar at the top
+- Sorting tabs: All | Unread | By service
+- Each chat row: master/customer name, last message, time, unread count
+- Click opens the actual chat (reuse existing chat component)
+
+### Profile Page
+- Keep exactly as it is now (no changes needed).
+
+### Technical Requirements
+- Use existing React Router.
+- Make bottom nav dynamic based on role (use context or user state).
+- All navigation must work correctly (logo → landing page `/`, bottom nav, internal buttons).
+- Use localStorage for mock data (requests, chats, profile completion, etc.) so everything is testable immediately.
+- Add realistic mock data for providers (several requests, chats, upcoming services).
+- All text in Uzbek (Latin script).
+- Keep clean, modern, mobile-first design.
+
+Priority order:
+1. Role-based bottom navigation (switch between customer and provider)
+2. Provider Bosh sahifa with all 5 sections
+3. So'rovlar page (unseen + sliding cards + filtered list)
+4. Suhbatlarim page
+5. Make Smart-Hormang disabled
+
+Implement everything now. First update the bottom navigation to be role-aware, then create the provider home page.

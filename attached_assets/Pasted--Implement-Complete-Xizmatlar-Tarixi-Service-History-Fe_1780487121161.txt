@@ -1,0 +1,424 @@
+# Implement Complete "Xizmatlar Tarixi" (Service History) Feature for Providers
+
+You are working on Hormang, a marketplace platform similar to Soomgo where customers create service requests and providers send offers.
+
+Implement a complete Provider Service History system.
+
+## Goal
+
+Providers should be able to see all completed services, their earnings, ratings, customer reviews, statistics, and portfolio-worthy projects.
+
+This feature should feel professional and production-ready.
+
+---
+
+# 1. Create Service History Data Model
+
+Create a ServiceHistory entity.
+
+Fields:
+
+```ts
+interface ServiceHistory {
+  id: string;
+
+  providerId: string;
+  customerId: string;
+
+  requestId: string;
+  offerId: string;
+
+  categoryId: string;
+  categoryName: string;
+
+  serviceTitle: string;
+  serviceDescription: string;
+
+  finalPrice: number;
+
+  status: "completed";
+
+  rating?: number;
+  review?: string;
+
+  completedAt: Timestamp;
+
+  durationMinutes?: number;
+
+  beforePhotos?: string[];
+  afterPhotos?: string[];
+
+  locationName?: string;
+
+  isRepeatCustomer: boolean;
+
+  isPortfolio: boolean;
+}
+```
+
+Important:
+
+Store a snapshot when service is completed.
+
+Do NOT rely on original request data later.
+
+---
+
+# 2. Automatically Create History Record
+
+When:
+
+Request.status === "completed"
+
+Create ServiceHistory record automatically.
+
+Copy:
+
+* service title
+* category
+* final price
+* customer
+* provider
+* completion date
+* review/rating
+
+This record must remain immutable.
+
+---
+
+# 3. Provider History Screen
+
+Create:
+
+ProviderHistoryScreen.tsx
+
+Navigation path:
+
+/dashboard
+→ Xizmatlar Tarixi
+
+Layout:
+
+---
+
+⭐ 4.9
+
+127 xizmat
+
+48.5M so'm
+
+## 98% muvaffaqiyat
+
+[Tarix] [Sharhlar] [Statistika]
+
+## (List below)
+
+Use existing design system.
+
+---
+
+# 4. Statistics Header
+
+Calculate dynamically.
+
+Show:
+
+Average Rating
+
+Total Completed Jobs
+
+Total Earnings
+
+Success Rate
+
+Example:
+
+⭐ 4.9
+
+127 Xizmat
+
+48,500,000 so'm
+
+98%
+
+Use cached queries if available.
+
+---
+
+# 5. History List
+
+Display service cards.
+
+Card Design:
+
+Category Icon
+
+Service Title
+
+Date
+
+Location
+
+Price
+
+Rating
+
+Example:
+
+Tozalash
+
+⭐ 5.0
+
+250,000 so'm
+
+15 May 2026
+
+Yunusobod
+
+---
+
+# 6. Empty State
+
+If no completed services:
+
+Show illustration/icon.
+
+Text:
+
+Xizmatlar tarixi hali bo'sh
+
+Birinchi muvaffaqiyatli buyurtmangiz
+yakunlangach bu yerda ko'rinadi.
+
+Add CTA:
+
+So'rovlarni ko'rish
+
+---
+
+# 7. History Detail Page
+
+Create:
+
+ProviderHistoryDetailScreen.tsx
+
+When card tapped.
+
+Show:
+
+Service title
+
+Category
+
+Completion date
+
+Customer name
+
+Location
+
+Final price
+
+Rating
+
+Review
+
+Before photos
+
+After photos
+
+Provider notes if available
+
+Modern card layout.
+
+---
+
+# 8. Reviews Tab
+
+Second tab.
+
+Display all reviews.
+
+Card:
+
+⭐ 5.0
+
+Customer Name
+
+Date
+
+Newest first.
+
+Support pagination.
+
+For detailed view redirect to /provider-reviews(related review)
+
+---
+
+# 9. Statistics Tab
+
+Create analytics section.
+
+Show:
+
+This Month Earnings
+
+Total Earnings
+
+Completed Jobs
+
+Average Rating
+
+Most Popular Category
+
+Repeat Customers
+
+Use cards.
+
+Later chart support.
+
+Prepare architecture for future charts.
+
+---
+
+# 10. Portfolio Feature
+
+Allow provider to mark service:
+
+Add button:
+
+⭐ Portfolioga qo'shish
+
+Updates:
+
+isPortfolio = true
+
+Portfolio jobs appear on public provider profile.
+
+Create:
+
+Provider Portfolio section.
+
+Show:
+
+After photos
+
+Title
+
+Category
+
+Price
+
+Completion date
+
+---
+
+# 11. Filtering
+
+History screen filters:
+
+All
+
+This Month
+
+Last 3 Months
+
+This Year
+
+Category Filter
+
+Rating Filter
+
+Completed newest first.
+
+---
+
+# 12. Search
+
+Search by:
+
+Service title
+
+Category
+
+Customer name
+
+Location
+
+Debounced search.
+
+300ms debounce.
+
+---
+
+# 13. Performance Requirements
+
+Use pagination.
+
+20 items per page.
+
+Lazy loading.
+
+Avoid loading full history at once.
+
+Use indexes for:
+
+providerId
+
+completedAt
+
+categoryId
+
+rating
+
+---
+
+# 14. Security Rules
+
+Provider may only view:
+
+providerId == currentUser.id
+
+Customer history must not be visible.
+
+Portfolio items are public.
+
+Everything else remains private.
+
+---
+
+# 15. Future Ready
+
+Architecture should support:
+
+Achievements
+
+Badges
+
+Revenue charts
+
+AI Insights
+
+Repeat customer metrics
+
+Referral tracking
+
+Without major refactoring.
+
+---
+
+# Expected Deliverables
+
+1. Database schema
+2. ServiceHistory model
+3. Automatic history creation logic
+4. ProviderHistoryScreen
+5. ProviderHistoryDetailScreen
+6. Reviews tab
+7. Statistics tab
+8. Portfolio integration
+9. Filtering
+10. Search
+11. Pagination
+12. Security rules
+
+Build with clean TypeScript, responsive mobile UI, and existing Hormang design language.

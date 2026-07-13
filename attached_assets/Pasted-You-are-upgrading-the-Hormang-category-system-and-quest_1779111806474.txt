@@ -1,0 +1,401 @@
+You are upgrading the Hormang category system and questionnaire editor architecture.
+
+CRITICAL:
+The current matching system is still using category STRING NAMES for matching.
+
+This is dangerous and MUST be refactored to immutable category IDs WITHOUT breaking existing matching behavior.
+
+==================================================
+IMPORTANT GOAL
+==============
+
+Build a complete:
+
+* category management system
+* category creation/editing UI
+* multilingual category architecture
+* questionnaire-category integration
+
+WHILE preserving and safely migrating matching logic.
+
+==================================================
+CURRENT PROBLEM
+===============
+
+Current matching.ts uses string normalization:
+
+normalizeCategory(name)
+
+and compares translated category names.
+
+This WILL break when:
+
+* admin renames category
+* Uzbek/Russian differ
+* emojis added
+* translations change
+* typos happen
+
+==================================================
+NEW REQUIRED ARCHITECTURE
+=========================
+
+Categories MUST use immutable IDs.
+
+Matching MUST ONLY use category IDs.
+
+Translated names are PRESENTATION ONLY.
+
+==================================================
+NEW CATEGORY STRUCTURE
+======================
+
+Create centralized category model:
+
+{
+id: "cleaning",
+
+emoji: "🧹",
+
+title: {
+uz: "Tozalash",
+ru: "Уборка"
+},
+
+description: {
+uz: "Uy va ofis tozalash",
+ru: "Уборка дома и офиса"
+},
+
+isActive: true,
+
+parentCategoryId: null,
+
+color: "#4F46E5"
+}
+
+==================================================
+VERY IMPORTANT RULE
+===================
+
+Category IDs are IMMUTABLE.
+
+Admin can edit:
+
+* emoji
+* title
+* description
+* color
+
+Admin CANNOT edit:
+
+* id
+
+AFTER creation.
+
+==================================================
+MATCHING.TS REFACTOR
+====================
+
+Refactor matching.ts safely.
+
+==================================================
+REMOVE STRING-BASED MATCHING
+============================
+
+REMOVE:
+
+normalizeCategory()
+
+REMOVE translated string comparison logic.
+
+==================================================
+NEW CATEGORY MATCHING
+=====================
+
+Replace with ID-based matching:
+
+doesCategoryMatch(
+requestCategoryId: string,
+providerCategoryIds: string[],
+)
+
+Implementation:
+
+return providerCategoryIds.includes(requestCategoryId)
+
+==================================================
+BACKWARD COMPATIBILITY
+======================
+
+IMPORTANT:
+Do NOT break existing mock data immediately.
+
+Implement migration-safe compatibility layer.
+
+==================================================
+STEP 1
+======
+
+Add support for:
+
+* categoryId
+* legacy category string
+
+==================================================
+STEP 2
+======
+
+If categoryId exists:
+use ID matching
+
+Else:
+fallback to legacy string matching
+
+==================================================
+STEP 3
+======
+
+Gradually migrate mock data.
+
+==================================================
+FINAL GOAL
+==========
+
+Eventually REMOVE:
+normalizeCategory()
+
+completely.
+
+==================================================
+QUESTIONNAIRE EDITOR INTEGRATION
+================================
+
+Categories become centralized entities.
+
+Questions MUST reference:
+
+categoryId
+
+NOT translated category names.
+
+==================================================
+QUESTION STRUCTURE
+==================
+
+{
+id: "room_count",
+
+categoryId: "cleaning",
+
+type: "select",
+
+question: {
+uz: "Nechta xona?",
+ru: "Сколько комнат?"
+}
+}
+
+==================================================
+CATEGORY MANAGEMENT PAGE
+========================
+
+Create full category management UI inside admin panel.
+
+==================================================
+CATEGORY LIST PAGE
+==================
+
+Display:
+
+* emoji
+* Uzbek title
+* Russian title
+* active/inactive badge
+* number of linked questions
+
+Actions:
+
+* edit
+* deactivate
+* view linked questions
+
+==================================================
+IMPORTANT
+=========
+
+DO NOT allow hard deletion.
+
+Use:
+
+isActive = false
+
+This prevents:
+
+* broken requests
+* broken provider profiles
+* broken matching
+* analytics corruption
+
+==================================================
+CREATE CATEGORY FLOW
+====================
+
+Create category modal/page.
+
+Fields:
+
+Emoji
+[input]
+
+Internal ID
+[input]
+
+Name (UZ)
+[input]
+
+Name (RU)
+[input]
+
+Description (UZ)
+[input]
+
+Description (RU)
+[input]
+
+Color
+[color picker]
+
+==================================================
+ID CREATION RULES
+=================
+
+IMPORTANT:
+
+ID is immutable after creation.
+
+Allow:
+
+* auto-generation from Uzbek title
+  OR
+* manual entry during creation ONLY
+
+After save:
+LOCK ID permanently.
+
+==================================================
+QUESTION EDITOR CATEGORY INTEGRATION
+====================================
+
+In questionnaire editor:
+
+Replace old category strings with category selector.
+
+==================================================
+CATEGORY SELECTOR
+=================
+
+Display:
+
+🧹 Tozalash
+
+BUT internally store:
+
+categoryId: "cleaning"
+
+==================================================
+CATEGORY DISPLAY
+================
+
+Use localization helper:
+
+getLocalizedText(category.title, language)
+
+==================================================
+IMPORTANT
+=========
+
+Matching/business logic MUST NEVER depend on translated text.
+
+ONLY UI rendering may use translations.
+
+==================================================
+PROVIDER CATEGORY STORAGE
+=========================
+
+Provider profiles MUST store:
+
+selectedCategoryIds: string[]
+
+NOT translated names.
+
+==================================================
+REQUEST STORAGE
+===============
+
+Customer requests MUST store:
+
+categoryId: string
+
+NOT translated names.
+
+==================================================
+MIGRATION REQUIREMENTS
+======================
+
+Create migration helpers that:
+
+* map old category strings → IDs
+* preserve old mock data temporarily
+* avoid crashes
+
+==================================================
+CATEGORY HELPERS
+================
+
+Create centralized helpers:
+
+categories/
+├── categoryTypes.ts
+├── categoryHelpers.ts
+├── categoryStore.ts
+├── categoryMigration.ts
+└── categories.ts
+
+==================================================
+CATEGORY HELPER FUNCTIONS
+=========================
+
+Create:
+
+* getCategoryById()
+* getLocalizedCategoryTitle()
+* migrateLegacyCategory()
+* getCategoryEmoji()
+* getActiveCategories()
+
+==================================================
+FUTURE DATABASE COMPATIBILITY
+=============================
+
+Architecture MUST later support:
+
+* Supabase
+* Firebase
+* PostgreSQL
+
+WITHOUT frontend rewrite.
+
+==================================================
+IMPORTANT
+=========
+
+This task is NOT just admin UI.
+
+This is a full business-logic migration from:
+translated-string matching
+
+TO:
+immutable ID-based matching
+
+while preserving backward compatibility and preventing matching failures.

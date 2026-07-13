@@ -1,0 +1,35 @@
+Update the Profile Settings page (`/profile/settings`) to use a clean, simple dynamic approach based on the user's active role.
+
+### Final Requirements:
+
+- Keep **one single URL**: `/profile/settings`
+- Render completely different content depending on `activeRole` from the auth context:
+
+  **If activeRole === "customer"** (pure customer or currently switched to customer role):
+  - Show a **simple Customer Profile Settings** with only relevant fields:
+    - Profile photo upload
+    - First name + Last name
+    - Phone number (with "Telefon qo'shish" modal if missing)
+    - **My Main Location** — single region + district selector (reuse the existing region + district components, but as single selection)
+    - Optional: Saved Addresses section (list + add new address)
+    - Completion percentage calculated only for customer-relevant fields (photo, name, phone, location)
+
+  **If activeRole === "provider"**:
+  - Show the **existing full Provider Profile Settings** unchanged (photo, categories, service areas, bio, experience, portfolio, etc.)
+
+### Important:
+- Reuse the existing Service Area / Region + District components for both sides where appropriate.
+- For providers, keep "Service Areas" as **multi-select** (they can work in multiple locations).
+- For customers, use a simpler "**My Main Location**" (single region + district selection).
+- When the user switches role using the existing role switcher, the profile settings page must automatically update to show the correct version for the new `activeRole`.
+- After a customer clicks "Ijrochi bo'lish", selects categories in the modal, and becomes a provider, redirect them to `/profile/settings` and show the **provider version** by default.
+
+### Technical Notes:
+- Keep all existing UI styling, animations, violet theme, and components (photo upload, phone modal, completion circle, etc.).
+- Make sure saving works correctly for both customer and provider versions.
+- Ensure the completion percentage is calculated differently for each role.
+- The page should feel natural and not show irrelevant fields.
+
+Implement this dynamic role-based profile settings cleanly now.
+
+Start by modifying the ProfileSettingsPage component to render customer or provider content based on activeRole.

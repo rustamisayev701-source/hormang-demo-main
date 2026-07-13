@@ -1,0 +1,223 @@
+Create a full Self-Request Prevention System in Hormang so users with provider role cannot see or send offers to their own requests.
+
+🎯 Goal
+
+Prevent providers from interacting with requests they created themselves as customers.
+
+A user may have both roles:
+
+customer
+provider
+
+If they create a request as customer:
+
+✅ They should still fully see/manage it inside:
+
+Mening so'rovlarim
+customer dashboard
+request details/history
+
+❌ They should NOT see it inside:
+
+provider marketplace request feed
+available requests
+request discovery lists
+
+❌ They should NEVER be able to send an offer to their own request
+
+✅ 1. Hide Own Requests in Provider Marketplace Feed
+
+Audit all provider-side request listing screens.
+
+Examples:
+
+/provider-home
+available requests
+marketplace feed
+request search
+category request browsing
+
+Filter out:
+
+request.customerId === currentUser.id
+
+before rendering.
+
+IMPORTANT
+
+This must apply everywhere providers browse requests.
+
+Not just one page.
+
+Search project-wide for:
+
+request cards
+request feed loaders
+available requests queries
+
+and apply consistently.
+
+✅ 2. Backend Validation — Required
+
+Even if UI hides own requests:
+
+Add server-side / action-level validation when creating offer.
+
+Before offer creation:
+
+if (request.customerId === currentUser.id) {
+  throw new Error("O'zingizning so'rovingizga taklif yuborib bo'lmaydi");
+}
+
+This is mandatory.
+
+Reason:
+
+prevents manual API calls
+prevents stale UI bugs
+prevents localStorage tampering
+protects token economy
+If blocked:
+
+Do NOT deduct Tanga.
+
+Do NOT create offer.
+
+Do NOT create notification.
+
+Do NOT write offer history.
+
+✅ 3. Token Safety
+
+Very important.
+
+If self-offer attempt happens:
+
+Provider should:
+
+lose 0 Tanga
+receive no charge
+receive no refund event
+
+No token transaction should occur.
+
+✅ 4. UI Safety on Request Details Page
+
+If a provider somehow opens their own request detail page directly via URL:
+
+Example:
+
+/request/:id
+
+Then:
+
+Hide:
+
+Taklif yuborish
+
+button completely
+
+OR replace with:
+
+Bu sizning so'rovingiz
+
+with muted informational UI.
+
+Preferred:
+Hide CTA entirely and show subtle notice.
+
+Suggested notice
+Bu so‘rov siz tomonidan yaratilgan. O‘zingizning so‘rovingizga taklif yuborib bo‘lmaydi.
+
+Keep tone neutral.
+
+✅ 5. Existing Customer Experience Must Stay Untouched
+
+Do NOT break:
+
+customer dashboard
+customer requests
+request editing
+request history
+
+Users should still fully manage their own requests as customers.
+
+Only provider-side marketplace interaction should be blocked.
+
+✅ 6. Edge Cases to Test
+
+Test all:
+
+Case 1
+
+User = provider only
+
+Should see all customer requests normally.
+
+Case 2
+
+User = customer only
+
+No changes.
+
+Case 3
+
+User = customer + provider
+
+Creates request.
+
+Should:
+
+appear in Mening so'rovlarim
+NOT appear in provider marketplace feed
+Case 4
+
+Direct URL to own request detail as provider
+
+Should:
+
+open normally
+not allow offer creation
+Case 5
+
+Manual offer creation attempt via code/localStorage/API
+
+Should fail safely.
+
+✅ 7. Optional Audit Logging
+
+If self-offer blocked:
+
+Optional:
+
+Add audit log:
+
+Blocked self-offer attempt on request {id}
+
+Helpful for debugging.
+
+🎯 Expected Result
+
+After implementation:
+
+Providers:
+
+never see their own requests in available request feed
+
+Users with both roles:
+
+still manage requests normally as customers
+
+System:
+
+prevents self-offers completely
+protects Tanga economy
+avoids confusing UX
+keeps marketplace clean
+
+Build production-ready and fully integrated with existing:
+
+request feed
+request detail pages
+offer creation
+token spending logic

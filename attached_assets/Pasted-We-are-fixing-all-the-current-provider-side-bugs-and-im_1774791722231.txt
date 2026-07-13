@@ -1,0 +1,69 @@
+We are fixing all the current provider-side bugs and improvements in the Uzbekistan service marketplace app (Hormang). Use the uploaded screenshot as exact visual reference for the "Mavjud So'rovlar" section.
+
+### 1. Profile Completion Percentage (Fix in /dashboard and /profile)
+- Make the percentage **dynamic and accurate**.
+- Calculate based on filled fields in the provider profile (photo, name, phone, city, services offered, experience, about me, portfolio — at least 8 fields).
+- Show exact % (e.g. 65%) and list missing items below it.
+- The whole card must be clickable and navigate to `/profile/settings`.
+
+### 2. Yaqinlashayotgan xizmatlar (Upcoming Services) in Provider Home (/provider-home or /dashboard)
+- Each upcoming service card must show **brief content from the accepted offer**:
+  - Category
+  - Customer name/location
+  - Offer price
+  - Estimated completion time
+  - Start date
+- Add two buttons on each card:
+  - **Chatga o'tish** (goes to the chat with that customer)
+  - **Bajarildi** (mark as done — moves the service out of upcoming list and updates status)
+
+### 3. Mavjud So'rovlar (Available Requests) in Provider Home — Redesign like the screenshot
+- Top stats row (exactly like the image):
+  - **Jami** (total requests) — e.g. 61
+  - **Yangi so'rovlar** (new requests with small red dot) — e.g. 48
+  - **Yuborilgan takliflar** — e.g. 13
+- Below the stats: request cards in the same style as the screenshot:
+  - Category title (bold)
+  - Location + district (e.g. Toshkent, Yunusobod)
+  - "Takliflar soni: X ta" + time ago (e.g. 3 soat oldin)
+  - Pagination dots at the bottom (horizontal scroll or swipeable)
+- Keep the existing filter tabs (All / New / Seen) above the cards.
+
+### 4. /provider/requests Page Improvements
+- Rename or keep "Taklif yuborilganlar" section → make each sent offer **clickable**.
+- On click: open a modal or expand to show **full content of the offer** the provider sent (price, message, estimated time, attached files, etc.).
+- Add new section **"E'tiborsiz qoldirilganlar"** (Ignored services) — list of requests the provider ignored.
+- Update category filter to **exactly 9 categories** (the original 8 + Ustachilik):
+  Tozalash, Ta'mirlash, Enagalik, Tadbir xizmatlari, Ko'chirish yuk yetkazish, Go'zallik, Avto xizmat, Repetitorlar, Ustachilik.
+
+### 5. /provider/chats (Suhbatlarim) Page
+- Remove all demo chats completely.
+- Keep the search bar.
+- Change the filter button **"Xizmat bo'yicha"** to a dropdown menu containing the 9 categories above.
+- When a specific category is selected, show **only chats related to that category**.
+- Keep the existing sorting tabs (All / Unread).
+
+### 6. Profile Picture & Public Profile Fixes
+- Fix profile picture upload so it updates immediately in:
+  - /dashboard
+  - Header (everywhere)
+  - Public profile page
+- Update the **public profile page** to reflect latest Profile Completion % and all recent profile changes.
+
+### 7. Navigation & Back Button Fixes
+- In `/profile/settings`: fix the **"Back"** button so it returns to the main `/profile` menu.
+- **Throughout the entire app**: clicking anywhere on a user's profile picture/name must open the **public profile page** (not the private settings).
+
+### Technical Requirements
+- Use localStorage for all data persistence (profile fields, offers, requests, chats).
+- Make all changes mobile-first and match the clean style of the rest of the app.
+- All text in Uzbek (Latin script).
+- After fixes, test role switching (Customer ↔ Provider) to ensure bottom nav and pages behave correctly.
+
+Priority order:
+1. Fix profile completion % + picture update + public profile.
+2. Redesign Mavjud So'rovlar exactly like the screenshot.
+3. Make "Respond" / sent offers clickable with offer details modal.
+4. Add Ignored section + update category filters to 9.
+5. Fix back button and profile clicks everywhere.
+6. Update Upcoming Services with offer details + chat/done buttons.

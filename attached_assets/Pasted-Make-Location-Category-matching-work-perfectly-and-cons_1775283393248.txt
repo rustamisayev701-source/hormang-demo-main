@@ -1,0 +1,46 @@
+Make Location + Category matching work perfectly and consistently across the entire Hormang platform.
+
+### Core Rules (Must Be Strictly Enforced Everywhere):
+- A request is visible to a provider **only if**:
+  1. The request's **category** is in the provider's `selectedCategories` (exact match).
+  2. The request's **location** overlaps with the provider's **Service Areas**.
+
+### Implementation Requirements:
+
+1. **Standardize Location Data**
+   - Customer requests must store `region` and `district` clearly.
+   - Provider profiles must store `serviceAreas` as array of objects or strings (e.g. ["Toshkent", "Toshkent-Yunusobod", "Samarqand"]).
+   - Create a helper function `doesLocationMatch(requestLocation, providerServiceAreas)` that returns true if they overlap.
+
+2. **Update All Provider Request Views**
+   - In `/provider-home` (Mavjud So'rovlar section and all its modals: Barcha so'rovlar, Yangi so'rovlar, Taklif olmagan so'rovlar):
+     - Only show requests where **both** category and location match the current provider.
+   - In `/provider/requests` (So'rovlar page and sliding cards):
+     - Apply the same strict matching.
+   - Update stats (Jami, Yangi so'rovlar, Taklif olmagan so'rovlar) to count **only matching requests**.
+
+3. **Real-time & Consistent Filtering**
+   - Use the centralized data hook so that when a new request is created, matching providers see it immediately (no refresh needed).
+   - When a provider updates their Service Areas or categories, the visible requests update instantly.
+
+4. **Customer Side**
+   - When a customer creates a request, the location they choose must be properly saved (region + district).
+   - In customer's "Mening so'rovlarim", show the location clearly.
+
+5. **Public Profile & Matching Readiness**
+   - Ensure provider's Service Areas are displayed correctly in their public profile preview.
+
+### Technical Notes:
+- Reuse existing Service Area selector components where possible.
+- For providers: Service Areas = multi-select.
+- For customers: Main Location = single region + district.
+- Create or improve helper functions for matching logic so it's used everywhere (no duplicated code).
+- Keep all text in Uzbek.
+- Make sure empty states are shown when no matching requests exist ("Sizning hududingiz va kategoriyalaringiz bo'yicha so'rovlar yo'q").
+
+Priority:
+1. Implement strict category + location matching logic in a reusable helper.
+2. Apply this filter to all provider request views (home + so'rovlar page + modals).
+3. Make sure new requests appear instantly for matching providers.
+
+This is the foundation for intelligent matching. Implement it cleanly and consistently now.

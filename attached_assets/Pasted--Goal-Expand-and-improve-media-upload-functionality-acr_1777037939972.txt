@@ -1,0 +1,243 @@
+## 🎯 Goal
+
+Expand and improve media upload functionality across the entire platform (requests, offers, provider portfolio, and chat), while keeping all existing flows intact.
+
+This is both a UI and data/storage update.
+
+---
+
+# 1. Request Creation — Increase Media Upload
+
+Update request questionnaire media upload.
+
+## Requirements
+
+Increase request photo upload limit:
+* Max 10 photos per request
+
+---
+
+## Apply this everywhere request details appear:
+
+Uploaded request photos must remain visible in all places request data is shown, including:
+
+* customer request preview
+* provider request cards
+* provider request detail view
+* admin request view
+* request detail modal/pages
+
+Use consistent gallery display everywhere.
+
+---
+
+## Improve request media UX
+
+Add:
+
+* multi-upload
+* drag/drop if possible
+* reorder photos before submit
+* remove/replace photo
+* image preview carousel
+* upload counter:
+
+```text id="xkg8z5"
+3 / 10 photos
+```
+
+---
+
+# 2. Provider Offer Creation — Add Media
+
+Update provider offer submission.
+
+## New limit:
+
+* Max 3 photos per offer
+
+Providers can attach:
+
+* example solution photos
+* before/after examples
+* reference images
+
+---
+
+## Show offer media everywhere offers appear:
+
+Uploaded offer photos should appear in:
+
+* customer offer cards
+* offer detail modal
+* offer comparison views
+* accepted offer detail view
+* admin offer views
+
+Use compact thumbnail gallery.
+
+Add:
+
+```text id="n10u8k"
+0 / 3 photos
+```
+
+---
+
+# 3. Provider Portfolio — Major Upgrade
+
+Redesign provider portfolio into album-based portfolio system.
+
+## New limits
+
+* Max 10 albums per provider
+* Max 20 photos per album
+
+---
+
+## Each album should support:
+
+* Album title
+* Cover image
+* Add/edit/delete album
+* Add/remove photos
+* Drag to reorder photos
+* Set cover image
+* Sort photos manually
+
+
+---
+
+## Portfolio UI Improvements
+
+Add album gallery view:
+
+* album cards
+* cover thumbnails
+* photo count badges
+
+Example:
+
+```text id="5yj6r2"
+Kitchen Cleaning (12)
+```
+
+---
+
+## Provider editing tools
+
+Give provider more control:
+
+* reorder albums
+* sort photos inside album
+* rename albums
+
+---
+
+## Provider Public Profile
+
+Display albums on public provider profiles.
+
+Album click →
+open photo gallery/lightbox.
+
+---
+
+# 4. Chat Attachments (Customer + Provider)
+
+Enable media/file sharing in chat for BOTH roles.
+
+Support:
+
+* Images
+* Videos
+* Files/documents (pdf, doc, etc.)
+
+---
+
+## Chat Attachment Features
+
+Add attachment button in chat composer.
+
+Support:
+
+* image preview before sending
+* inline image previews in chat
+* playable video preview
+* downloadable files
+
+Show attachment messages in chat thread.
+
+---
+
+## Permissions
+
+Both:
+
+* customers
+* providers
+
+can send attachments.
+
+---
+
+# 5. Storage / Backend
+
+Update storage/data model as needed.
+
+Use existing storage layer for now.
+
+Handle:
+
+* upload paths
+* metadata
+* file references
+* limits validation
+* preserve existing uploads
+
+Do not break current media already stored.
+
+---
+
+# 6. Shared Media Components (Important)
+
+Refactor reusable media components if possible:
+Create shared:
+
+* Upload component
+* Gallery component
+* Lightbox viewer
+* Attachment preview component
+
+Reuse across requests/offers/portfolio/chat.
+
+Avoid duplicate implementations.
+
+---
+
+# 7. UX Requirements
+
+Keep mobile-first.
+
+Add upload limits visibly shown:
+
+* Requests: 10
+* Offers: 3
+* Portfolio: 10 albums × 20 photos
+
+Show friendly validation if limits exceeded.
+
+
+---
+
+## Deliver
+
+Implement:
+
+1. Request uploads → max 10 + visible everywhere
+2. Offer uploads → max 3 + visible everywhere
+3. Portfolio album system → 10 albums / 20 photos each + editing tools
+4. Chat attachments for both roles (images/videos/files)
+5. Update storage + UI components accordingly
+
+Do not break current request, offer, matching or messaging flows.

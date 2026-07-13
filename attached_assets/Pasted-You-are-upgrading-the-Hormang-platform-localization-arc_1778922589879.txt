@@ -1,0 +1,421 @@
+You are upgrading the Hormang platform localization architecture, admin panel translation system, and dynamic multilingual content handling.
+
+IMPORTANT:
+
+* The project currently does NOT have a real database yet.
+* Build the architecture in a future-proof way so database integration later becomes easy.
+* Do NOT hardcode multilingual dynamic content.
+* Do NOT redesign the current UI.
+* Keep existing visual language and component styling.
+
+==================================================
+MAIN GOAL
+=========
+
+Implement a scalable multilingual architecture for:
+
+1. Static UI translations
+2. Dynamic admin-created content
+3. Future database compatibility
+4. Admin translation management
+
+Supported languages:
+
+* Uzbek (primary)
+* Russian
+* English
+
+==================================================
+IMPORTANT ARCHITECTURE RULE
+===========================
+
+There are TWO translation systems:
+
+---
+
+1. STATIC UI TRANSLATIONS
+
+---
+
+Examples:
+
+* buttons
+* menus
+* errors
+* settings labels
+* login text
+
+These MUST use i18n locale files.
+
+Example:
+locales/uz/common.json
+locales/ru/common.json
+locales/en/common.json
+
+Use:
+
+* i18next
+  OR existing localization library already installed.
+
+==================================================
+2. DYNAMIC CONTENT TRANSLATIONS
+===============================
+
+Examples:
+
+* categories
+* survey questions
+* plans
+* FAQ
+* announcements
+* badges
+* onboarding texts
+* admin-created content
+
+These MUST NOT use static locale JSON files.
+
+Instead use multilingual objects.
+
+==================================================
+REQUIRED TRANSLATION STRUCTURE
+==============================
+
+DO NOT USE:
+
+titleUz
+titleRu
+titleEn
+
+DO NOT USE:
+hardcoded strings.
+
+USE THIS STRUCTURE EVERYWHERE:
+
+{
+id: "cleaning",
+
+title: {
+uz: "Tozalash",
+ru: "Уборка",
+en: "Cleaning"
+}
+}
+
+==================================================
+CREATE GLOBAL TYPES
+===================
+
+Create reusable localization types.
+
+Example:
+
+type LocalizedText = {
+uz?: string;
+ru?: string;
+en?: string;
+};
+
+==================================================
+CREATE TRANSLATION HELPER
+=========================
+
+Create reusable helper:
+
+getLocalizedText(field, currentLanguage)
+
+Behavior:
+
+1. Return current language
+2. If missing:
+   fallback to Uzbek
+3. If Uzbek missing:
+   fallback to Russian
+4. If Russian missing:
+   fallback to English
+5. Never crash UI
+
+Example:
+
+getLocalizedText(category.title, "ru")
+
+==================================================
+FOLDER STRUCTURE
+================
+
+Create clean architecture:
+
+src/
+├── locales/
+│   ├── uz/
+│   ├── ru/
+│   └── en/
+│
+├── data/
+│   ├── categories.ts
+│   ├── surveys.ts
+│   ├── plans.ts
+│   ├── faq.ts
+│   └── announcements.ts
+│
+├── lib/
+│   ├── localization/
+│   │   ├── getLocalizedText.ts
+│   │   ├── localizationTypes.ts
+│   │   └── languageStore.ts
+│
+├── admin/
+│   ├── forms/
+│   └── components/
+
+==================================================
+MOCK DATA IMPLEMENTATION
+========================
+
+Since there is no database yet:
+
+Use structured mock data files.
+
+IMPORTANT:
+The structure MUST exactly resemble future DB/API responses.
+
+Example:
+
+categories.ts
+
+export const categories = [
+{
+id: "cleaning",
+
+```
+title: {
+  uz: "Tozalash",
+  ru: "Уборка",
+  en: "Cleaning"
+},
+
+description: {
+  uz: "Uy va ofis tozalash",
+  ru: "Уборка дома и офиса",
+  en: "Home and office cleaning"
+}
+```
+
+}
+];
+
+==================================================
+ADMIN PANEL TRANSLATION SYSTEM
+==============================
+
+Implement translation-ready admin forms.
+
+==================================================
+CATEGORY CREATION FORM
+======================
+
+Create multilingual form inputs.
+
+Example UI:
+
+Category name (UZ)
+[input]
+
+Category name (RU)
+[input]
+
+Category name (EN)
+[input]
+
+Description (UZ)
+[input]
+
+Description (RU)
+[input]
+
+Description (EN)
+[input]
+
+==================================================
+SURVEY QUESTION CREATION
+========================
+
+Same multilingual structure.
+
+Example:
+
+Question (UZ)
+Question (RU)
+Question (EN)
+
+==================================================
+PLAN CREATION
+=============
+
+Fields:
+
+* title
+* description
+* feature list
+
+All multilingual.
+
+==================================================
+FAQ CREATION
+============
+
+Fields:
+
+* question
+* answer
+
+All multilingual.
+
+==================================================
+ADMIN UX REQUIREMENTS
+=====================
+
+IMPORTANT:
+Uzbek is primary language.
+
+Russian strongly recommended.
+
+English optional.
+
+Visual behavior:
+
+* highlight missing translations
+* show language badges
+* clear section separation
+
+==================================================
+MISSING TRANSLATION HANDLING
+============================
+
+If translation missing:
+
+* UI must NOT break
+* fallback automatically
+
+Example:
+Current language = English
+English missing
+→ show Uzbek
+
+==================================================
+TRANSLATION COMPLETENESS INDICATOR
+==================================
+
+Add translation status indicators in admin panel.
+
+Example:
+
+UZ ✅
+RU ⚠️
+EN ❌
+
+==================================================
+FUTURE DATABASE COMPATIBILITY
+=============================
+
+VERY IMPORTANT:
+
+Architecture must later support:
+
+* Supabase
+* Firebase
+* PostgreSQL
+* REST API
+
+WITHOUT frontend rewrite.
+
+This means:
+
+* components must already expect API-like structures
+* no hardcoded translation logic inside UI components
+
+==================================================
+DYNAMIC RENDERING
+=================
+
+Every dynamic content component MUST use:
+
+getLocalizedText()
+
+Example:
+
+<Text>
+  {getLocalizedText(category.title, language)}
+</Text>
+
+==================================================
+LANGUAGE STATE MANAGEMENT
+=========================
+
+Create centralized language state/store.
+
+Requirements:
+
+* persist selected language
+* update entire app instantly
+* work with both:
+
+  * static i18n
+  * dynamic content localization
+
+==================================================
+NO HARDCODED STRINGS
+====================
+
+Refactor existing dynamic mock content to multilingual structure.
+
+Examples:
+
+* categories
+* plans
+* FAQ
+* onboarding text
+* survey questions
+
+==================================================
+OPTIONAL FUTURE-PROOFING
+========================
+
+Prepare architecture for future:
+"Auto-translate missing fields"
+
+Structure should later support:
+
+* OpenAI
+* DeepL
+* Google Translate
+
+DO NOT implement APIs now.
+Just keep architecture compatible.
+
+==================================================
+UI/UX REQUIREMENTS
+==================
+
+Keep existing design language:
+
+* rounded corners
+* soft shadows
+* spacing
+* mobile-first design
+
+Do NOT redesign unrelated pages.
+
+==================================================
+IMPORTANT
+=========
+
+This task is NOT just about translations.
+
+This is about building:
+
+* scalable multilingual architecture
+* future-proof admin CMS structure
+* DB-ready localization system
+* dynamic multilingual rendering
+
+The final system should scale cleanly when real backend/database is added later.

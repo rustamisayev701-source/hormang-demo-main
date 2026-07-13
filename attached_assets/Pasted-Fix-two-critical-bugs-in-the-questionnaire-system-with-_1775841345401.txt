@@ -1,0 +1,40 @@
+Fix two critical bugs in the questionnaire system with conditional follow-up questions:
+
+### Bug 1: Follow-up answers are not saved or displayed
+- When a customer selects an option that triggers conditional follow-up questions and fills them, those answers are NOT saved into the request's `answers` object.
+- As a result, follow-up answers do not appear in:
+  - My Requests page
+  - Request detail / offer preview (for both customer and provider)
+  - Any place where full request details are shown
+
+### Bug 2: Required flag is ignored
+- The "Required" toggle set in the question editor does not show the required mark (*) in the survey form.
+- The form does not prevent submission or show validation error when required questions (including follow-ups) are left empty.
+
+### Solution Requirements:
+
+**For Saving Answers:**
+- When rendering the form, properly traverse and collect answers from conditional branches.
+- If a triggering option is selected, include all answers from its `conditionalBranches[optionValue]` recursively.
+- Store follow-up answers in the main `answers` object using a clear structure, for example:
+  - Flat: `answers["mainQuestionId"] = selectedValue`
+  - Follow-ups: `answers["mainQuestionId_sub_car"] = "..."` or use a nested object like `answers["mainQuestionId"] = { value: "...", followUps: { ... } }`
+- Choose the simplest structure that works reliably. Prefer flat keys with prefixes if easier.
+
+**For Required Validation:**
+- Show a clear red "*" or "Majburiy" label next to required questions (including follow-ups).
+- Prevent form submission (or show error) if any required question is unanswered.
+- Make validation work for both top-level and conditional follow-up questions.
+
+**Also Fix Display:**
+- In all request detail views (customer My Requests, provider offer preview, admin Requests section), properly display conditional follow-up answers with clear grouping (e.g. indented under the main answer).
+
+**Implementation Notes:**
+- Update the form renderer to handle `conditionalBranches`.
+- Update answer collection logic (wherever `answers` is built before saving the request).
+- Update request preview components to render nested/conditional answers nicely.
+- Keep the existing conditional branching editor unchanged.
+
+Do not introduce new complexity. Focus only on making follow-up answers save correctly and required flags work.
+
+Implement these fixes now so conditional questions work end-to-end.

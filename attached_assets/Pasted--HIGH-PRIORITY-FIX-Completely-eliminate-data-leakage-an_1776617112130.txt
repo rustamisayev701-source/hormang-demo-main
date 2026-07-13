@@ -1,0 +1,52 @@
+**HIGH PRIORITY FIX** — Completely eliminate data leakage and user duplication bug across the entire platform.
+
+### The Bug:
+- After sign out and sign in with a different phone number, data from previous users leaks.
+- Saving profile (especially as only-customer) sometimes changes the phone number or duplicates users with the same number.
+- Provider profile (categories, service areas, bio, etc.) gets reset or mixed between accounts.
+- This must **never happen again**.
+
+### Required Solution: Strict Per-User Isolation
+
+Implement **bulletproof per-user data isolation** using the phone number as the ultimate key:
+
+1. **Central Token & User Management**
+   - All user data must be stored under keys like:
+     - `user_${phone}_profile`
+     - `user_${phone}_providerProfile`
+     - `user_${phone}_tokens`
+     - `user_${phone}_activeRole`
+     - `user_${phone}_localProfile`
+
+2. **On Login / Sign In:**
+   - Immediately clear **all** previous user data from localStorage.
+   - Load ONLY the data belonging to the current phone number.
+   - Correctly restore both customer and provider roles if they exist.
+   - Never fall back to old/stale data.
+
+3. **On Profile Save (`handleSave`):**
+   - Always save using the **current user's phone number** as the key.
+   - Never use shared or global keys.
+   - Update both customer profile and provider profile correctly without affecting other users.
+
+4. **On Logout:**
+   - Fully clear all data related to the current user.
+   - Do not leave any residual keys.
+
+5. **Role Switching & Provider Profile Creation:**
+   - "Ijrochi bo'lish" must only create a new provider profile for the current user.
+   - Never overwrite or mix with other users' data.
+
+6. **Defensive Measures:**
+   - Add logging when saving/loading user data (user phone + id).
+   - Add checks to prevent saving if no valid user/phone is present.
+   - Make `setAuth`, `saveLocalProfile`, `getLocalProfile`, `persistUserToRegistry`, and `handleUserSwitch` strictly isolated.
+
+### Goal:
+After this fix, it must be **impossible** for one user's data to affect another user, even after multiple sign out / sign in cycles or saving profiles.
+
+Do a complete audit and refactor of all auth, profile, and localStorage related code to enforce strict per-user isolation using phone number as the primary key.
+
+This is a critical stability fix. Make it rock-solid so the bug can never happen again.
+
+Start coding now.

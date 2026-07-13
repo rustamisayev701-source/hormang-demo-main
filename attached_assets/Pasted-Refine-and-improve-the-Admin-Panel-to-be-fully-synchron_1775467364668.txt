@@ -1,0 +1,43 @@
+Refine and improve the Admin Panel to be fully synchronized with the main app after the recent clean-up.
+
+### Key Goals:
+- Make Admin read and control the **exact same data** as the main app.
+- Remove outdated/hardcoded/demo elements.
+- Improve usability and relevance for our current platform state (category + location matching, isolated offers/chats, role-based profiles).
+
+### Specific Improvements:
+
+1. **Data Key Alignment (Critical)**
+   - Update all localStorage keys to match the main app exactly:
+     - "requests" instead of "hormang_requests"
+     - "offers" instead of "hormang_offers" / "hormang_provider_offers"
+     - "chats" instead of "hormang_provider_chats" / "hormang_chats"
+     - Keep "hormang_admin_log" and "hormang_admin_suspended_users" if needed.
+   - Remove all references to old "hormang_" prefixed keys.
+
+2. **Requests Section Improvements**
+   - Show real request data with better columns: Category, Location, Urgency, Budget, Offer Count, Status, Created At.
+   - Display question + answer summary when possible (or at least key fields like budget, urgency, location).
+   - Keep status update and delete actions, but make them safe.
+
+3. **Users Section Improvements**
+   - Load real users from "users" key.
+   - Show useful columns: Name, Role, Categories (for providers), Service Areas, Completion %, Phone Verified status, Rating.
+   - Keep suspend/activate functionality.
+
+4. **Overview Section**
+   - Use real counts from current data (no sin/cos fake data).
+   - Show real category distribution and status breakdown.
+
+5. **General Polish**
+   - Add a prominent "Refresh All Data" button in the Top Bar.
+   - Improve empty states with helpful messages.
+   - Keep the beautiful red design, sidebar, and animations unchanged.
+   - Ensure real-time sync works (storage listener + store events).
+
+6. **Reset Functionality**
+   - Keep the "Platforma ma'lumotlarini tozalash" button, but make it safer — it should only clear requests, offers, chats, and upcomingServices. Keep current user session intact.
+
+Do not change the login gate or sidebar design — they are excellent.
+
+Implement these refinements cleanly. Start by aligning all localStorage keys and updating the Requests and Users sections to use real data structures.

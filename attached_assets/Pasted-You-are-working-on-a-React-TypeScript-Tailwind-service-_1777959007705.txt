@@ -1,0 +1,165 @@
+You are working on a React + TypeScript + Tailwind service marketplace project in Replit.
+
+## 🎯 Goal
+
+Improve the **Customer Dashboard (/customer-home)** UX by:
+
+* Moving the **primary CTA ("Yangi so‘rov")buttons into the header**
+* Making the header **action-driven instead of passive**
+* Cleaning up duplicated CTAs
+* Keeping the UI minimal, modern, and conversion-focused
+
+---
+
+# 🧠 Core UX Rule
+
+There must be **ONE primary action per screen**.
+
+👉 Primary action = **"Yangi so‘rov yaratish"**
+
+---
+
+# ✅ 1. Update Header Section
+
+## Replace current header card with:
+
+### Structure:
+
+```text id="xk3l9n"
+Greeting (small)
+User name (bold)
+Short helper text
+Primary CTA button
+```
+
+---
+
+## Content:
+
+```text id="o8n0ru"
+Salom, [First Name] 👋
+Qanday xizmat kerak?
+```
+
+---
+
+## Add PRIMARY CTA button:
+
+```text id="6w84cu"
++ Yangi so‘rov
+```
+
+---
+
+## Behavior:
+
+* On click → navigate to request creation flow (survey/categories page)
+* This must be the **most visually prominent element**
+
+---
+
+## UI Style:
+
+* Blue background (lighter, not heavy gradient)
+* CTA button:
+
+  * white or glass style
+  * rounded-xl
+  * bold text
+  * slightly larger than normal buttons
+
+---
+
+# ❌ 2. Remove from Header
+
+Remove completely:
+
+* Profile completion %
+* Progress bar
+* Any unnecessary info
+
+Keep header clean and focused.
+
+---
+
+
+
+## UI Rules:
+
+* smaller cards
+* neutral colors (white/gray)
+* less visual weight than header CTA
+
+---
+
+# ✅ 4. Visual Hierarchy Fix
+
+Ensure:
+
+* Header CTA = MOST prominent
+* Quick actions = secondary
+* No competing primary buttons
+
+---
+
+# ✅ 5. Layout Order
+
+Final structure:
+
+```text id="6d5z8b"
+Header (Greeting + CTA)
+
+Quick Actions (secondary)
+
+Active Requests
+
+Offers
+
+Chats
+```
+
+---
+
+# ✅ 6. Optional Enhancement (if easy)
+
+Add subtle helper text under greeting:
+
+```text id="d61dsh"
+Xizmat topish uchun yangi so‘rov yarating
+```
+
+---
+
+# ⚠️ 7. Do NOT Break
+
+* Existing navigation
+* Request creation flow
+* Routing
+* Existing components (reuse where possible)
+
+---
+
+# 🎯 Expected Result
+
+* User lands on dashboard
+
+* Immediately sees:
+  → greeting
+  → clear action button
+
+* No confusion, no scrolling needed to act
+
+* Cleaner, more professional UX
+
+* Improved conversion (more requests created)
+
+---
+
+## Deliver
+
+1. Updated header component
+2. CTA moved and styled correctly
+3. Quick actions cleaned (no duplication)
+4. Visual hierarchy improved
+
+Do NOT add unnecessary complexity or extra features.

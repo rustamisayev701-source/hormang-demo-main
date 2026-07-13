@@ -1,0 +1,388 @@
+IMPORTANT:
+The previous implementation only created UI placeholders and "Coming Soon" popups.
+
+DO NOT create mock buttons or fake flows.
+
+Implement REAL WORKING LOGIC for:
+
+* email registration
+* email change
+* password verification
+* 2FA
+* account deletion
+* login flow updates
+
+The flows must actually function end-to-end in the app state/database/backend.
+
+==================================================
+CRITICAL REQUIREMENTS
+=====================
+
+DO NOT:
+
+* use "Coming Soon"
+* use fake modals
+* use dummy buttons
+* use placeholder handlers
+* use console.log-only logic
+* use TODO comments instead of implementation
+
+Every flow must actually work.
+
+==================================================
+EMAIL REGISTRATION IMPLEMENTATION
+=================================
+
+Current issue:
+"Register email address" UI exists but no actual functionality.
+
+Implement FULL email registration flow.
+
+==================================================
+BACKEND / DATABASE
+==================
+
+Add fields to user model:
+
+* email
+* passwordHash
+* emailVerified
+* twoFactorEnabled
+* twoFactorMethod
+* pendingEmail
+* pendingEmailVerificationCode
+* pendingPhoneNumber
+* pendingDeleteRequest
+
+==================================================
+REGISTER EMAIL FLOW
+===================
+
+If user has NO email:
+
+STEP 1:
+Open bottom sheet.
+
+Fields:
+
+* email
+* password
+* confirm password
+
+Validation:
+
+* valid email format
+* password min length
+* password confirmation match
+
+==================================================
+STEP 2
+======
+
+Generate verification code.
+
+For MVP:
+simulate sending email by:
+
+* storing verification code
+* showing temporary dev toast/snackbar:
+  "DEV OTP: 123456"
+
+IMPORTANT:
+Structure code so real email provider can later replace this.
+
+Create reusable service:
+
+* sendEmailVerificationCode()
+
+DO NOT hardcode inside component.
+
+==================================================
+STEP 3
+======
+
+OTP verification screen:
+
+* 6-digit input
+* resend code
+* countdown timer
+
+If correct:
+
+* save email
+* hash password
+* set emailVerified = true
+
+==================================================
+STEP 4
+======
+
+Update security level card instantly.
+
+Phone + Email => Medium security.
+
+Enable:
+
+* Change phone number
+* 2FA
+
+==================================================
+EMAIL LOGIN IMPLEMENTATION
+==========================
+
+Current issue:
+UI exists but login logic incomplete.
+
+Implement ACTUAL email login.
+
+Flow:
+
+1. email input
+2. password input
+3. verify password hash
+4. if 2FA enabled → open 2FA step
+5. login success
+
+==================================================
+PASSWORD STORAGE
+================
+
+DO NOT store plain passwords.
+
+Use actual password hashing.
+
+Frontend demo:
+bcrypt or equivalent.
+
+Backend:
+secure hash + compare helpers.
+
+==================================================
+CHANGE EMAIL IMPLEMENTATION
+===========================
+
+Current issue:
+Disabled/non-functional.
+
+Implement REAL flow.
+
+STEP 1:
+Password confirmation modal.
+
+Verify actual password hash.
+
+STEP 2:
+Enter new email.
+
+STEP 3:
+Generate verification code.
+
+STEP 4:
+OTP verification.
+
+STEP 5:
+Replace old email.
+
+==================================================
+CHANGE PHONE NUMBER IMPLEMENTATION
+==================================
+
+Current issue:
+Disabled forever.
+
+Correct behavior:
+
+IF emailVerified == false:
+disabled state
+
+IF emailVerified == true:
+enable interaction
+
+REAL FLOW:
+
+1. password confirmation
+2. new phone input
+3. SMS OTP
+4. update phone
+
+For MVP:
+simulate SMS OTP same way as email:
+DEV OTP snackbar.
+
+==================================================
+2FA IMPLEMENTATION
+==================
+
+Current issue:
+Fake placeholder.
+
+Implement REAL working SMS-based 2FA.
+
+==================================================
+ENABLE FLOW
+===========
+
+STEP 1:
+Password confirmation.
+
+STEP 2:
+Send OTP.
+
+STEP 3:
+Verify OTP.
+
+STEP 4:
+Set:
+twoFactorEnabled = true
+
+==================================================
+LOGIN FLOW UPDATE
+=================
+
+Phone login:
+phone → OTP → 2FA OTP if enabled
+
+Email login:
+email/password → 2FA OTP if enabled
+
+2FA screen must be REAL and BLOCK login until verified.
+
+==================================================
+DELETE ACCOUNT IMPLEMENTATION
+=============================
+
+Current issue:
+Fake popup only.
+
+Implement REAL deletion flow.
+
+==================================================
+FLOW
+====
+
+STEP 1:
+Danger warning modal.
+
+STEP 2:
+Password confirmation.
+
+STEP 3:
+SMS OTP verification.
+
+STEP 4:
+Final confirmation.
+
+STEP 5:
+Actually:
+
+* delete user data
+  OR
+* soft delete user
+
+STEP 6:
+Logout user.
+Redirect to onboarding/login.
+
+==================================================
+SECURITY REQUIREMENTS
+=====================
+
+Sensitive actions REQUIRE:
+
+* password verification
+  OR
+* OTP verification
+
+Actions:
+
+* email change
+* phone change
+* enable 2FA
+* account deletion
+
+==================================================
+DEV MODE OTP SYSTEM
+===================
+
+For MVP development:
+Use temporary OTP simulation.
+
+Example:
+Toast:
+"DEV CODE: 482193"
+
+BUT:
+Architecture must support replacing with:
+
+* Twilio
+* Firebase Auth
+* SendGrid
+* Resend
+* SMTP
+
+Create services:
+
+* sendSmsCode()
+* sendEmailCode()
+
+==================================================
+UI REQUIREMENTS
+===============
+
+DO NOT redesign UI.
+
+Keep existing:
+
+* spacing
+* typography
+* cards
+* colors
+* shadows
+
+Add:
+
+* loading states
+* disabled button states
+* resend timers
+* error messages
+* success animations
+
+==================================================
+STATE MANAGEMENT
+================
+
+Security status card must update LIVE.
+
+Examples:
+
+Phone only:
+LOW
+
+Phone + verified email:
+MEDIUM
+
+Phone + verified email + 2FA:
+HIGH
+
+==================================================
+ERROR HANDLING
+==============
+
+Implement real validation:
+
+* wrong password
+* invalid OTP
+* expired OTP
+* duplicate email
+* duplicate phone
+* weak password
+
+==================================================
+IMPORTANT
+=========
+
+This is NOT a static UI task anymore.
+
+This is a real authentication/security system implementation task.
+
+All flows must be fully functional in-app.

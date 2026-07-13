@@ -1,0 +1,268 @@
+Create a full Request Delete / Deactivate logic upgrade in Hormang for customer request cards.
+
+🎯 Goal
+
+Fix the current X button behavior on customer request preview cards.
+
+Right now:
+
+X toggles active ↔ inactive infinitely
+customers can spam it repeatedly
+
+This should be replaced with smarter behavior based on whether the request already has offers.
+
+New business rules
+Rule 1 — No offers → Permanent delete allowed
+
+If request has:
+
+offerCount === 0
+
+Then:
+
+X button should:
+
+Delete request permanently
+Behavior
+
+When clicked:
+
+Show confirmation modal:
+
+So‘rovni o‘chirib tashlamoqchimisiz?
+
+Bu so‘rovga hali hech qanday taklif kelmagan.
+O‘chirganingizdan keyin uni tiklab bo‘lmaydi.
+
+Buttons:
+
+Bekor qilish
+Ha, o‘chirish
+On confirm:
+
+Permanently delete request from storage.
+
+Remove from:
+
+requests list
+customer dashboard
+request history
+provider marketplace feed
+admin marketplace view
+
+If related draft chat/empty references exist:
+clean safely if needed.
+
+Rule 2 — Has offers → Permanent deletion forbidden
+
+If request has:
+
+offerCount > 0
+
+Then request CANNOT be deleted.
+
+Reason:
+
+providers already spent Tanga
+offers already exist
+marketplace history must remain preserved
+In this case
+
+Same X button becomes:
+
+Deactivate request
+Deactivate behavior
+
+When clicked:
+
+Show modal:
+
+So‘rovni yopmoqchimisiz?
+
+Bu so‘rov bo‘yicha takliflar mavjud.
+Shuning uchun uni o‘chirib bo‘lmaydi.
+
+So‘rov yopiladi va yangi takliflar qabul qilinmaydi.
+
+Buttons:
+
+Bekor qilish
+So‘rovni yopish
+On confirm
+
+Set:
+
+request.status = "inactive"
+
+OR existing equivalent:
+
+closed
+paused
+deactivated
+
+depending on current architecture.
+
+Effects of deactivation
+
+Inactive request:
+
+✅ remains visible to customer
+
+✅ remains visible in request history
+
+✅ existing offers remain visible
+
+✅ existing chats remain intact
+
+❌ hidden from provider marketplace feed
+
+❌ new offers cannot be submitted
+
+IMPORTANT
+
+Once request has at least 1 offer:
+
+Permanent deletion must never be possible
+
+Even if:
+
+offer rejected later
+offer withdrawn
+request inactive
+
+If request ever had an offer:
+
+keep history.
+
+UI changes
+
+Keep same X button placement if possible.
+
+But behavior should be dynamic.
+
+Visual hint (optional)
+
+If no offers:
+
+Tooltip:
+
+So‘rovni o‘chirish
+
+If has offers:
+
+Tooltip:
+
+So‘rovni yopish
+
+Optional icon change:
+
+No offers:
+
+Trash2
+
+Has offers:
+
+XCircle
+
+Only if clean.
+
+If not:
+keep existing X icon.
+
+Safeguards
+
+Add helper:
+
+canDeleteRequest(request)
+return request.offerCount === 0
+
+Add helper:
+
+hasEverReceivedOffer(request)
+
+based on:
+
+linked offers table
+OR
+stored offer count
+OR
+request metadata
+
+Use whichever is most reliable.
+
+Backend validation required
+
+Do not rely only on UI.
+
+Protect request delete action:
+
+if (request.offerCount > 0) {
+  throw new Error(
+    "Taklif mavjud bo‘lgan so‘rovni o‘chirib bo‘lmaydi"
+  )
+}
+
+Must validate before delete.
+
+Admin behavior
+
+Admin should still be able to:
+
+see deleted requests in audit log if tracked
+see inactive requests in marketplace/admin view
+Audit logging
+
+Track:
+
+Request deleted by customer
+
+and
+
+Request deactivated by customer
+
+with:
+
+requestId
+customerId
+timestamp
+Edge cases to test
+Case 1
+
+Request with 0 offers
+
+→ delete permanently
+
+Case 2
+
+Request with 1+ offers
+
+→ deactivate only
+
+Case 3
+
+Inactive request reopened manually if allowed by current logic
+
+Only if business rules allow.
+
+Otherwise keep closed.
+
+Case 4
+
+Deleted request should not appear anywhere afterward.
+
+Expected Result
+
+Customers now:
+
+can clean up accidental unused requests
+cannot erase requests once providers engaged with them
+
+Providers are protected from:
+
+spam request deletion
+disappearing offer targets
+wasted Tanga history loss
+
+Marketplace history stays reliable.
+
+Do not redesign request cards—update logic and modals around existing X action only.

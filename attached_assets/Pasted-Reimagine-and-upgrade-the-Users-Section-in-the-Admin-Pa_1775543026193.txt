@@ -1,0 +1,44 @@
+Reimagine and upgrade the **Users Section** in the Admin Panel to give complete data and full control over users.
+
+### Current Problems:
+- The Users page is outdated, uses fragmented `hormang_local_profile_*` keys, and shows very limited information.
+- It does not reflect the rich user data we now have in the main app.
+
+### New Vision for Users List:
+
+Create a powerful, information-rich Users table with the following columns:
+
+- **User** (photo + full name)
+- **ID** (shortened)
+- **Role** (Xaridor / Ijrochi / Both — show badges)
+- **Phone** + verification status (green check if verified)
+- **Main Location** (for customers) or **Service Areas** (for providers)
+- **Categories** (chips for providers)
+- **Completion %** (progress bar or number, only for providers)
+- **Rating** (stars + review count, clickable in future)
+- **Average Response Time** (only for providers)
+- **Status** (Active / Suspended)
+- **Joined** date
+- **Actions**:
+  - Suspend / Activate
+  - Delete user (with confirmation)
+  - "View Full Profile" button (opens a modal with complete user details)
+
+### Additional Features:
+- Search by name, phone, or ID
+- Filters: All / Customers / Providers / Both / Suspended / Verified
+- Multi-select category filter (for providers)
+- "Refresh" button
+- Empty state with helpful message
+
+### Technical Requirements:
+- Load users from the main app's `"users"` key.
+- For each user, also load their provider profile data if it exists (`providerProfile` or local profile).
+- Show combined information (customer + provider data when both exist).
+- Keep the beautiful red-themed design, table style, and responsiveness.
+- Make actions (suspend, delete) actually update the real data in localStorage.
+- Use existing helper functions where possible.
+
+Replace the current UsersSection completely with this new, comprehensive version.
+
+Start implementation now. Make the Users list the most informative and controllable page in the entire Admin Panel.

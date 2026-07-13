@@ -1,0 +1,22 @@
+packages:
+  "framer-motion": "For high-quality scroll and interaction animations"
+  "clsx": "Utility for constructing className strings conditionally"
+  "tailwind-merge": "Utility for merging tailwind classes without style conflicts"
+
+images:
+  - path: "artifacts/hormang-landing/public/images/hero-bg.png"
+    description: "Abstract fluid gradient background with dynamic mesh in deep indigo, vibrant purple, and soft orange, clean modern 3d glassmorphism aesthetic, high resolution"
+    aspect_ratio: "16:9"
+  - path: "artifacts/hormang-landing/public/images/app-mockup.png"
+    description: "Modern mobile smartphone mockup floating slightly in 3D space, displaying a clean local services marketplace app interface with a chat screen, bright and polished, soft studio lighting"
+    aspect_ratio: "3:4"
+  - path: "artifacts/hormang-landing/public/images/provider-growth.png"
+    description: "Abstract 3D illustration of a rising growth chart with floating shiny coins and a smartphone, symbolizing small business success, gig economy, and earning money, vibrant colors"
+    aspect_ratio: "1:1"
+  - path: "artifacts/hormang-landing/public/images/ai-matching.png"
+    description: "Abstract futuristic 3D illustration representing artificial intelligence connecting a service provider and a customer, glowing nodes and connection lines, soft clean background"
+    aspect_ratio: "1:1"
+
+notes:
+  - Landing page is fully static marketing, no real backend requirements
+  - CTAs will trigger UI toasts mimicking coming soon / app store redirects

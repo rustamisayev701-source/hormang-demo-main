@@ -1,0 +1,110 @@
+Goal
+
+Integrate the functionality of /admin/questions directly into /admin so I can manage categories and question flows from a single admin control panel, without navigating away.
+
+Task
+
+Move (or embed) the entire “Toifalar / Questions Editor” section currently at:
+
+/admin/questions
+
+into the main:
+
+/admin
+
+as a dedicated admin panel section/tab.
+
+✅ Requirements
+1. Add New Section in /admin
+
+Create a new section/tab/card inside /admin called:
+
+Toifalar
+(subtitle) Xizmat so‘rov savollari boshqaruvi
+
+It should feel like part of the existing admin dashboard, not a separate page.
+
+2. Migrate Existing /admin/questions Features
+
+Bring all current functionality from /admin/questions into this section, including:
+
+View all service categories
+Add category
+Edit category
+Delete category
+Manage category-specific survey questions
+Reorder questions
+Edit answer options
+Conditional / follow-up questions logic (if already implemented)
+Save/publish changes
+
+Do not remove or break existing functionality.
+
+3. Use Expandable Layout (Preferred)
+
+Inside /admin, use this structure:
+
+Category List (left column or accordion)
+
+Cleaning
+Car Service
+Moving
+Beauty
+etc.
+
+When clicking a category:
+→ show its question editor inline on the right (or expand below)
+
+Like split-panel admin UX.
+
+4. Add Question Builder Improvements
+
+While migrating, improve editor UX:
+
+Each question should support:
+
+Question title
+Question type:
+single choice
+multi choice
+text
+number
+Required toggle
+Add/edit/remove answer options
+Drag-and-drop reorder if current system supports it
+5. Keep Admin as Single Control Center
+
+Goal is:
+
+No redirect to /admin/questions
+Manage everything from /admin
+Keep navigation simplified
+
+If "Toifalar" currently routes to /admin/questions,
+change it so it scrolls or switches to embedded section inside /admin.
+
+6. UI Requirements
+
+Use same design language as existing admin:
+
+reuse current cards
+consistent spacing
+searchable categories if possible
+collapsible sections to avoid clutter
+
+Suggested sections in /admin:
+
+Overview
+Providers
+Requests
+Pricing
+Toifalar (new integrated question builder)
+7. Code Requirements
+Reuse existing /admin/questions logic/components where possible
+Refactor into reusable components instead of duplicating code
+Prefer moving/importing question editor into admin over rebuilding from scratch
+Keep TypeScript-safe
+Preserve existing data connections (Supabase/API)
+Deliver
+
+Refactor admin so question management lives inside /admin as an integrated control panel section and remove the need to use /admin/questions as a separate workflow.

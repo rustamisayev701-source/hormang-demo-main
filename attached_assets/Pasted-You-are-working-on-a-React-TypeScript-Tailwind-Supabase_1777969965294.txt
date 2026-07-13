@@ -1,0 +1,322 @@
+You are working on a React + TypeScript + Tailwind + Supabase (or localStorage fallback) service marketplace project.
+
+## 🎯 Goal
+
+Implement a full **“Takliflar va Shikoyatlar” (Feedback System)** that allows both **customers and providers** to submit:
+
+* 🆘 Muammo (Problem / Bug)
+* ⚠️ Shikoyat (Complaint)
+* 💡 Taklif (Suggestion)
+
+This system must include:
+
+* User submission UI
+* Database structure
+* User history view
+* Full Admin Panel integration
+
+---
+
+# 🧠 1. DATABASE DESIGN
+
+Create a new table:
+
+```ts id="zbnfjk"
+feedbacks
+```
+
+---
+
+## Fields:
+
+```ts id="syo17o"
+id: string
+userId: string
+userRole: "customer" | "provider"
+
+type: "problem" | "complaint" | "suggestion"
+
+title: string
+description: string
+
+targetType?: "provider" | "customer" | "platform"
+targetId?: string
+
+relatedRequestId?: string
+relatedOfferId?: string
+
+attachments?: string[] // URLs (images/videos/files)
+
+status: "new" | "in_review" | "resolved" | "rejected"
+priority: "low" | "medium" | "high"
+
+adminNote?: string
+
+createdAt: string
+updatedAt: string
+```
+
+---
+
+## Storage:
+
+* Use Supabase if available
+* Otherwise fallback to localStorage
+
+---
+
+# 🧩 2. USER SUBMISSION UI
+
+## Create page:
+
+```text id="czmpz1"
+/feedback
+```
+
+---
+
+## Step-based Form:
+
+### Step 1: Type Selection
+
+```text id="lb9jb3"
+Nima yubormoqchisiz?
+
+[ Muammo ] [ Shikoyat ] [ Taklif ]
+```
+
+---
+
+### Step 2: Dynamic Fields
+
+#### If Complaint:
+
+* Kim haqida?
+
+  * Provider / Customer / Platform
+* Optional:
+
+  * Related request selector
+
+---
+
+#### If Problem:
+
+* Qayerda muammo?
+
+  * Chat / So‘rov / To‘lov / Boshqa
+
+---
+
+#### If Suggestion:
+
+* Category (optional)
+
+  * UX / Features / Payments
+
+---
+
+---
+
+### Step 3: Main Input
+
+* Title (required)
+* Description (required)
+
+---
+
+### Step 4: Attachments
+
+* Upload:
+
+  * Images
+  * Videos
+  * Files
+
+Limit: max 5 files
+
+Store URLs/base64
+
+---
+
+### Submit Button:
+
+* Save feedback
+* Status = `"new"`
+
+---
+
+# 📄 3. USER FEEDBACK HISTORY
+
+## Add section:
+
+```text id="9rsysr"
+/profile → "Mening murojaatlarim"
+```
+
+---
+
+## Show list:
+
+Each item:
+
+* Type badge
+* Title
+* Status
+* Date
+
+---
+
+## Status Colors:
+
+* new → gray
+* in_review → blue
+* resolved → green
+* rejected → red
+
+---
+
+## Click → Detail View:
+
+* full description
+* attachments
+* status
+* admin note (if exists)
+
+---
+
+# 🧑‍💼 4. ADMIN PANEL INTEGRATION
+
+## Create new section:
+
+```text id="r6q2tm"
+/admin/feedback
+```
+
+---
+
+## Table View:
+
+Columns:
+
+* Type
+* User (name + role)
+* Title
+* Related entity (request/provider)
+* Status
+* Priority
+* Date
+
+---
+
+## Filters:
+
+* Type
+* Status
+* Priority
+* Date
+
+---
+
+## Row Click → Detail Drawer
+
+Show:
+
+* full description
+* attachments
+* linked request/provider
+* user info
+
+---
+
+## Admin Actions:
+
+* Change status:
+
+  * new → in_review → resolved/rejected(if rejected force to enter the reason)
+* Set priority:
+
+  * low / medium / high
+* Add internal note
+
+---
+
+## Save updates immediately
+
+---
+
+# ⚡ 5. SMART LOGIC (IMPORTANT)
+
+## Auto-linking:
+
+If:
+
+* complaint about provider → save `targetType="provider"` + `targetId`
+* tied to request → store `relatedRequestId`
+
+---
+
+## Optional:
+
+Highlight:
+
+* multiple complaints for same provider
+
+---
+
+# 🎨 6. UI DESIGN RULES
+
+* Clean, modern cards
+* Rounded-2xl
+* Use color-coded badges
+* Keep forms simple (not overwhelming)
+* Mobile-first
+
+---
+
+# 🔗 7. ENTRY POINTS
+
+Add access to feedback:
+
+## For users:
+
+* Profile page → “Takliflar va shikoyatlar”
+* After **service completion** in chat:
+
+  ```text id="hqk1pb"
+  Muammo bormi? Shikoyat yuboring
+  ```
+
+---
+
+# ⚠️ 8. DO NOT
+
+* Do NOT make it just a simple textarea
+* Do NOT skip status system
+* Do NOT lose relation to requests/providers
+* Do NOT break existing data structure
+
+---
+
+# 🎯 EXPECTED RESULT
+
+* Users can submit structured feedback
+* Feedback is stored and trackable
+* Users see status updates
+* Admin can manage everything in one place
+* System improves platform quality over time
+
+---
+
+## Deliver
+
+1. Feedback DB/table
+2. `/feedback` submission page
+3. User feedback history section
+4. Admin panel `/admin/feedback`
+5. Full status + priority system
+6. Attachment support
+
+---
+
+Build it clean, scalable, and fully connected to existing platform data.

@@ -1,0 +1,50 @@
+Fix the real interaction flow so that when a customer creates a service request, it immediately appears for matching providers using localStorage only.
+
+### Core Problem to Solve
+Currently, new requests from customers are not appearing for providers. We need full category matching + real-time updates.
+
+### 1. Data Structure (ensure these fields exist)
+- Every `request` object must have: `category` (exact string, e.g. "Tozalash", "Ta'mirlash", etc.)
+- Every `provider` user/profile must have: `selectedCategories` (array of strings, e.g. ["Tozalash", "Avto xizmat", "Ustachilik"])
+
+### 2. When Customer Submits a Request (questionnaire flow)
+- Save the request to `localStorage` key `requests` (array).
+- Use the centralized `useAppData` hook (or create it if missing) so that **every component listening to requests re-renders instantly**.
+- After saving, check all providers and if the request's category is in a provider's `selectedCategories`, trigger a notification for that provider.
+
+### 3. Provider-Side Visibility (category matching is crucial)
+- In **/provider-home** (Mavjud So'rovlar) and **/provider/requests** (So'rovlar page):
+  - Only show requests where `request.category` is included in the current provider's `selectedCategories`.
+  - If no matching requests → show empty state: "Sizning kategoriyalaringiz bo'yicha yangi so'rovlar yo'q"
+- Update the stats row (Jami, Yangi so'rovlar, Taklif olmagan so'rovlar) to only count **matching** requests for the current provider.
+
+### 4. Notifications (preferred)
+- When a new matching request is created:
+  - Show a **toast notification** (e.g. "Yangi so'rov! Tozalash kategoriyasi bo'yicha") only to providers who have that category selected.
+  - Increase a badge on the bottom nav "So'rovlar" tab (unread count).
+- Use a simple toast library or a custom toast component that appears at the top.
+
+### 5. Real-time Testing Flow (must work without refresh)
+- Customer creates a request → saved instantly.
+- Switch role to a provider who has that category selected → the request appears immediately in So'rovlar and Mavjud So'rovlar.
+- Switch role to a provider who does **not** have the matching category → the request must **not** appear for them.
+- Provider submits an offer → customer immediately sees it in "Olingan takliflar" (already working, keep it).
+
+### 6. Provider Profile – Service Categories
+- In `/profile/settings`, ensure providers can select multiple categories (checkboxes or multi-select) from the 9 available categories.
+- Save them as `selectedCategories` array in the user profile.
+
+### 7. Technical Implementation
+- Use the existing centralized data hook (`useAppData` / Context) everywhere for requests.
+- After every `setRequests` or `addRequest`, call a function that checks matching providers and triggers notifications.
+- All pages that show requests must use `useEffect` + dependency on the requests array from the hook.
+- Keep everything in localStorage (no backend).
+- All text in Uzbek (Latin script).
+
+Priority order:
+1. Fix request creation so it saves with correct category and notifies matching providers.
+2. Make provider So'rovlar and Mavjud So'rovlar show only category-matched requests.
+3. Add toast notification for new matching requests.
+4. Ensure role switching instantly reflects the correct data (no stale data).
+
+Implement the full real-time category-matched request flow now. Start by ensuring the request creation in the questionnaire correctly saves to localStorage and triggers provider notifications.

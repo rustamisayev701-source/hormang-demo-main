@@ -1,0 +1,8 @@
+uploads = []
+generated = []
+
+[[outputs]]
+id = "mOFuzBA4vZ-fwyqI-YYWz"
+uri = "file://hormang-landing.pdf"
+type = "pdf"
+title = "Hormang Landing Page PDF"

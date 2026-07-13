@@ -1,0 +1,269 @@
+## 🎯 Goal
+
+Refactor the admin panel by merging **Requests** and **Offers** into a single, interconnected **Marketplace Control Center**, while keeping the existing database structure intact.
+
+This is a UI/UX + logic refactor, NOT a database merge.
+
+---
+
+# 🧠 Core Concept
+
+Treat:
+
+* Request = Parent entity
+* Offers = Child entities
+
+Admin should manage the **entire lifecycle of a job in one place**, instead of switching between separate “Requests” and “Offers” pages.
+
+---
+
+# ✅ 1. Replace Admin Sections
+
+Remove or deprecate:
+
+```text
+/admin/requests
+/admin/offers
+```
+
+Replace with:
+
+```text
+/admin/marketplace
+```
+
+Update navigation:
+
+---
+
+# ✅ 2. Marketplace Table (Main View)
+
+Create a unified table where each row represents a **Request with its offer summary**.
+
+Columns:
+
+* Request title / category
+* Customer
+* Location
+* # of Offers
+* Status
+* Selected Provider
+* Created time
+* Actions
+
+Example row:
+
+```text
+Apartment cleaning | 4 offers | Negotiating | Usta Clean | Manage
+```
+
+---
+
+# ✅ 3. Request Detail = Admin Command Center
+
+Clicking a row opens a **full control panel** (modal or page).
+
+## Sections inside:
+
+---
+
+## A. Request Overview
+
+Show:
+
+* customer info
+* category
+* location
+* budget
+* description
+* uploaded photos
+* current status
+
+---
+
+## B. Offers Section (IMPORTANT)
+
+List all offers tied to this request:
+
+Each offer should show:
+
+* provider name
+* price
+* message
+* attached photos
+* timestamp
+
+Admin actions:
+
+* accept/reject offer
+* mark suspicious
+* manually assign provider
+* remove offer
+
+---
+
+## C. Timeline / Activity Log
+
+Display lifecycle:
+
+```text
+Request created
+Offer received
+Provider selected
+Job completed
+Review submitted
+```
+
+Auto-generated from system events.
+
+---
+
+## D. Chat Viewer 
+
+Allow admin to view conversation between:
+
+* customer
+* provider
+
+Read-only is fine.
+
+---
+
+## E. Metrics Panel (Per Request)
+
+Show:
+
+* total offers
+* average offer price
+* min / max price
+* time to first offer
+* response rate
+
+---
+
+# ✅ 4. Marketplace Pipeline View (KANBAN)
+
+Add a second view mode:
+
+Columns:
+
+* New Requests
+* Offers Incoming
+* Negotiation
+* Assigned
+* Completed
+* Problem Cases
+
+Requests should move between columns based on status.
+
+Drag & drop optional (bonus).
+
+---
+
+# ✅ 5. Exception / Attention Queue
+
+Create a special filter or section:
+
+Show:
+
+* requests with 0 offers after X hours
+* disputes
+* flagged providers
+* cancelled jobs
+* abnormal pricing
+
+This is critical for admin efficiency.
+
+---
+
+# ✅ 6. Keep Offers Search (Secondary Tool)
+
+Keep a global offers view ONLY as a filter/search tool:
+
+```text
+/admin/offers (optional or hidden route)
+```
+
+Used for:
+
+* searching offers by provider
+* investigating abuse
+* analytics
+
+Not primary navigation.
+
+---
+
+# ✅ 7. Backend / Data Handling
+
+DO NOT merge database tables.
+
+Keep:
+
+* requests table
+* offers table
+
+Link via:
+
+```text
+offer.request_id
+```
+
+Update queries to fetch:
+
+* request + related offers in one call (join or relational fetch)
+
+---
+
+# ✅ 8. UI/UX Requirements
+
+* Fast loading (optimize queries)
+* Expandable rows OR detail modal
+* Clean, admin-style layout (not consumer UI)
+* Mobile-friendly but desktop-optimized
+* Use reusable components
+
+---
+
+# ✅ 9. Bonus Improvements (if simple)
+
+* Inline expand request row to show offers
+* Add quick filters:
+
+  * no offers
+  * high value requests
+  * urgent
+* Add sorting by:
+
+  * most offers
+  * newest
+  * highest value
+
+---
+
+# 🎯 Expected Result
+
+* Admin manages full lifecycle in ONE place
+* No switching between requests/offers
+* Faster moderation & decision making
+* Better marketplace visibility
+* Cleaner mental model
+
+---
+
+## Deliver
+
+1. New `/admin/marketplace` section
+2. Unified request + offers table
+3. Request detail command center
+4. Pipeline (kanban) view
+5. Exception queue
+6. Updated navigation
+7. Refactored data fetching logic
+
+Do not break:
+
+* request creation
+* offer submission
+* matching logic
+* existing database structure

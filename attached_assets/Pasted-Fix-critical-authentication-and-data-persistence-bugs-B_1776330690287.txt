@@ -1,0 +1,40 @@
+Fix critical authentication and data persistence bugs:
+
+### Bugs:
+1. When a user has both customer and provider roles, after sign out and sign in, only the customer role is loaded. User has to click "Ijrochi bo'lish" again and re-select categories, even though the provider account already exists.
+
+2. When signing in with a different phone number, data/credentials from another user sometimes leak into the new session.
+
+3. Provider data (selected categories, service areas/locations, bio, portfolio, etc.) gets reset or lost after sign out and sign in.
+
+### Required Fix – Proper Per-User Storage:
+
+Refactor auth and profile saving so that **every user has completely isolated data**:
+
+- Use keys like:
+  - `user_${phone}_profile`          (customer + basic info)
+  - `user_${phone}_providerProfile`  (categories, locations, bio, portfolio, etc.)
+  - `user_${phone}_tokens`           (Tanga balance)
+  - `user_${phone}_roles`            (array or object with customer/provider flags)
+
+- On sign in:
+  - Clear all previous user data from localStorage.
+  - Load ONLY the data belonging to the current phone number.
+  - Correctly restore both roles if the user has provider profile.
+
+- On sign out:
+  - Fully clear the current user's data and any temporary session keys.
+
+- Make sure "Ijrochi bo'lish" only appears if the user does NOT already have a provider profile for that phone number.
+
+- When creating a provider profile the first time, save it under the correct `user_${phone}_providerProfile` key.
+
+### Additional Requirements:
+- Prevent any cross-user data leakage completely.
+- All counters (completed requests, completed services, reviews, Tanga balance) must load correctly per user after sign in.
+- Public profile preview and dashboard must show correct data immediately after login.
+- Keep existing login/registration flow unchanged — only fix the storage and loading logic.
+
+This is a high-priority fix. Make the user data isolation strict and reliable.
+
+Start coding now.

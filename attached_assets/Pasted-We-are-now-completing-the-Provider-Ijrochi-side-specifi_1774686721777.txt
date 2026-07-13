@@ -1,0 +1,62 @@
+We are now completing the **Provider (Ijrochi)** side, specifically the "Respond" / Offer creation flow.
+
+### Trigger
+- On the **So'rovlar** page, both in the fullscreen sliding cards AND in the scrollable list view:
+  - The green **"Respond"** button must open a new **Offer Form** (preferably a clean modal or bottom sheet on mobile, but full-screen form is also acceptable).
+
+### Offer Form Requirements (Title: "Taklif berish")
+
+**Top Section – Customer Request Summary** (read-only preview)
+- Customer name (or "Mijoz" if anonymous)
+- Category + short request title
+- Key details from the request: location, urgency, budget, date posted
+- Button: **"Mijoz haqida batafsil ko'rish"** → opens a small modal or expands to show all customer answers from the questionnaire
+
+**Provider Info Section**
+- Show **your average response time** (e.g. "Sizning o'rtacha javob vaqtingiz: 14 daqiqa")
+- Option to update it if needed (simple number input)
+
+**Main Offer Fields** (all in one clean form)
+- **Taklif narxi** (required)
+  - Number input in so'm (with thousand separator)
+  - Label: "Taklif narxi (so'm)"
+- **Xabar / Taklif matni** (required)
+  - Textarea for detailed message to the customer
+- **Qo‘shimcha fayl yuklash** (optional)
+  - Button "Rasm yoki hujjat yuklash" + file input (preview thumbnails if images)
+- **Additional useful fields** (add these naturally):
+  - **Taxminiy bajarish muddati** (estimated completion time) – dropdown: 1 kun, 2-3 kun, 1 hafta, 2 hafta, boshqa
+  - **Ishni boshlash sanasi** – date picker (default: today or next day)
+  - **Taklif shartlari** – checkbox: "Platforma qoidalariga roziman va mijoz bilan to‘g‘ridan-to‘g‘ri aloqa qilmayman"
+
+**Bottom Actions**
+- **Bekor qilish** button (closes form)
+- **Taklifni yuborish** button (prominent green)
+
+### What happens after submitting the offer
+- Save the offer to localStorage under "offers" array (link it to the requestId and providerId)
+- The request status for this provider becomes "responded"
+- Show success toast: "Taklif muvaffaqiyatli yuborildi!"
+- Automatically close the form and refresh the So'rovlar page (move the request from "New" to "Seen" or hide the Respond button for this request)
+- The offer must immediately appear on the **customer side** in their "Olingan takliflar" and become visible in the relevant chat.
+
+### Navigation & Polish
+- Add a small "Back" button in the form header.
+- Make the form mobile-friendly (large inputs, good spacing).
+- After successful submission, optionally navigate the provider to **Suhbatlarim** page so they can continue chatting.
+- Update the request card in So'rovlar to show "Taklif yuborilgan" badge once responded.
+
+### Technical
+- Use React state + localStorage for persistence.
+- Reuse existing components where possible (e.g. chat component if needed).
+- Keep all text in Uzbek (Latin script).
+- Make the form beautiful and professional (clean cards, good typography).
+
+Priority order:
+1. Make the "Respond" button open the full Offer Form with all fields listed above.
+2. Implement customer details preview + average response time display.
+3. Handle form submission and save the offer correctly.
+4. Ensure the offer appears on the customer side immediately.
+5. Add the extra helpful fields (completion time, start date, terms checkbox).
+
+Implement this Offer Form completely now. Start by updating the So'rovlar page so the Respond button works and opens the form.

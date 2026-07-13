@@ -1,0 +1,44 @@
+Reimagine and fix the entire Offer Preview / Offer Review experience across the app.
+
+### Problems to Solve:
+1. Provider's offer preview modal currently shows only raw answers without the original questions — this is misleading and hard to understand.
+2. Providers cannot preview the customer's profile from the offer form.
+3. Customers cannot preview the provider's profile when viewing received offers.
+4. "Average response time" is editable in the offer form — this is incorrect and should not be there.
+
+### New Design for Provider's Offer Review (when clicking "Respond"):
+
+- Modal title: "Taklif berish"
+- Top section: **Request Summary** (clean and readable)
+  - Show every question from the questionnaire + the customer's answer next to it (Question: Answer format).
+  - Include key details: location, budget, urgency, time posted.
+- Button: **"Mijoz profilini ko'rish"** — opens the customer's public profile preview modal.
+- Main form fields (below the summary):
+  - Taklif narxi (required)
+  - Xabar / Taklif matni (required)
+  - Taxminiy bajarish muddati (dropdown)
+  - Ishni boshlash sanasi (date picker)
+  - Qo'shimcha fayl yuklash
+  - Terms checkbox
+- Remove any "Average Response Time" field from the offer form.
+
+### Customer Side (Olingan takliflar):
+- In each received offer card, add a button **"Usta profilini ko'rish"** that opens the provider's public profile preview modal.
+
+### Average Response Time:
+- Remove it completely from the offer form.
+- Make it a **profile-level metric**:
+  - Calculate it automatically from the last 10 chats (average time between request and first provider message).
+  - Display it in both customer and provider **public profile previews** as: "O'rtacha javob vaqti: 18 daqiqa".
+  - Show it in the dashboard profile header as well.
+
+### Technical & Design Requirements:
+- Keep the modal clean, modern, and mobile-friendly.
+- Use the same violet/red theme as the rest of the app.
+- Ensure real-time data (use existing data hooks).
+- Make profile preview modals consistent on both sides (no phone number shown in public previews).
+- After submitting an offer, everything should update instantly for both sides.
+
+Implement this redesigned offer preview/review flow completely.
+
+Start with the provider's "Respond" modal and the offer form redesign.

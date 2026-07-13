@@ -1,0 +1,437 @@
+You are upgrading the existing Hormang mobile app settings(Sozlamalar) page and authentication system.
+
+IMPORTANT:
+
+* Keep the existing visual design language, spacing, colors, typography, shadows, rounded corners, and component style.
+* Preserve the current modern soft UI aesthetic.
+* Mobile-first design.
+* Smooth animations and transitions.
+* Do NOT redesign unrelated pages.
+* Use reusable components.
+* Clean production-level architecture.
+
+Replace the current settings page accordion/dropdown structure with dedicated subpages.
+
+New structure:
+
+Settings
+├── Notifications & Preferences
+├── Privacy & Security
+├── Help & Support
+└── About
+
+Each item should be a clickable card row with:
+
+* icon
+* title
+* subtitle
+* chevron arrow
+
+Navigation should open dedicated pages/screens.
+
+---
+
+1. MAIN SETTINGS PAGE
+
+---
+
+Create a clean settings home page.
+
+Top:
+
+* Back button
+* Title: "Sozlamalar"
+* Subtitle:
+
+  * "Ijrochi paneli" for providers
+  * "Mijoz paneli" for customers
+
+Use existing role detection logic.
+
+Sections/cards:
+
+1. Notifications & Preferences
+   Subtitle:
+   "Bildirishnomalar va ilova sozlamalari"
+
+2. Privacy & Security
+   Subtitle:
+   "Hisob va xavfsizlik"
+
+3. Help & Support
+   Subtitle:
+   "Yordam va qo'llab-quvvatlash"
+
+4. About
+   Subtitle:
+   "Ilova ma'lumotlari"
+
+Spacing should remain consistent with current UI.
+
+Combine notification toggles and app preferences into one page.
+
+---
+
+## NOTIFICATIONS SECTION
+
+Provider version:
+
+* New messages
+* New requests
+* App notifications
+
+Customer version:
+
+* New messages
+* New offers
+* App notifications
+
+Use smooth animated iOS-style toggles.
+
+Each row:
+
+* icon
+* title
+* subtitle
+* toggle
+
+Example subtitles:
+
+* "Kimdir xabar yuborganda"
+* "Yangi buyurtma so'rovi kelganda"
+* "Ijrochidan taklif kelganda"
+
+---
+
+## PREFERENCES SECTION
+
+1. Language selector
+   Options:
+
+* O'zbekcha
+* Русский
+* English
+
+Use modern bottom sheet selector.
+
+2. Dark mode toggle
+   Animated toggle.
+   Persist selection.
+
+3. OPTIONAL:
+   Add "Reduce animations" toggle placeholder for future use.
+
+Very important:
+Security UX must feel trustworthy and modern.
+
+## Top card:
+
+Security Status Card
+
+Display:
+
+* Phone verified ✅
+* Email verified or not
+* 2FA enabled or not
+
+Security level:
+
+* Low
+* Medium
+* High
+
+Logic:
+Phone only = Low
+Phone + Email = Medium
+Phone + Email + 2FA = High
+
+---
+
+## EMAIL SECTION
+
+CASE 1:
+If NO email exists:
+
+Show row:
+"Register email address"
+
+Subtitle:
+"Email xavfsizligi va tiklash"
+
+Click opens bottom sheet modal.
+
+FLOW:
+Step 1:
+Fields:
+
+* Email
+* New password
+
+Button:
+"Send verification code"
+
+After click:
+Show OTP field.
+
+Step 2:
+
+* Verification code input
+
+Step 3:
+Success state animation/checkmark.
+
+---
+
+CASE 2:
+If email already exists:
+
+Show:
+"Change email address"
+
+Flow:
+
+STEP 1:
+Password confirmation modal.
+
+STEP 2:
+Open email change modal:
+
+* New email
+* Send verification code
+
+STEP 3:
+OTP verification.
+
+STEP 4:
+Success state.
+
+---
+
+## CHANGE PHONE NUMBER
+
+IMPORTANT:
+Disabled unless email is registered.
+
+Disabled state should NOT look broken.
+Show explanation text:
+
+"Email manzil ro'yxatdan o'tkazilgandan keyin mavjud"
+
+If enabled:
+
+Flow:
+
+1. Password confirmation
+2. Enter new phone number
+3. SMS verification
+4. Success
+
+---
+
+## TWO FACTOR AUTHENTICATION
+
+Disabled unless email is registered.
+
+Explanation text:
+"2FA uchun email talab qilinadi"
+
+If enabled:
+
+Flow:
+
+1. Password confirmation
+2. Enable 2FA
+3. SMS verification
+4. Success state
+
+Use simple MVP implementation:
+SMS-based 2FA only.
+
+Structure code for future authenticator app support.
+
+---
+
+## DELETE ACCOUNT
+
+Place inside separate red-tinted section.
+
+Label:
+"Delete account"
+
+Flow:
+
+1. Warning modal
+2. Password confirmation
+3. SMS verification
+4. Final delete confirmation
+
+Require multiple confirmations.
+
+Sections:
+
+1. Takliflar va Shikoyatlar
+   Reuse/import existing dashboard component.
+
+2. FAQ
+
+Create expandable FAQ items.
+
+Example questions:
+
+* Buyurtma qanday ishlaydi?
+* To'lov qanday amalga oshiriladi?
+* Ijrochini qanday tanlash mumkin?
+* Nizo bo'lsa nima qilish kerak?
+* Token tizimi qanday ishlaydi?
+
+3. Contact Support
+
+Create contact card:
+
+* [support@hormang.uz](mailto:support@hormang.uz)
+* Telegram: @HormangSupport
+
+Use copy-to-clipboard buttons.
+
+4. Community Guidelines
+
+Simple static page with sections:
+
+* Respectful communication
+* No fraud
+* No harassment
+* No fake services
+* No off-platform scams
+
+5. Legal
+
+Rows:
+
+* Terms of Service
+* Privacy Policy
+* Licenses
+
+Open placeholder content pages.
+
+Include:
+
+* App logo
+* Version
+* Build number
+* Copyright
+
+Rows:
+
+* Licenses
+* Open source libraries
+
+Current system:
+Phone number → SMS OTP
+
+Upgrade to dual login system.
+
+Top:
+
+* Hormang logo
+* Welcome text
+
+Add segmented tabs:
+
+[ Phone Number ] [ Email ]
+
+Smooth animated transition between tabs.
+
+STEP 1:
+Phone number input.
+
+STEP 2:
+SMS verification code screen.
+
+STEP 3:
+IF 2FA enabled:
+Show additional 2FA verification step.
+
+STEP 4:
+Login success.
+
+STEP 1:
+Email input
+Password input
+
+STEP 2:
+IF 2FA enabled:
+Show verification step.
+
+STEP 3:
+Login success.
+
+Only available if email exists.
+
+Flow:
+
+1. Enter email
+2. Verification code
+3. New password
+
+* Use bottom sheets instead of ugly desktop modals.
+* Smooth spring animations.
+* Use Framer Motion if available.
+* Maintain current design language.
+* Rounded 2xl corners.
+* Soft shadows.
+* Consistent spacing.
+* Proper disabled states.
+* Loading states everywhere.
+* Skeleton loaders where needed.
+* Success animations/checkmarks.
+* Error validation messages.
+
+- Modular reusable components
+- Clean folder structure
+- State persistence
+- Role-aware rendering
+- Type-safe architecture
+- Do not break existing app routing
+
+Create reusable components for:
+
+* SettingsRow
+* ToggleRow
+* SecurityCard
+* BottomSheet
+* OTPInput
+* PasswordConfirmModal
+* LanguageSelector
+* DangerZoneCard
+
+Prepare localization structure for:
+
+* Uzbek
+* Russian
+* English
+
+Do not hardcode strings everywhere.
+
+The app should feel:
+
+* premium
+* modern
+* trustworthy
+* safe
+* mobile-native
+
+Avoid:
+
+* giant accordion layouts
+* cluttered settings pages
+* desktop-style forms
+* ugly popup modals
+* excessive scrolling
+
+The final UX should resemble:
+
+* Airbnb mobile
+* Uber
+* Fiverr
+* Soomgo
+* Revolut security flows

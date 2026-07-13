@@ -1,0 +1,64 @@
+Update the persistent bottom navigation and related pages with these exact specifications:
+
+### Bottom Navigation Panel (Fixed at bottom for logged-in users)
+Create a clean, persistent bottom nav with exactly these 5 tabs:
+
+1. **Bosh sahifa** (Home icon) 
+   - Navigates to the landing page (`/`) — the public homepage with category cards.
+
+2. **Kategoriyalar** (Grid/Category icon)
+   - Navigates to the categories/survey page (the questionnaire starting point where user selects a category and starts the survey).
+
+3. **So'rovlarim** (List/Check icon)
+   - Navigates to `/my-requests`
+
+4. **Chat** (Message icon)
+   - Navigates to offers + chatting history page (see details below)
+
+5. **Dashboard** (User/Home icon)
+   - Navigates to `/dashboard` (not /profile or /profile/settings)
+
+- Highlight the active tab based on current route.
+- Use React Router for navigation.
+- Show bottom nav only for logged-in users. Hide on login, register, and public landing page if needed.
+- Add proper padding-bottom to main content so it doesn't overlap.
+
+### Page Updates:
+
+**1. So'rovlarim Page (`/my-requests`)**
+- Show two sections clearly separated:
+  - **Faol so'rovlar** (Active requests - still open to offers)
+    - List of requests that accept new offers
+  - **Yakunlangan so'rovlar** (Inactive / Closed requests - no longer accept offers)
+- For each active request, add a button: **"Takliflarni to'xtatish"** or **"Yopish"** that changes the request status from active to inactive.
+- Each request card should show category, key details (budget, urgency), number of offers received, and status.
+
+**2. Chat Tab (`/chat` or `/offers`)**
+- This tab should **NOT** go directly to a single chat.
+- Instead, show the **"Olingan takliflar"** page in recency order (newest offers first).
+- Display all received offers grouped by request or as a flat list.
+- Each offer card should include:
+  - Master name
+  - Price
+  - Short message
+  - Average response time
+  - "Chat ochish" button that opens the actual chat with that master
+- Also show recent chatting history (list of previous chats with masters).
+- Title the page something like "Takliflar va suhbatlar"
+
+### General Rules:
+- Clicking "Bosh sahifa" in bottom nav or anywhere else must go to the public landing page (`/` with category cards).
+- Logo click should also go to landing page `/`.
+- Fix any previous "Bosh sahifaga qaytish" button if still broken.
+- All navigation must use React Router (`useNavigate` or `<Link>`).
+- Keep Uzbek language (Latin script) for all labels.
+
+### Priority order:
+1. Update the bottom navigation with the new 5 tabs and correct destinations.
+2. Fix "Bosh sahifa" to always go to landing page.
+3. Update `/my-requests` with Active vs Inactive sections + close offer button.
+4. Make the Chat tab show offers + chat history (with "Chat ochish" buttons).
+
+Make sure the bottom nav is visible and functional on all logged-in pages.
+
+Implement these changes cleanly now.

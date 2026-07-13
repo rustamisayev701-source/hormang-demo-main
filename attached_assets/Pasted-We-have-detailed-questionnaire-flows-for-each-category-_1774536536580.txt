@@ -1,0 +1,109 @@
+We have detailed questionnaire flows for each category in the landing page. Now improve and complete the questionnaire-style smart matching with these additions:
+
+
+
+### Full List of Questions per Category (use exactly these, plus the 2 new common ones at the end):
+
+**Ta'mirlash:**
+- Nimani ta'mirlash kerak? (multi-select: Santexnika, Elektr jihozlari, Mebel, Konditsioner, Muzlatgich, Kir yuvish mashinasi, boshqa)
+- Muammoni qisqacha tasvirlab bering. (textarea)
+- Rasm yuklash
+
+**Tozalash:**
+- Tozalash turi? (oddiy, chuqur, ko'chib kirishdan oldin, boshqa)
+- Joy turi? (kvartira, ofis, hovli, boshqa)
+- Joy hajmi? (xona yoki kvm) — number input
+- Qo'shimcha ma'lumotlar (textarea)
+- Rasm yuklash
+
+**Avto xizmat:**
+- Xizmat turi? (Yuvish, Ta'mirlash, Diagnostika, boshqa)
+- Mashina markasi? (text)
+- Qo'shimcha ma'lumotlar
+- Rasm yuklash
+
+**Ko'chirish, yuk yetkazish:**
+- Yuk turi? (Xonadon jihozlari, Ofis jihozlari, Oziq-ovqat mahsulotlari, boshqa)
+- Yetkazish manzili? (from ... gacha text inputs)
+- Lift mavjudmi? (Ha / Yo'q + optional qavat)
+- Qo'shimcha ma'lumotlar
+- Rasm yuklash
+
+**Repetitorlik:**
+- Fan turi? (Ingliz tili, Rus tili, Matematika, Musiqa, boshqa)
+- Hozirgi darajangiz? (Boshlang'ich, O'rta, Yuqori)
+- Dars formati? (online, offline)
+- Qo'shimcha ma'lumotlar
+
+**Tadbir xizmatlari:**
+- Tadbir turi? (To'y, Tug'ilgan kun, Kelin salom, Gap, Korporativ, boshqa)
+- Xizmat turi? (multiselect: Ovqat pishirish, Bezash xizmati, Video/rasm xizmati, Tashkillashtirish xizmati, Ijara xizmati, Tozalash xizmati, Kortej xizmati, Musiqiy xizmatlar, boshqa)
+- Belgilangan sana? (date picker)
+- Qo'shimcha ma'lumotlar
+
+**Go'zallik:**
+- Xizmat turi? (Makiyaj, Manikyur/pedikyur, Soch turmak, Qosh/kiprik, boshqa)
+- Xizmat sababi? (Kundalik, To'y marosimlari, boshqa tadbirlar)
+- Xizmat joyi? (Uyda, Salonda)
+- Qo'shimcha ma'lumotlar
+- Rasm yuklash
+
+**Enagalik:**
+- Enagalik turi? (Yosh bola, Qariya)
+- Enaga jinsi? (Erkak, Ayol)
+- Qo'shimcha ma'lumotlar
+
+**Ustachilik:**
+- Xizmat turi? (Qurilish va tashqi fasad, Ichki pardozlash ishlari, Kommunikatsiya ishlari, Duradgorlik ishlari, Landshaft va dizayn, boshqa)
+- Joy turi? (Kvartira, Hovli, Noturar bino)
+- Ovqat va yotoq bilan ta'minlash? (Ha, Faqat ovqat, Faqat yotoq, Yo'q)
+- Boshqa ma'lumotlar
+
+### New Common Questions (appear at the END of every category's questionnaire):
+1. **Shoshilinchlik darajasi (Urgency Level)** - Single select:
+   - Bugun yoki ertaga kerak
+   - 3-7 kun ichida
+   - 1-2 hafta ichida
+   - 1 oy ichida
+   - Shoshilinch emas (qulay vaqt)
+
+2. **Taxminiy byudjet (Estimated Budget)**:
+   - Number input field for amount in so'm (e.g. 500000)
+   - Checkbox / Toggle: "Taklifga ochiq" (Open to offers) — if checked, hide or disable the number input and show text "Byudjet moslashuvchan / Taklifga ochiq"
+
+These two questions must be added to **every category** after the existing specific questions.
+
+### After all questions (including urgency + budget):
+- Show a clean **Summary page** listing all answers grouped by category-specific and common questions.
+- Prominent button: "Mos keladigan ustalarni ko'rish"
+
+### Recommendation Screen:
+- Show 4–6 mock providers with:
+  - Matching percentage (e.g. 92% mos keladi)
+  - Reasons based on answers (especially urgency and budget)
+  - Rating, reviews, location
+  - "Chat ochish" and "Taklif so'rash" buttons
+
+### Admin Panel for Questions (Must Have):
+- Admin-only page (protect it — simple role check or password for now)
+- List all categories
+- For each category: View, Add, Edit, Delete, and Reorder questions
+- Support question types: single select, multiselect, text, textarea, number, yes/no, date, file upload
+- Allow adding the common questions (urgency & budget) but keep them as shared
+
+Store the entire question configuration in a central JS object / JSON so it's dynamic and managed via admin panel. Persist changes with localStorage for now.
+
+### Technical Notes:
+- Make the questionnaire a dynamic multi-step or accordion-based form (match the style of your screenshots with red wavy question titles).
+- Add the two new common questions at the bottom of every category automatically.
+- Budget field: When "Taklifga ochiq" is selected, show "Byudjet moslashuvchan" instead of number.
+- All UI text in Uzbek (Latin).
+- Keep mobile-friendly and consistent with existing design.
+
+Priority order:
+1. Update the questionnaire to include all existing questions + new Urgency Level + Estimated Budget for every category.
+2. Improve the Summary screen to clearly display urgency and budget.
+3. Implement the Admin Panel for managing questions.
+4. Ensure the full flow works: Category selection → Questionnaire (with new fields) → Summary → Mock Recommendations.
+
+Make the code clean, well-commented, and easy to extend.

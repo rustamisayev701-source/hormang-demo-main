@@ -1,0 +1,273 @@
+You are working on a React + TypeScript + Tailwind + Supabase (or localStorage fallback) service marketplace project.
+
+## 🎯 Goal
+
+Upgrade Admin Panel usability by:
+
+1. Replacing raw `userId` in **/admin/feedback** with a proper **User Display UI**
+2. Adding **"Murojaatlar" (Feedback Count)** column in **/admin/users**
+3. Connecting both sections for better admin workflow
+
+---
+
+# 🧠 Core Principle
+
+Admin UI must be:
+
+* human-readable
+* actionable
+* interconnected
+
+❌ No raw IDs
+✅ Always show real user identity
+
+---
+
+# ✅ 1. Fix Feedback Table (User Display)
+
+## Location:
+
+```text
+/admin/feedback
+```
+
+---
+
+## ❌ Current (BAD):
+
+```text
+userId: "as8d9a8s9d"
+```
+
+---
+
+## ✅ Replace with User Cell Component
+
+### Create reusable component:
+
+```text
+/components/admin/UserCell.tsx
+```
+
+---
+
+## UserCell should display:
+
+* Avatar (or initials fallback)
+* Full Name
+* Role badge:
+
+  * Xaridor (customer)
+  * Ijrochi (provider)
+
+---
+
+## Example UI:
+
+```text
+[Avatar] John Doe
+         Xaridor
+```
+
+---
+
+## Optional small text:
+
+* phone or email (lighter color)
+
+---
+
+## Behavior:
+
+* Click → navigate to:
+
+```text
+/admin/users?id=USER_ID
+```
+
+---
+
+# 🔗 2. Data Mapping (IMPORTANT)
+
+When loading feedbacks:
+
+```ts
+const enrichedFeedbacks = feedbacks.map(f => ({
+  ...f,
+  user: users.find(u => u.id === f.userId)
+}));
+```
+
+---
+
+## Handle fallback:
+
+If no user found:
+
+```text
+Noma’lum foydalanuvchi
+```
+
+---
+
+# ✅ 3. Update Feedback Table Columns
+
+Replace:
+
+```text
+userId
+```
+
+With:
+
+```text
+User
+```
+
+Render:
+
+```tsx
+<UserCell user={feedback.user} />
+```
+
+---
+
+# ✅ 4. Add "Murojaatlar" Column in Users Table
+
+## Location:
+
+```text
+/admin/users
+```
+
+---
+
+## Add new column:
+
+```text
+Murojaatlar
+```
+
+---
+
+## Logic:
+
+```ts
+const count = feedbacks.filter(f => f.userId === user.id).length;
+```
+
+---
+
+## Display:
+
+```text
+3 ta
+```
+
+---
+
+## Advanced (RECOMMENDED):
+
+```text
+3 ta (2 shikoyat, 1 taklif)
+```
+
+---
+
+## Breakdown logic:
+
+```ts
+const complaints = feedbacks.filter(f => f.userId === user.id && f.type === "complaint").length;
+const suggestions = feedbacks.filter(f => f.userId === user.id && f.type === "suggestion").length;
+const problems = feedbacks.filter(f => f.userId === user.id && f.type === "problem").length;
+```
+
+---
+
+# 🔗 5. Click Behavior (IMPORTANT)
+
+Clicking "Murojaatlar" should:
+
+→ Navigate to:
+
+```text
+/admin/feedback?userId=USER_ID
+```
+
+---
+
+## Then filter feedback list:
+
+```ts
+if (query.userId) {
+  feedbacks = feedbacks.filter(f => f.userId === query.userId);
+}
+```
+
+---
+
+# ⚡ 6. Bonus: Highlight Problematic Users
+
+If user has many complaints:
+
+```ts
+if (complaints >= 3)
+```
+
+---
+
+## Show warning badge:
+
+```text
+⚠️ 3 ta shikoyat
+```
+
+Style:
+
+* red or amber
+* small badge
+
+---
+
+# 🎨 7. UI Rules
+
+* Use compact rows (admin efficiency)
+* Avatar: small (w-8 h-8)
+* Name: bold
+* Role: small badge
+* Keep everything scannable
+
+---
+
+# ⚠️ 8. DO NOT
+
+* Do NOT show raw IDs anywhere
+* Do NOT break existing admin logic
+* Do NOT duplicate user fetching logic (reuse where possible)
+* Do NOT slow down table performance
+
+---
+
+# 🎯 Expected Result
+
+Admin can now:
+
+* instantly identify users
+* click into user profiles
+* see how many complaints each user made
+* filter feedback by user
+* detect problematic users quickly
+
+---
+
+## Deliver
+
+1. `UserCell` component
+2. Updated `/admin/feedback` table
+3. Updated `/admin/users` table with "Murojaatlar"
+4. Filtering logic between pages
+5. Complaint highlighting (bonus)
+
+---
+
+Build clean, efficient, and admin-friendly UI.

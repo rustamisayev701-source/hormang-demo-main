@@ -1,0 +1,190 @@
+Refactor Provider Requests page mobile filtering/search UX
+
+Improve /provider/requests page by replacing the always-visible search bar and separate filter row with a compact expandable toolbar.
+
+Goal
+
+Reduce vertical space usage and make the page feel more native-mobile and cleaner.
+
+1. Remove current layout
+
+Remove:
+
+always-visible full-width search input
+separate always-visible filter chip row
+2. Add compact toolbar below tabs
+
+Create a single horizontal toolbar below:
+
+Barchasi / O‘qilmagan / Taklifsiz
+
+Toolbar layout:
+
+[ Filter button ] [ Search button ] [ active filter chips... ]
+
+Vertically centered.
+
+3. Filter button behavior
+
+Default:
+
+Icon-only circular button:
+
+<Funnel />
+
+Style:
+
+rounded-full
+white background
+subtle border
+shadow-sm
+size ~40px
+On click
+
+Expand horizontally with Framer Motion animation.
+
+Expanded state:
+
+[Funnel] [Barchasi] [Tozalash] [Ta’mirlash] [...]
+
+Use horizontal chip list.
+
+Scrollable horizontally.
+
+Selection
+
+Allow multiple category selection.
+
+Example:
+
+✓ Tozalash
+✓ Ta’mirlash
+
+Selected chip:
+
+primary purple background
+white text
+
+Unselected:
+
+light gray background
+Collapse behavior
+
+Collapse when:
+
+tapping outside
+after short delay after selection
+manual re-tap
+
+Keep selected filters active after collapse.
+
+Active count badge
+
+If filters selected:
+
+show small badge on button:
+
+2
+
+Example:
+
+<Funnel /> •2
+4. Search button behavior
+
+Default:
+
+Icon-only circular button:
+
+<Search />
+On click
+
+Expand horizontally inline into search field.
+
+Animation:
+
+44px → full width
+
+Spring animation.
+
+Expanded input
+
+Placeholder:
+
+Tavsif yoki joylashuv bo‘yicha qidirish...
+
+Include:
+
+search icon left
+clear X button right
+Collapse when
+clear clicked and empty
+blur while empty
+Escape key
+
+Keep value if non-empty.
+
+5. Active filter chips
+
+If filters active:
+
+display compact pills inline after buttons:
+
+Example:
+
+Tozalash ×
+Ta’mirlash ×
+
+Click X removes individual filter.
+
+6. Add “Clear all”
+
+If:
+
+selectedFilters.length > 0
+
+show:
+
+Tozalash
+
+small text button.
+
+Clears all filters.
+
+7. Preserve state
+
+Persist in component state (or URL params if already used):
+
+selected tab
+selected filters
+search query
+
+so when provider opens request detail and comes back, state is preserved.
+
+8. Empty state improvements
+
+Update empty states dynamically:
+
+no requests
+Hozircha mos so‘rovlar yo‘q
+search empty
+Hech narsa topilmadi
+filter empty
+Tanlangan kategoriyada hozircha so‘rov yo‘q
+9. Styling
+
+Mobile-first.
+
+Use:
+
+rounded-full buttons
+subtle shadows
+smooth Framer Motion expand/collapse
+preserve current purple provider theme
+keep existing tabs unchanged
+
+Important:
+Do not redesign request cards themselves.
+Only refactor search/filter toolbar UX.
+
+Goal:
+Make provider request browsing faster, cleaner, and more space-efficient on mobile.

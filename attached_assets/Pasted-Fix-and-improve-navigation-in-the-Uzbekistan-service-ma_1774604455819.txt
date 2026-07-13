@@ -1,0 +1,45 @@
+Fix and improve navigation in the Uzbekistan service marketplace app.
+
+### Requirements:
+
+1. **Logo Navigation (Image)**
+   - The logo is an image in the header.
+   - Make the logo image clickable.
+   - Clicking the logo should always navigate to the homepage (`/`).
+   - Wrap the logo `<img>` with React Router `<Link to="/">` or use `useNavigate` so it works from every page.
+
+2. **Fix 'Bosh sahifaga qaytish' Button**
+   - Find the button with text "Bosh sahifaga qaytish".
+   - Fix it so it correctly navigates to the homepage (`/`).
+   - Make sure it works from the dashboard and all other pages.
+   - Use React Router's `useNavigate` hook properly (do not use window.location).
+
+3. **Persistent Bottom Navigation Panel** (Very Important)
+   - Add a **fixed bottom navigation bar** that appears on all pages for logged-in users (both Customer and Provider).
+   - The bottom nav should be mobile-first and always visible at the bottom of the screen.
+   - Include these 5 tabs with icons and labels in Uzbek:
+     - **Bosh sahifa** (Home icon) → navigates to `/`
+     - **So'rovlarim** (List or File icon) → `/my-requests`
+     - **Takliflar** (Offer / Price icon) → `/offers`
+     - **Chat** (Message icon) → `/chats` or chat list page
+     - **Profil** (User icon) → `/profile`
+   - Highlight the active tab based on current route.
+   - Use React Router to handle navigation between these pages.
+   - Make it look clean and modern (simple icons + text, shadow, white background).
+
+### Additional Details:
+- Only show the bottom navigation for logged-in users. Hide it on login/register pages.
+- Make sure the bottom nav does not overlap with page content (add proper padding-bottom to main content).
+- Keep the top header with the logo (now clickable).
+- Ensure all navigation works correctly after page refresh.
+- Use consistent Uzbek labels.
+
+### Priority:
+1. Fix the 'Bosh sahifaga qaytish' button immediately.
+2. Make the logo image clickable and navigate to home.
+3. Implement the persistent bottom navigation bar with the 5 tabs listed above.
+4. Test that clicking "Bosh sahifa" in bottom nav, logo, and "Bosh sahifaga qaytish" button all go to the homepage.
+
+Update the routing if needed so all pages (`/`, `/my-requests`, `/offers`, chat pages, profile) are properly defined.
+
+Make the code clean. Use Lucide-react or simple emoji icons if no icon library is installed.

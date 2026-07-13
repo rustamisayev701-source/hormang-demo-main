@@ -1,0 +1,286 @@
+You are working on a React + TypeScript + Tailwind + Supabase (or localStorage fallback) service marketplace project in Replit.
+
+## 🎯 Goal
+
+Upgrade the existing **Announcement Editor (Create/Edit Drawer)** into a more advanced, user-friendly **mini CMS editor** with:
+
+* proper image upload (not URL input)
+* live preview (not modal-only)
+* markdown content support
+* scheduling capability
+* better validation and UX
+
+DO NOT break existing announcement system or data structure.
+
+---
+
+# 🧠 Core Improvements
+
+Upgrade in 3 layers:
+
+```text
+Media → Content → Control
+```
+
+---
+
+# ✅ 1. Replace Image URL Input with File Upload
+
+## Remove:
+
+```tsx
+<input value={f.image} ... />
+```
+
+---
+
+## Add:
+
+```tsx
+<input
+  type="file"
+  accept="image/*"
+  onChange={handleImageUpload}
+/>
+```
+
+---
+
+## Implement handler:
+
+```ts
+function handleImageUpload(e: React.ChangeEvent<HTMLInputElement>) {
+  const file = e.target.files?.[0];
+  if (!file) return;
+
+  const reader = new FileReader();
+  reader.onloadend = () => {
+    set("image", reader.result as string); // base64
+  };
+  reader.readAsDataURL(file);
+}
+```
+
+---
+
+## UX Requirements:
+
+* show preview after upload
+* allow remove/reset image
+* hide broken images
+
+---
+
+# ✅ 2. Upgrade Content Editor (Markdown + Preview)
+
+Replace `<textarea>` usage with:
+
+## A. Editor + Preview layout:
+
+```text
+Left: Markdown editor
+Right: Live preview
+```
+
+---
+
+## Install and use:
+
+```tsx
+import ReactMarkdown from "react-markdown";
+```
+
+---
+
+## Render preview:
+
+```tsx
+<ReactMarkdown>{f.content}</ReactMarkdown>
+```
+
+---
+
+## Keep textarea as editor (simple but effective)
+
+---
+
+# ✅ 3. Add Live Preview Panel (IMPORTANT)
+
+Instead of modal-only preview:
+
+👉 Add **side-by-side preview panel inside drawer**
+
+---
+
+## Preview should match provider-home card:
+
+Include:
+
+* image
+* title
+* badge (news/event)
+* content
+* CTA button
+* pinned indicator
+
+---
+
+# ✅ 4. Add Scheduling Support
+
+Extend model:
+
+```ts
+publishAt?: string;
+```
+
+---
+
+## Add input:
+
+```tsx
+<input
+  type="datetime-local"
+  value={f.publishAt ?? ""}
+  onChange={(e) => set("publishAt", e.target.value)}
+/>
+```
+
+---
+
+## Update visibility logic:
+
+```ts
+status === "published" &&
+(!publishAt || new Date(publishAt) <= new Date())
+```
+
+---
+
+# ✅ 5. Improve CTA Handling
+
+Add validation:
+
+```ts
+if (f.ctaLink && !f.ctaLink.startsWith("/")) {
+  // show error or warning
+}
+```
+
+---
+
+## Optional:
+
+Add toggle:
+
+* internal link
+* external link
+
+---
+
+# ✅ 6. Add Form Validation Layer
+
+Before saving:
+
+```ts
+if (!f.title.trim()) throw Error("Title required");
+if (!f.content.trim()) throw Error("Content required");
+```
+
+---
+
+## Extra rules:
+
+* events should recommend expiry date
+* CTA must have both text + link
+
+---
+
+# ✅ 7. Improve Section UI
+
+Update section headers:
+
+```text
+📌 Basic Info
+📝 Content
+🖼 Media
+🎯 CTA
+⚙️ Visibility
+```
+
+---
+
+## Add:
+
+* better spacing
+* subtle dividers
+* consistent typography
+
+---
+
+# ✅ 8. Add Character Counter (Nice UX)
+
+For title:
+
+```tsx
+<span>{f.title.length}/120</span>
+```
+
+---
+
+# ✅ 9. Add Image Controls
+
+If image exists:
+
+* show preview
+* add “Remove image” button
+
+---
+
+# ✅ 10. Add Auto Draft Behavior (Optional but simple)
+
+When form changes:
+
+* store in local state or localStorage
+
+Restore if user reopens editor.
+
+---
+
+# ✅ 11. Keep Existing Features
+
+Do NOT break:
+
+* create/edit logic
+* preview modal (can keep as fallback)
+* announcement saving
+* targeting system
+* pin / expiry logic
+
+---
+
+# 🎯 Expected Result
+
+* Admin can upload images easily
+* Content looks professional (markdown rendered)
+* Live preview improves confidence
+* Scheduling enables campaigns
+* Form is clean and structured
+* System still lightweight (no heavy CMS)
+
+---
+
+## Deliver
+
+1. Updated drawer UI
+2. Image upload with preview
+3. Markdown editor + preview
+4. Live preview panel
+5. Scheduling input
+6. Validation improvements
+7. UX polish
+
+Do not break:
+
+* existing announcement data
+* provider-home rendering
+* performance

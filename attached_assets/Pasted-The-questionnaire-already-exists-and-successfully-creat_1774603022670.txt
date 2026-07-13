@@ -1,0 +1,71 @@
+The questionnaire already exists and successfully creates/saves a service request (using localStorage).
+
+Now implement the full **Customer Requests & Offers & Chat** system.
+
+### 1. Data Structure (use localStorage)
+- "customerRequests" → array of requests created by the logged-in customer
+  Each request contains: id, category, answers (including urgency + budget), status, createdAt, city
+- "offers" → array of offers received
+  Each offer: { id, requestId, masterId, masterName, price (so'm), message, createdAt, averageResponseTime }
+- "chats" → simple chat storage
+  Each chat: { id, requestId, masterId, masterName, messages: [{sender: "customer"|"master", text, timestamp}] }
+
+### 2. New Pages / Routes
+- `/my-requests` → "Mening so'rovlarim" (main page for customers)
+- `/offers` → "Olingan takliflar" (dedicated offers page)
+- `/chat/:chatId` → Chat page with specific master (or create dynamic chat)
+
+### 3. "Mening so'rovlarim" Page (`/my-requests`)
+- List of all customer's posted requests (newest first)
+- Each request card shows:
+  - Category + short title (e.g. "Tozalash - Kvartira")
+  - Key details (budget, urgency, date)
+  - Number of offers received (badge)
+  - "Takliflar ko'rish" button → goes to that request's offers
+  - **Chatting icon** (💬) → if there is at least one offer, clicking it opens chat with the first/last master who made an offer (or shows list of masters to chat with)
+
+### 4. "Olingan takliflar" Page (`/offers`)
+- Shows all received offers across all requests
+- Grouped by request or flat list with request title
+- Each offer card:
+  - Master name + photo placeholder
+  - Price (e.g. 1 200 000 so'm)
+  - Short message from master
+  - **Average response time** displayed under master name: "O'rtacha javob vaqti: 18 daqiqa"
+  - "Chat ochish" button (prominent)
+  - "Qabul qilish" / "Rad etish" buttons (for now just UI, status changes in localStorage)
+
+### 5. Chat System
+- Simple real-time-like chat (using localStorage + state)
+- Chat header:
+  - Master name
+  - **Average response time** displayed under the name (e.g. "O'rtacha javob vaqti: 12 daqiqa")
+  - Online / last seen status (mock)
+- Message list (customer messages on right, master on left)
+- Input box at bottom to send message
+- Messages are saved per request + master pair
+
+### 6. Mock Data
+- When a new request is created from questionnaire, automatically generate 2–4 fake offers from different masters (with realistic prices and average response times between 8–45 minutes).
+- Pre-populate some chats so the user can test immediately.
+
+### 7. Navigation & UI
+- Add a bottom navigation or top tabs for logged-in customers: Home, So'rovlarim, Takliflar, Chat, Profile
+- Chatting icon should be visible on every request card and offer card
+- All text in Uzbek (Latin script)
+- Mobile-first, clean design
+
+### Technical
+- Use React Router for all new routes
+- Persist everything in localStorage so data survives page refresh
+- Make sure only logged-in Customers can access these pages
+- Create reusable components: RequestCard, OfferCard, ChatWindow
+- Keep code clean and well commented
+
+Priority order:
+1. Make sure requests from questionnaire are properly saved and visible on /my-requests
+2. Implement the Offers page with mock offers
+3. Add chatting icon that opens chat
+4. Build the full Chat page with average response time displayed under master name
+
+Start implementing now. First create the /my-requests page and ensure existing requests appear there.

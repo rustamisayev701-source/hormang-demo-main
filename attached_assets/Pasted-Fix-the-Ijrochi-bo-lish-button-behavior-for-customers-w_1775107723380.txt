@@ -1,0 +1,45 @@
+Fix the "Ijrochi bo'lish" button behavior for customers who don't have a provider profile yet.
+
+### Current Problem:
+When a customer clicks the **"Ijrochi bo'lish"** button, it does **not** redirect to profile settings. Instead, it immediately shows the error: **"Kamida bitta kategoriya tanlang"**.
+
+The button is trying to switch the role or save the provider profile too early, before any categories are selected.
+
+### Correct Desired Flow:
+
+1. When user clicks **"Ijrochi bo'lish"**:
+   - Do **not** show any error.
+   - Immediately open a **clean modal** titled "Ijrochi bo'lish".
+
+2. Inside the modal:
+   - Clear message: "Ijrochi sifatida faoliyat yuritish uchun kamida bitta xizmat turini tanlang"
+   - Display all **9 categories** as nice selectable chips (multi-select allowed):
+     - Tozalash
+     - Ta'mirlash
+     - Enagalik
+     - Tadbir xizmatlari
+     - Ko'chirish / yuk yetkazish
+     - Go'zallik
+     - Avto xizmat
+     - Repetitorlar
+     - Ustachilik
+   - "Davom etish" button — disabled until at least **one** category is selected.
+   - "Bekor qilish" button.
+
+3. When user clicks **"Davom etish"** (after selecting categories):
+   - Save the selected categories to the provider profile.
+   - Update the user role to "provider".
+   - Close the modal.
+   - **Redirect** the user to `/profile/settings`.
+   - In the profile settings page, show a temporary welcome banner:
+     "Tabriklaymiz! Siz endi ijrochi bo'ldingiz. Profilingizni to'liq to'ldiring!"
+
+### Important:
+- Do **not** trigger the "Kamida bitta kategoriya tanlang" error in this flow.
+- The modal should prevent the user from proceeding without selecting at least one category.
+- Use the same category list that exists in the profile settings page (`SERVICE_CATEGORIES`).
+- Keep the design consistent with the rest of the app (violet accents, clean cards).
+
+Replace the current broken "Ijrochi bo'lish" logic with this modal-first approach.
+
+Implement this fix cleanly now.

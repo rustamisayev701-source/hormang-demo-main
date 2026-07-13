@@ -1,0 +1,193 @@
+Implement WhatsApp-style read receipts in Hormang chat.
+
+Goal
+
+For every message sent by the current user:
+
+show single check → message sent/delivered
+show double check → message read by receiver
+
+Use Lucide React icons:
+
+Check
+CheckCheck
+
+Display the status icon below or inline-right of the sender’s own message bubble.
+
+Receiver messages should NOT display checkmarks.
+
+Data model
+
+Extend message type.
+
+type ChatMessage = {
+  id: string
+  chatId: string
+  senderId: string
+  receiverId: string
+  text: string
+  createdAt: string
+
+  deliveredAt?: string | null
+  readAt?: string | null
+}
+
+Rules:
+
+deliveredAt = message exists in receiver conversation
+readAt = receiver has actually opened/viewed chat
+Sending message flow
+
+When sender sends message:
+
+createMessage({
+  ...
+  createdAt: now(),
+  deliveredAt: now(),
+  readAt: null
+})
+
+So:
+
+✓ immediately visible
+Read logic
+
+When receiver opens chat:
+
+markMessagesAsRead(chatId, currentUserId)
+
+Logic:
+
+find all messages where:
+receiverId === currentUserId
+readAt == null
+
+set:
+readAt = now()
+
+Persist to localStorage.
+
+localStorage structure
+
+Persist in existing messages store.
+
+Example:
+
+localStorage.chatMessages
+[
+  {
+    "id": "...",
+    "senderId": "provider1",
+    "receiverId": "customer1",
+    "text": "Salom",
+    "createdAt": "...",
+    "deliveredAt": "...",
+    "readAt": "..."
+  }
+]
+UI rendering
+
+Inside message bubble component:
+
+Only render status if:
+
+message.senderId === currentUser.id
+
+Then:
+
+Sent / delivered but unread
+<Check className="w-3.5 h-3.5 text-gray-400" />
+Read
+<CheckCheck className="w-3.5 h-3.5 text-blue-500" />
+Placement
+
+Place status in bottom-right under sender message timestamp.
+
+Example:
+
+<div className="flex items-center justify-end gap-1 mt-1">
+  <span className="text-[10px] text-gray-400">
+    {formatTime(message.createdAt)}
+  </span>
+
+  {message.readAt ? (
+    <CheckCheck className="w-3.5 h-3.5 text-blue-500" />
+  ) : (
+    <Check className="w-3.5 h-3.5 text-gray-400" />
+  )}
+</div>
+Important behavior
+Must update live without refresh
+
+When receiver opens chat:
+
+sender sees icon update from:
+✓
+→ ✓✓
+
+without page reload
+
+Trigger via:
+
+window.dispatchEvent(
+  new CustomEvent("chat:read", { detail: { chatId } })
+)
+
+or existing chat state store.
+
+Edge cases
+1. Sender viewing own chat
+
+Should NOT auto-mark own messages read.
+
+Only:
+
+receiverId === currentUser.id
+2. Background unread
+
+If receiver has unread badge but never opened chat:
+
+✓
+
+not ✓✓
+
+3. Old messages
+
+Existing messages without status:
+
+normalize:
+
+deliveredAt = createdAt
+readAt = null
+
+during hydration.
+
+Nice optional polish
+
+If useful:
+
+animate on read:
+
+<motion.div
+  initial={{ scale: 0.8, opacity: 0.6 }}
+  animate={{ scale: 1, opacity: 1 }}
+>
+
+when:
+
+✓ → ✓✓
+
+Very subtle.
+
+Acceptance checklist
+sender sees ✓ after sending
+receiver opens chat → sender sees ✓✓
+persists in localStorage
+updates live without refresh
+works customer ↔ provider both directions
+unread badges still work
+no checkmarks on incoming messages
+no duplicate read marking
+mobile UI remains clean
+
+Do not rewrite entire chat system—integrate into existing chat storage/components only.

@@ -1,0 +1,37 @@
+### 1. Replace Profile Completion Indicator
+- Find the old Profile Completion card/section in the dashboard.
+- Completely delete the old one.
+- Replace it with the **newer, modern version** that already exists in the provider profile settings:
+  - Use the `CircularProgress` component (with violet gradient).
+  - Show the exact percentage (e.g. 78%).
+  - Below it, display the list of missing items (same as in profile settings).
+  - Keep the same styling, animation, and colors.
+
+### 2. Redesign the Top Profile Header Section
+- Locate the current top section that shows profile image, name, and role.
+- Completely reimagine it as a clean, rich profile header card with the following layout:
+  - Left side: Profile photo (large, circular or rounded-2xl, with camera button if needed).
+  - Right side (stacked):
+    - Full name (First + Last name) in bold.
+    - Role badge ("Ijrochi" / Provider).
+    - Average review rating: e.g. "4.8 ★ (out of 5)" with the number of reviews in parentheses, e.g. "(127 ta baho)".
+      - Make the entire rating line **clickable** (add onClick that shows a toast "Reviews modal will be here in the future").
+    - Number of completed services: e.g. "48 ta bajarilgan xizmat".
+      - Make this line **clickable** (add onClick that shows a toast "Service history modal will be here in the future").
+  - Bottom row (or top-right): Verification badges
+    - Phone verification badge (green check) — show only if the user has a verified phone number.
+    - Leave space for future badges (e.g. "ID tasdiqlangan", "Top ijrochi").
+
+- Use the same clean card style as the rest of the app (rounded-2xl, subtle shadow, white background).
+- Make it responsive and mobile-friendly.
+
+### Technical Notes
+- Use existing components and contexts (`useAuth`, `useToast`, etc.).
+- Pull real data from the current user/providerProfile (rating, review count, completed services count, phone verification status).
+- For now, use placeholder/mock values for rating and completed services if not yet stored, but make the fields ready for real data.
+- Keep all text in Uzbek (Latin script).
+- Do not break any existing functionality.
+
+Priority:
+1. Replace the old completion indicator with the new one.
+2. Redesign the top profile header exactly as described.

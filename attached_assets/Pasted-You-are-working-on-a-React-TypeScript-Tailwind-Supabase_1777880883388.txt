@@ -1,0 +1,296 @@
+You are working on a React + TypeScript + Tailwind + Supabase (or localStorage fallback) service marketplace project in Replit.
+
+## 🎯 Goal
+
+Implement a full **Announcements System (News & Events)** that allows admins to create, manage, and broadcast content to users, and display it in `/provider-home`.
+
+This system acts as a **mini CMS for communication, growth, and monetization messaging**.
+
+---
+
+# 🧠 Core Concept
+
+Announcements = structured content:
+
+* News → informational (updates, features)
+* Events → action-driven (promos, campaigns)
+
+---
+
+# ✅ 1. Data Model
+
+Create:
+
+```ts
+type Announcement = {
+  id: string;
+  type: "news" | "event";
+
+  title: string;
+  content: string;
+  image?: string;
+
+  ctaText?: string;
+  ctaLink?: string;
+
+  target: "all" | "providers" | "customers";
+
+  isPinned?: boolean;
+  expiresAt?: string;
+
+  status: "draft" | "published";
+
+  createdAt: string;
+};
+```
+
+---
+
+## Storage
+
+* Supabase table OR localStorage:
+
+```ts
+announcements: Announcement[]
+```
+
+---
+
+# ✅ 2. Admin Section
+
+Create new route:
+
+```text
+/admin/announcements
+```
+
+---
+
+## A. List Page
+
+Display list:
+
+Columns:
+
+* Type (News/Event)
+* Title
+* Status (Draft/Published)
+* Target
+* Pinned
+* Expiry
+
+Example:
+
+```text
+[Event] Earn +10 Tanga | Published | Providers | Pinned
+```
+
+---
+
+## Features:
+
+* Create new
+* Edit
+* Delete
+* Publish / unpublish
+* Pin / unpin
+
+---
+
+# ✅ 3. Create / Edit Page
+
+Form sections:
+
+---
+
+## A. Basic Info
+
+* Title (required)
+* Type (news / event)
+
+---
+
+## B. Content Editor (IMPORTANT)
+
+Use simple rich text editor OR textarea with formatting support.
+
+Minimum:
+
+* paragraphs
+* line breaks
+* optional markdown
+
+---
+
+## C. Media
+
+* Upload image (cover)
+
+---
+
+## D. CTA (Optional)
+
+Fields:
+
+* Button text
+* Link
+
+---
+
+## E. Targeting
+
+Options:
+
+* All
+* Providers
+* Customers
+
+---
+
+## F. Visibility
+
+* Status: Draft / Published
+* Pin toggle
+* Expiry date (optional)
+
+---
+
+# ✅ 4. Provider Home Integration
+
+Update:
+
+```text
+/provider-home
+```
+
+---
+
+## Fetch announcements:
+
+Filter:
+
+```ts
+announcements.filter(a =>
+  a.status === "published" &&
+  (a.target === "all" || a.target === "providers") &&
+  (!a.expiresAt || new Date(a.expiresAt) > new Date())
+);
+```
+
+---
+
+## Sorting:
+
+1. Pinned first
+2. Then newest
+
+---
+
+# ✅ 5. UI Display (Provider Home)
+
+Create announcement cards:
+
+### Card should include:
+
+* Image (if exists)
+* Title
+* Short preview (truncate content)
+* CTA button (if exists)
+
+---
+
+## Example:
+
+```text
+🔥 Earn +10 Tanga this week
+[Buy Tanga]
+```
+
+---
+
+## On click:
+
+* Open full content (modal or page)
+
+---
+
+# ✅ 6. Expiry Handling
+
+Automatically hide expired announcements:
+
+```ts
+if (expiresAt < now) → do not show
+```
+
+---
+
+# ✅ 7. Optional: Seen Tracking (if simple)
+
+Add:
+
+```ts
+seenBy?: string[] // user IDs
+```
+
+Mark when user views.
+
+---
+
+# ✅ 8. Admin UX Requirements
+
+* clean card/table UI
+* quick toggles (publish, pin)
+* preview before publish
+
+---
+
+# ✅ 9. Performance
+
+* limit fetch (e.g. latest 10–20)
+* lazy load images
+
+---
+
+# ✅ 10. Audit Log Integration
+
+Log actions:
+
+* announcement created
+* updated
+* published/unpublished
+
+Example:
+
+```ts
+logAction({
+  action: "ANNOUNCEMENT_CREATED",
+  description: `Created announcement: ${title}`,
+});
+```
+
+---
+
+# 🎯 Expected Result
+
+* Admin can create and control announcements easily
+* Providers see relevant news/events on homepage
+* Expired content disappears automatically
+* CTA drives user actions (monetization, referrals)
+
+---
+
+## Deliver
+
+1. `/admin/announcements` page
+2. Create/edit announcement form
+3. Storage integration
+4. Provider-home display
+5. Filtering + sorting logic
+6. CTA support
+7. Expiry handling
+
+Do not break:
+
+* provider-home layout
+* performance
+* existing data systems

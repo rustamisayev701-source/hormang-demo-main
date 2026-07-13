@@ -1,0 +1,289 @@
+You are working on a React + TypeScript + Tailwind project (frontend-heavy, using localStorage as temporary backend).
+
+## 🎯 Goal
+
+Implement a **complete Referral System** for providers, including:
+
+* referral code generation
+* tracking invited users
+* reward logic (Tanga)
+* UI for providers
+* admin visibility (basic)
+
+All logic must work using **localStorage (no real backend yet)**.
+
+---
+
+# 🧠 Core Logic Overview
+
+Flow:
+
+1. Provider gets a unique referral code
+2. New user signs up using `?ref=CODE`
+3. System stores referrer
+4. When invited user becomes a **provider (profile completed)**:
+   → reward referrer with **+3 Tanga**
+   → log referral
+
+---
+
+# ✅ 1. Data Structures (localStorage)
+
+Create/update these keys:
+
+```ts id="ds1"
+users: User[]
+referrals: Referral[]
+tangaHistory: TangaTransaction[]
+```
+
+---
+
+## User type:
+
+```ts id="ds2"
+type User = {
+  id: string;
+  name: string;
+  phone: string;
+  role: "customer" | "provider";
+  referralCode?: string;
+  referredBy?: string; // referralCode
+  isProviderComplete?: boolean;
+  tangaBalance?: number;
+};
+```
+
+---
+
+## Referral record:
+
+```ts id="ds3"
+type Referral = {
+  id: string;
+  referrerCode: string;
+  referredUserId: string;
+  status: "pending" | "completed";
+  createdAt: string;
+  rewarded: boolean;
+};
+```
+
+---
+
+## Tanga transaction:
+
+```ts id="ds4"
+type TangaTransaction = {
+  id: string;
+  userId: string;
+  amount: number;
+  type: "referral_reward" | "spend" | "manual";
+  description: string;
+  createdAt: string;
+};
+```
+
+---
+
+# ✅ 2. Referral Code Generation
+
+When provider profile is created:
+
+```ts id="codegen"
+function generateReferralCode(name: string) {
+  const random = Math.floor(1000 + Math.random() * 9000);
+  return name.slice(0, 3).toUpperCase() + random;
+}
+```
+
+Save:
+
+```ts id="savecode"
+user.referralCode = generatedCode;
+```
+
+Ensure uniqueness:
+
+* check existing users
+
+---
+
+# ✅ 3. Capture Referral from URL
+
+On signup page:
+
+```ts id="capture"
+const params = new URLSearchParams(window.location.search);
+const refCode = params.get("ref");
+```
+
+If exists:
+
+```ts id="saveref"
+newUser.referredBy = refCode;
+```
+
+---
+
+# ✅ 4. Create Referral Record
+
+After signup:
+
+```ts id="create_ref"
+if (refCode) {
+  addReferral({
+    referrerCode: refCode,
+    referredUserId: newUser.id,
+    status: "pending",
+    rewarded: false,
+  });
+}
+```
+
+---
+
+# ✅ 5. Reward Logic (CRITICAL)
+
+Trigger when user becomes full provider:
+
+```ts id="reward_logic"
+function handleProviderCompletion(user: User) {
+  if (!user.referredBy) return;
+
+  const referral = referrals.find(
+    r => r.referredUserId === user.id && !r.rewarded
+  );
+
+  if (!referral) return;
+
+  const referrer = users.find(
+    u => u.referralCode === user.referredBy
+  );
+
+  if (!referrer) return;
+
+  // reward
+  referrer.tangaBalance = (referrer.tangaBalance || 0) + 3;
+
+  // log transaction
+  addTangaTransaction({
+    userId: referrer.id,
+    amount: 3,
+    type: "referral_reward",
+    description: "Referral bonus",
+  });
+
+  // update referral
+  referral.status = "completed";
+  referral.rewarded = true;
+
+  saveAll();
+}
+```
+
+---
+
+# ✅ 6. Provider UI (Referral Section)
+
+In already existing section in /provider-home and /plans page :
+
+### Show:
+
+* Referral Code
+* Copy button
+* Share link:
+
+```ts id="link"
+https://yourapp.com/signup?ref=CODE
+```
+
+---
+
+## Stats:
+
+* Total invited
+* Completed referrals
+* Earned Tanga
+
+DO NOT CHANGE THE DESIGN OF THE REFERRAL CARD
+---
+
+# ✅ 7. Tanga History Update
+
+In Tanga page:
+
+Show referral rewards:
+
+```text
++3 Tanga — Referral bonus (Ali joined as provider)
+```
+
+Filter:
+
+* show type: referral_reward
+
+---
+
+# ✅ 8. Admin Users Section (Basic Integration)
+
+In admin user table:
+
+Add:
+
+* referralCode
+* referredBy
+* total referrals count
+* total earned from referrals
+
+Optional badge:
+
+```text
+Top Referrer
+```
+
+---
+
+# ✅ 9. UI Requirements
+
+Keep clean and simple:
+
+* card layout
+* copy button
+* stats row
+* referral list
+
+Use Tailwind.
+
+---
+
+# ✅ 10. Validation / Edge Cases
+
+* Prevent self-referral
+* Prevent double reward
+* Referral works only once per user
+* Only reward when provider fully completes profile
+
+---
+
+# 🎯 Expected Result
+
+* Providers have referral codes
+* Users can sign up using referral link
+* Rewards are automatically granted
+* Tanga history updates correctly
+* Referral stats visible in UI
+
+---
+
+## Deliver
+
+1. Referral code system
+2. URL referral capture
+3. Referral tracking logic
+4. Reward system (+3 Tanga)
+5. Provider referral UI
+6. Tanga history integration
+7. Admin visibility (basic)
+
+All powered via localStorage (no backend required yet)

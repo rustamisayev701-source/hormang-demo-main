@@ -1,0 +1,311 @@
+You are working on Hormang (React + TypeScript + Tailwind + Supabase or localStorage fallback).
+
+## 🎯 Goal
+
+Upgrade the **"Popular Services"** section on `/`customer-home (customer homepage) so it shows **real ranked service categories by popularity**, instead of static/manual categories.
+
+This should feel dynamic, trustworthy, and useful for customers.
+
+---
+
+# ✅ 1. Popularity Ranking Logic
+
+Calculate popularity from real marketplace activity.
+
+Each category should get a popularity score based on actual platform data.
+
+Use weighted ranking from:
+
+### Primary:
+
+* number of customer requests created in that category
+
+### Secondary:
+
+* number of offers submitted in that category
+
+### Optional boost:
+
+* number of completed orders in that category
+
+---
+
+# Suggested formula
+
+```ts
+popularityScore =
+(requestCount * 1.0)
++ (offerCount * 0.5)
++ (completedCount * 0.8)
+```
+
+Replit can tune weights if needed.
+
+---
+
+# IMPORTANT
+
+Use existing real platform data:
+
+* requests
+* offers
+* accepted/completed jobs
+
+DO NOT hardcode popularity manually.
+
+---
+
+# ✅ 2. Sort Categories
+
+Sort descending by:
+
+```ts
+popularityScore
+```
+
+Highest first.
+
+---
+
+# Example:
+
+```text
+1. Tozalash xizmatlari
+2. Elektrik
+3. Santexnik
+4. Ko‘chirish
+...
+```
+
+---
+
+# ✅ 3. Top 3 Ranking Badges
+
+Most important visual change:
+
+Top 3 categories should display ranking badges.
+
+---
+
+## 1st place
+
+Gold badge:
+
+```text
+🥇 #1
+```
+
+OR premium gold pill.
+
+---
+
+## 2nd place
+
+Silver:
+
+```text
+🥈 #2
+```
+
+---
+
+## 3rd place
+
+Bronze:
+
+```text
+🥉 #3
+```
+
+---
+
+# Badge Style
+
+Use:
+
+* compact corner badge OR inline badge
+* subtle gradient
+* elegant premium look
+
+Avoid emoji-only styling unless already matching UI.
+
+Preferred:
+
+* gold / silver / bronze pill with rank text
+
+---
+
+# Example:
+
+```text
+[🥇 #1] Tozalash xizmatlari
+```
+
+---
+
+# ✅ 4. Remaining Categories
+
+Categories ranked 4+:
+
+Show normally without medal badge.
+
+Optional:
+show small popularity metric:
+
+Example:
+
+```text
+120 ta so‘rov
+```
+
+OR
+
+```text
+Mashhur
+```
+
+if helpful.
+
+---
+
+# ✅ 5. Section Header
+
+Update section title if needed:
+
+Preferred:
+
+```text
+Mashhur xizmatlar
+```
+
+OR
+
+```text
+Eng mashhur xizmatlar
+```
+
+Optional subtitle:
+
+```text
+Hormang foydalanuvchilari orasida eng ko‘p so‘ralgan xizmatlar
+```
+
+---
+
+# ✅ 6. Real-Time Updating
+
+Popularity should auto-update whenever:
+
+* request created
+* offer submitted
+* request completed
+
+If cached:
+recompute safely when relevant data changes.
+
+---
+
+# localStorage fallback
+
+If using localStorage:
+derive from current saved:
+
+* requests
+* offers
+* categories
+
+---
+
+# Supabase:
+
+can compute on fetch or via helper util.
+
+---
+
+# ✅ 7. Reusable Utility
+
+Create reusable helper:
+
+```ts
+getPopularCategories()
+```
+
+Returns:
+
+```ts
+[
+  {
+    categoryId,
+    name,
+    popularityScore,
+    rank,
+    requestCount,
+    offerCount,
+    completedCount
+  }
+]
+```
+
+This can later be reused for:
+
+* admin analytics
+* homepage widgets
+* trends
+
+---
+
+# ✅ 8. UI Rules
+
+Keep current card design if possible.
+
+Only improve:
+
+* ranking logic
+* rank badges
+* ordering
+
+Avoid redesigning whole section unless necessary.
+
+---
+
+# ⚠️ IMPORTANT
+
+DO NOT:
+
+* manually hardcode top categories
+* hardcode ranks
+* use fake popularity values
+
+Must reflect real marketplace usage.
+
+---
+
+# 🎯 Expected Result
+
+Customer homepage now shows:
+
+```text
+Eng mashhur xizmatlar
+```
+
+Sorted by actual popularity.
+
+Top 3 have:
+
+* gold
+* silver
+* bronze rank indicators
+
+Customers instantly see:
+
+* trending categories
+* where marketplace demand is highest
+
+This makes the homepage feel:
+
+* dynamic
+* data-driven
+* trustworthy
+* alive
+
+Build production-ready and fully connected to existing requests/offers/category systems.

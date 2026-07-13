@@ -1,0 +1,311 @@
+Modify  current Average Response Time System in Hormang for both customers and providers based on chat activity.
+
+🎯 Goal
+
+Calculate and continuously update each user’s average response time from real conversations.
+
+This applies to:
+
+providers
+customers
+
+The metric should reflect:
+
+How quickly this user typically replies to incoming messages
+Core calculation logic
+
+Average response time is calculated from:
+
+time between receiving a message
+→ and sending the first reply back
+Example
+Provider
+
+Customer sends:
+
+12:10
+
+Provider replies:
+
+12:20
+
+Response time:
+
+10 min
+
+Provider average:
+
+10 min
+
+Later:
+
+Customer sends:
+
+12:34
+
+Provider replies:
+
+12:54
+
+Response time:
+
+20 min
+
+Provider average becomes:
+
+(10 + 20) / 2 = 15 min
+Customer
+
+Same logic applies in reverse.
+
+IMPORTANT — Response pairing rules
+
+This part matters.
+
+Measure only:
+
+first reply to latest incoming message
+Valid
+
+Customer:
+
+hello
+
+Provider:
+
+salom
+
+→ count interval
+
+Invalid duplicate counting
+
+Customer sends:
+
+hello
+are you available?
+please answer
+
+Provider sends one reply.
+
+This should count as:
+
+one response interval only
+
+Not three.
+
+Recommended implementation
+
+For each chat:
+
+Track pending unanswered incoming message per participant.
+
+Pseudo:
+
+lastIncomingAwaitingReply[userId]
+
+When user replies:
+
+compute:
+
+replyTimestamp - incomingTimestamp
+
+Store metric.
+
+Then clear pending.
+
+Data model
+
+Add to user profile:
+
+averageResponseTimeMinutes?: number
+responseSamplesCount?: number
+responseSamples?: number[]
+
+Preferred:
+
+Store running values:
+
+responseTimeTotalMinutes
+responseSamplesCount
+
+Then derive average.
+
+More efficient than storing every sample forever.
+
+Example
+provider.responseTimeTotalMinutes += 20
+
+provider.responseSamplesCount += 1
+
+provider.averageResponseTimeMinutes =
+total / count
+Update trigger
+
+Recalculate whenever:
+
+new message sent
+
+Specifically:
+
+when message is a reply to unanswered incoming message.
+
+Display formatting rules
+
+Very important.
+
+Under 10 min
+
+If calculated average is:
+
+< 10
+
+Display:
+
+10 min
+
+Never lower.
+
+This avoids:
+
+2 min
+1 min
+
+which feels too unstable.
+
+Between 10 min and 59 min
+
+Show:
+
+14 min
+22 min
+37 min
+
+rounded to nearest minute.
+
+60+ min
+
+Display:
+
+~1 soat
+
+or equivalent:
+
+about 1 hr
+
+No need for:
+
+1h 37m
+
+Keep simple.
+
+Suggested formatter helper
+formatAverageResponseTime(minutes)
+
+Returns:
+
+if <10 => "10 min"
+if <60 => `${rounded} min`
+if >=60 => "~1 soat"
+
+Where to display
+Providers
+
+Most important:
+
+-Public Profile Preview Modal
+
+Example:
+
+O‘rtacha javob vaqti: 15 min
+-Provider dashboard header card
+
+Small secondary metric.
+
+-In chat header
+
+Great for customer trust.
+
+Customers
+
+Optional but useful:
+
+Visible:
+
+-public preview modal
+-admin users section
+-chat header
+
+Less prominent than providers.
+
+Admin panel
+
+Add optional column:
+
+O‘rtacha javob vaqti
+
+Useful for support/moderation.
+
+Historical data
+
+For existing users:
+
+No backfill required unless easy.
+
+Can start tracking:
+
+from now forward
+
+If historical messages easy to process:
+optional hydration migration allowed.
+
+Edge cases
+User sends message first ever
+
+No metric yet.
+
+Display:
+
+— 
+
+or
+
+Hali mavjud emas
+User receives message but never replies
+
+Do not calculate yet.
+
+No sample added.
+
+Deleted messages
+
+Ignore deleted messages in response-time calculations.
+
+Self messages
+
+Ignore.
+
+Multiple chats
+
+Average should aggregate across all chats.
+
+Global user-level metric.
+
+Expected Result
+
+Hormang users now have a live:
+
+Average Response Time
+
+that:
+
+✅ updates continuously from real chats
+
+✅ works for both customers and providers
+
+✅ ignores spam bursts correctly
+
+✅ feels stable via minimum 10 min display
+
+✅ displays simply with ~1 hour cap
+
+Build production-ready using existing messaging storage/state without rewriting chat architecture.

@@ -1,0 +1,2 @@
+- [Offer-completion dual path](completion-dual-path.md) — completion fires via BOTH markOfferCompleted and confirmCompletion; hook on-completion side-effects into both, idempotently.
+- [Hormang landing honesty](hormang-landing-honesty.md) — landing may NOT claim fabricated stats/subscriptions/AI search/"20+ cats"; real model = Tanga tokens, 9 categories, rule-based survey.

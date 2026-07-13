@@ -1,0 +1,46 @@
+Update the Admin Questions Page (/admin/questions). Keep the existing password gate (hormang2024) unchanged.
+
+### Important Changes:
+- Remove any real-time sync or store listeners. Changes should only apply when the user clicks the "Saqlash" button at the top.
+- Improve data integration: Make sure it uses the exact same storage structure as the main app's questionnaire (questionsByCategory or equivalent from questionnaire-store).
+
+### Reimagined Question Editor – More Control:
+
+When adding or editing a question, give the admin much more powerful options:
+
+**New Advanced Fields:**
+- Question label (main text)
+- Question type: single-select, multi-select, text, textarea, number, yes-no, date, file, range (slider)
+- Required toggle
+- Help text / description
+- Placeholder text (for text-based questions)
+- For number/range: min value, max value, step
+- For select types (single/multi): 
+  - Ability to add, edit, delete, and drag-reorder options
+  - Special support for "Boshqa" (Other) option:
+    - When adding an option, there is a checkbox "Bu 'Boshqa' varianti"
+    - If checked, when user selects "Boshqa" in the customer form, a text input field automatically appears below it.
+    - Store this as `hasOther: boolean` and `otherLabel?: string` (default "Boshqa")
+
+**Additional Controls:**
+- Conditional display (simple): "Bu savolni faqat shart bajarilganda ko'rsatish" → choose another question + specific answer value that must be selected.
+- Mark as "Core question" (appears in every category, like COMMON_QUESTIONS)
+- Allow creating "Section Header" type (acts as a title divider in the form)
+
+### UI Improvements:
+- In the question list for each category: show small preview of options and whether it has "Boshqa" logic.
+- Question editor modal should be larger and clearer.
+- When editing select options: nice list with drag handles, edit inline, and the "Boshqa" checkbox per option.
+- Live preview inside the editor modal: show how the question (and "Boshqa" text field) will appear to the customer.
+- Keep category tabs (All + per category).
+- Save button at the top only saves when clicked (no auto-save).
+
+### Other Requirements:
+- Keep COMMON_QUESTIONS editable from the UI (add, edit, delete, reorder).
+- Urgency and budget fields can be toggled as special system questions per category.
+- Reset button should reset only the current view or have clear warning.
+- Keep the clean modern design with blue accents, good spacing, and Framer Motion animations.
+
+Implement this upgraded question management page with strong focus on control when adding questions and especially when defining options (including smart "Boshqa" logic).
+
+Start now.

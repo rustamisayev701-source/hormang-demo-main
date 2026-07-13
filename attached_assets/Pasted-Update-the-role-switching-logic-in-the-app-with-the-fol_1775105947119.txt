@@ -1,0 +1,35 @@
+Update the role switching logic in the app with the following rules:
+
+### Requirements:
+
+1. **Keep the current role switcher**  
+   - The existing role switcher (Customer ↔ Provider toggle) should **only appear** for users who already have **both** customer and provider profiles properly set up and completed.
+
+2. **New "Ijrochi bo'lish" button for pure customers**  
+   - For users who only have a customer account (no provider profile yet), show a prominent button **"Ijrochi bo'lish"** instead of the role switcher.
+   - When clicked, this button should:
+     - Set the user role to "provider"
+     - Redirect the user directly to `/profile/settings` (the modern provider profile settings page)
+     - Show a clear welcome banner in the profile settings page:  
+       "Tabriklaymiz! Siz endi ijrochi sifatida ro'yxatdan o'tdingiz. Profilingizni to'liq to'ldiring!"
+
+3. **Behavior after switching**
+   - After clicking "Ijrochi bo'lish" and being redirected to profile settings:
+     - The completion percentage should start from a low value.
+     - The user must fill in categories, photo, bio, location, portfolio, etc.
+   - Once they save the profile, the banner should disappear on next visit.
+
+4. **In /dashboard**
+   - Show the **"Ijrochi bo'lish"** button clearly for users who don't have a provider profile yet.
+   - Only show the full role switcher (toggle) when the user has **both** roles properly set up.
+
+5. **Technical Requirements**
+   - Use the existing `useAuth` context to check if the user has a `providerProfile`.
+   - If `providerProfile` is missing or incomplete → show "Ijrochi bo'lish" button.
+   - If both customer and provider profiles exist → show the normal role switcher.
+   - On "Ijrochi bo'lish" click: update role + redirect to `/profile/settings`.
+   - Add a temporary flag (e.g. `justBecameProvider: true`) to show the welcome banner only on first visit after switching.
+
+Remove any old outdated pop-up that appears during role switch.
+
+Implement this logic cleanly across the dashboard and any other places where role switching happens.

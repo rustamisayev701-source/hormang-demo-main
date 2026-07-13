@@ -1,0 +1,413 @@
+# Enhance Service Completion + Portfolio System
+
+We already have:
+
+* Service History
+* Add to Portfolio toggle
+* ServiceHistory model
+* Provider Public Profile (PPP)
+
+Now implement a professional project portfolio system based on REAL completed services.
+
+## Goal
+
+Portfolio projects must originate from completed services.
+
+Providers should NOT create portfolio entries from scratch.
+
+Portfolio should be generated from verified service history.
+
+---
+
+# 1. Add Completion Photos Workflow
+
+Modify service completion flow.
+
+When provider clicks:
+
+"Complete Service"
+
+Open completion modal.
+
+Fields:
+
+### Completion Photos
+
+Upload After Photos
+
+```ts
+afterPhotos: string[]
+```
+
+Limit:
+
+* max 10 photos
+* jpg/png/webp
+
+Optional but strongly encouraged.
+
+UI:
+
+Completed Work Photos
+
+[ + Add Photos ]
+
+Photo grid preview.
+
+---
+
+### Completion Notes
+
+```ts
+completionNotes?: string
+```
+
+Example:
+
+"Deep cleaned kitchen and removed grease buildup."
+
+Max 500 characters.
+
+---
+
+### Duration
+
+Optional.
+
+```ts
+durationMinutes?: number
+```
+
+Examples:
+
+120 minutes
+
+3 days
+
+Store numeric value.
+
+---
+
+### Confirm Completion
+
+Save all data into ServiceHistory snapshot.
+
+---
+
+# 2. Extend ServiceHistory Model
+
+Add:
+
+```ts
+interface ServiceHistory {
+  ...
+
+  completionNotes?: string;
+
+  afterPhotos?: string[];
+
+  durationMinutes?: number;
+
+  portfolioData?: PortfolioProject;
+}
+```
+
+---
+
+# 3. Create Portfolio Project Model
+
+```ts
+interface PortfolioProject {
+  title: string;
+
+  description: string;
+
+  coverPhoto: string;
+
+  additionalPhotos: string[];
+
+  featured: boolean;
+
+  createdAt: Timestamp;
+}
+```
+
+Portfolio data belongs to ServiceHistory.
+
+Do NOT create separate project entities yet.
+
+---
+
+# 4. Replace Simple Portfolio Toggle
+
+Current:
+
+⭐ Add to Portfolio
+
+Replace with:
+
+⭐ Create Portfolio Project
+
+When clicked:
+
+Open modal.
+
+---
+
+# 5. Portfolio Creation Modal
+
+Prepopulate data from completed service.
+
+Fields:
+
+### Project Title
+
+Required.
+
+Example:
+
+Kitchen Deep Cleaning
+
+Bathroom Renovation
+
+English Tutoring Program
+
+---
+
+### Project Description
+
+Required.
+
+Max 1000 chars.
+
+Example:
+
+Completed deep cleaning of a 25m² kitchen including oven, cabinets and tile surfaces.
+
+---
+
+### Cover Photo
+
+Choose from existing afterPhotos.
+
+Provider must select one.
+
+If no photos exist:
+
+Show message:
+
+"Upload completion photos first."
+
+Disable portfolio creation.
+
+---
+
+### Additional Photos
+
+Allow selecting from completion photos.
+
+No re-upload needed.
+
+---
+
+### Featured Project
+
+Toggle:
+
+📌 Pin to Top
+
+```ts
+featured: boolean
+```
+
+Only 3 featured projects maximum.
+
+---
+
+### Save
+
+Creates:
+
+```ts
+portfolioData
+```
+
+inside ServiceHistory.
+
+Sets:
+
+```ts
+isPortfolio = true
+```
+
+---
+
+# 6. Improve Service History Cards
+
+Portfolio services should display badge.
+
+Example:
+
+⭐ Portfolio Project
+
+Show under title.
+
+Card actions:
+
+View Details
+
+Edit Portfolio
+
+Remove From Portfolio
+
+---
+
+# 7. Create Portfolio Section on Public Provider Profile
+
+New section:
+
+Portfolio
+
+Display:
+
+Project count
+
+Grid layout
+
+Example:
+
+Portfolio (12)
+
+[Project]
+[Project]
+
+[Project]
+[Project]
+
+---
+
+# 8. Portfolio Card Design
+
+Show:
+
+Cover photo
+
+Project title
+
+Category
+
+Completion date
+
+Rating if exists
+
+Example:
+
+Kitchen Deep Cleaning
+
+⭐ 4.9
+
+May 2026
+
+View Project →
+
+---
+
+# 9. Portfolio Detail Modal
+
+When customer taps project.
+
+Display:
+
+Large cover photo
+
+Project title
+
+Description
+
+Photo gallery
+
+Category
+
+Completion date
+
+Duration
+
+Customer rating
+
+Customer review
+
+if available.
+
+Do NOT display:
+
+Customer name
+
+Customer contact
+
+Customer address
+
+Any private information
+
+---
+
+# 10. PPP Performance
+
+Load portfolio separately from history.
+
+Only fetch:
+
+```ts
+isPortfolio === true
+```
+
+Lazy load photos.
+
+Support future pagination.
+
+---
+
+# 11. Security
+
+Portfolio is public.
+
+Service history remains private.
+
+Customer data must never appear in portfolio.
+
+Remove all sensitive information before rendering.
+
+---
+
+# 12. Future Compatibility
+
+Design architecture for future support of:
+
+Before/After comparisons
+
+Portfolio views count
+
+Portfolio likes
+
+Portfolio saves
+
+Featured projects
+
+AI-generated project summaries
+
+without refactoring current data model.
+
+---
+
+# Expected Result
+
+Service Completion
+→ Upload completion photos
+→ Service enters History
+
+History
+→ Create Portfolio Project
+
+Portfolio Project
+→ Appears on Public Provider Profile
+
+Customers can browse verified completed work with photos and descriptions.

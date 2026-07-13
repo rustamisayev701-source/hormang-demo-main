@@ -1,0 +1,319 @@
+You are working on Hormang (React + TypeScript + Tailwind + Supabase or localStorage fallback).
+
+## 🎯 Goal
+
+Perform a **full audit and repair** of the messaging notification system across the platform.
+
+This is NOT a redesign request.
+
+First:
+
+* inspect current implementation thoroughly
+* verify existing logic
+* identify bugs or inconsistencies
+
+Then:
+
+* implement fixes only where needed
+
+Focus on everything related to:
+
+* unread/read message state
+* unread counters
+* new message badges
+* new offers/requests badges 
+* consistency in bottom navigation panels
+* chat list indicators
+* customer/provider synchronization
+* real-time UI updates
+
+---
+
+# ✅ Step 1 — Trace Existing Message Flow
+
+Read and verify all current logic for:
+
+* message sending
+* message receiving
+* message storage
+* chat thread updates
+* unread count calculation
+* read state persistence
+
+Inspect:
+
+* customer chat pages
+* provider chat pages
+* chat list previews
+* navbar badges
+* notification badges
+* homepage recent chats section
+
+Understand how these currently work before changing anything.
+
+---
+
+# ✅ Step 2 — Verify Read / Unread State
+
+Check the full lifecycle:
+
+---
+
+## When sender sends a message
+
+Verify:
+
+* message saved correctly
+* timestamp saved
+* senderId saved
+* receiverId saved
+
+---
+
+## When receiver has NOT opened chat yet
+
+Verify:
+
+* message marked unread
+* unread count increments
+* badge appears
+
+---
+
+## When receiver opens the conversation
+
+Verify:
+
+* messages become read
+* unread counter decrements correctly
+* badges disappear immediately
+
+---
+
+## When receiver leaves and re-enters
+
+Verify:
+
+* already-read messages stay read
+* unread does not reappear incorrectly
+
+---
+
+# ✅ Step 3 — Check Badge Locations
+
+Verify badges update correctly in ALL places:
+
+---
+
+## Chat list
+
+Example:
+
+```text
+Suhbatlarim → 3 unread
+```
+
+---
+
+## Bottom navigation
+
+If chat tab has unread:
+show red notification badge.
+
+---
+
+## Customer dashboard → Recent chats
+
+Unread dot/badge must update correctly.
+
+---
+
+## Provider dashboard/home
+
+Unread indicators must match.
+
+---
+
+## Individual conversation preview rows
+
+Show:
+
+* unread dot
+  OR
+* unread count
+
+depending on current UI.
+
+---
+
+# ✅ Step 4 — Real-Time UI Sync
+
+This is critical.
+
+When a new message arrives:
+
+WITHOUT page refresh:
+
+* unread badge should appear immediately
+
+When conversation is opened:
+
+* badge should disappear immediately
+
+When message is read:
+
+* all related counters should update everywhere
+
+Example:
+
+* chat list
+* nav badge
+* dashboard recent chats
+
+must stay in sync.
+
+---
+
+# ✅ Step 5 — Storage Verification
+
+If localStorage:
+verify:
+
+```ts
+messages
+chatThreads
+unreadCounts
+```
+
+or equivalent structures.
+
+Ensure:
+
+* no duplicate unread counters
+* no stale values
+* no desync between thread + message state
+
+---
+
+# Supabase
+
+If Supabase exists:
+verify:
+
+* read status persists properly
+* updates are reflected correctly
+
+---
+
+# ✅ Step 6 — Edge Cases to Test
+
+IMPORTANT
+
+Test all of these:
+
+---
+
+## Customer → Provider message
+
+Unread appears for provider
+
+---
+
+## Provider → Customer reply
+
+Unread appears for customer
+
+---
+
+## Sender viewing own sent message
+
+Should NOT increment unread
+
+---
+
+## Opening conversation after multiple unread messages
+
+All relevant unread messages should mark read
+
+---
+
+## Multiple conversations unread at once
+
+Unread counters sum correctly
+
+---
+
+## Re-opening already-read conversation
+
+Unread stays zero
+
+---
+
+## Browser refresh
+
+Unread persists correctly
+
+---
+
+## New incoming message in existing open conversation
+
+If chat is currently open:
+mark read instantly if appropriate
+
+If closed:
+increment unread
+
+---
+
+# ✅ Step 7 — Fixes
+
+After auditing:
+
+Implement fixes ONLY where needed.
+
+Do not rewrite whole messaging system unnecessarily.
+
+Keep existing UI intact unless required.
+
+Focus on:
+
+* correctness
+* consistency
+* real-time sync
+* storage integrity
+
+---
+
+# ✅ Step 8 — Add Debug Logging (temporary if helpful)
+
+If useful during audit:
+
+Add temporary logs for:
+
+```ts
+message_sent
+message_received
+message_marked_read
+unread_count_updated
+```
+
+Remove afterward if not needed.
+
+---
+
+# 🎯 Expected Result
+
+After audit:
+
+* unread/read logic fully reliable
+* new message badges always correct
+* counters consistent across entire platform
+* no stale unread counts
+* no refresh needed for updates
+* customer and provider chat experience synchronized
+
+IMPORTANT:
+Audit first.
+Fix second.
+Keep architecture clean.
+Use existing systems wherever possible.
