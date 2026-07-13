@@ -7,7 +7,7 @@ import {
   tangaTransactionsTable,
   type PaymentOrder,
 } from "@workspace/db";
-import { getPaymeConfig, env } from "./env.js";
+import { getPaymeConfig, isPaymeConfigured, env } from "./env.js";
 
 /**
  * Payme reserves -31050..-31099 for merchant-defined "account" errors (order
@@ -50,6 +50,7 @@ export function buildPaymeCheckoutUrl(order: Pick<PaymentOrder, "id" | "amountSo
 }
 
 function verifyAuth(authHeader: string | undefined): boolean {
+  if (!isPaymeConfigured()) return false;
   const { key } = getPaymeConfig();
   if (!authHeader?.startsWith("Basic ")) return false;
   const decoded = Buffer.from(authHeader.slice(6), "base64").toString("utf-8");
@@ -316,20 +317,26 @@ type PaymeMethod =
   | "GetStatement";
 
 /** Express handler for POST /api/payments/payme — Payme's Merchant API JSON-RPC webhook. */
+/**
+ * Always resolves — never throws. Payme requires HTTP 200 on every response,
+ * error or not, and retries if it doesn't get one, so this must not let an
+ * unexpected exception (e.g. missing config, a DB hiccup) turn into a 500.
+ */
 export async function handlePaymeRequest(
   authHeader: string | undefined,
   body: { method?: PaymeMethod; params?: Record<string, unknown>; id?: unknown }
 ) {
-  const { id, method, params } = body;
-
-  if (!verifyAuth(authHeader)) {
-    return rpcError(id, new PaymeError(PaymeErrorCode.InsufficientPrivilege, "Avtorizatsiya xato"));
-  }
-  if (!method) {
-    return rpcError(id, new PaymeError(PaymeErrorCode.MethodNotFound, "Metod ko'rsatilmagan"));
-  }
-
+  const id = body?.id;
   try {
+    const { method, params } = body;
+
+    if (!verifyAuth(authHeader)) {
+      return rpcError(id, new PaymeError(PaymeErrorCode.InsufficientPrivilege, "Avtorizatsiya xato"));
+    }
+    if (!method) {
+      return rpcError(id, new PaymeError(PaymeErrorCode.MethodNotFound, "Metod ko'rsatilmagan"));
+    }
+
     let result: unknown;
     switch (method) {
       case "CheckPerformTransaction":
