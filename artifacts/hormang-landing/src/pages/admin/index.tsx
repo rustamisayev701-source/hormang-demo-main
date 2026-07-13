@@ -6212,7 +6212,7 @@ function CategoryEditorModal({
                 </label>
                 <input value={nameUz} onChange={(e) => setNameUz(e.target.value)}
                   placeholder="Tozalash"
-                  className="w-full px-4 py-3 rounded-xl border border-gray-200 bg-gray-50 text-sm focus:outline-none focus:ring-2 focus:ring-blue-300 focus:border-blue-400" />
+                  className="w-full px-4 py-3 rounded-xl border border-gray-200 bg-gray-50 text-sm text-gray-900 focus:outline-none focus:ring-2 focus:ring-blue-300 focus:border-blue-400" />
               </div>
               <div>
                 <label className="block text-[11px] font-black uppercase tracking-wide text-gray-400 mb-1.5">
@@ -6220,7 +6220,7 @@ function CategoryEditorModal({
                 </label>
                 <input value={nameRu} onChange={(e) => setNameRu(e.target.value)}
                   placeholder="Уборка"
-                  className="w-full px-4 py-3 rounded-xl border border-gray-200 bg-gray-50 text-sm focus:outline-none focus:ring-2 focus:ring-blue-300 focus:border-blue-400" />
+                  className="w-full px-4 py-3 rounded-xl border border-gray-200 bg-gray-50 text-sm text-gray-900 focus:outline-none focus:ring-2 focus:ring-blue-300 focus:border-blue-400" />
               </div>
             </div>
 
@@ -6232,7 +6232,7 @@ function CategoryEditorModal({
                 <textarea value={descUz} onChange={(e) => setDescUz(e.target.value)}
                   rows={2}
                   placeholder="Qisqacha izoh (ixtiyoriy)"
-                  className="w-full px-4 py-3 rounded-xl border border-gray-200 bg-gray-50 text-sm focus:outline-none focus:ring-2 focus:ring-blue-300 focus:border-blue-400 resize-none" />
+                  className="w-full px-4 py-3 rounded-xl border border-gray-200 bg-gray-50 text-sm text-gray-900 focus:outline-none focus:ring-2 focus:ring-blue-300 focus:border-blue-400 resize-none" />
               </div>
               <div>
                 <label className="block text-[11px] font-black uppercase tracking-wide text-gray-400 mb-1.5">
@@ -6241,7 +6241,7 @@ function CategoryEditorModal({
                 <textarea value={descRu} onChange={(e) => setDescRu(e.target.value)}
                   rows={2}
                   placeholder="Краткое описание (необязательно)"
-                  className="w-full px-4 py-3 rounded-xl border border-gray-200 bg-gray-50 text-sm focus:outline-none focus:ring-2 focus:ring-blue-300 focus:border-blue-400 resize-none" />
+                  className="w-full px-4 py-3 rounded-xl border border-gray-200 bg-gray-50 text-sm text-gray-900 focus:outline-none focus:ring-2 focus:ring-blue-300 focus:border-blue-400 resize-none" />
               </div>
             </div>
 
@@ -6251,7 +6251,7 @@ function CategoryEditorModal({
                 <span className="ml-2 text-gray-400 font-normal normal-case">(ixtiyoriy — quyi kategoriya uchun)</span>
               </label>
               <select value={parentCategoryId} onChange={(e) => setParentCategoryId(e.target.value)}
-                className="w-full px-4 py-3 rounded-xl border border-gray-200 bg-gray-50 text-sm focus:outline-none focus:ring-2 focus:ring-blue-300 focus:border-blue-400">
+                className="w-full px-4 py-3 rounded-xl border border-gray-200 bg-gray-50 text-sm text-gray-900 focus:outline-none focus:ring-2 focus:ring-blue-300 focus:border-blue-400">
                 <option value="">— yo'q (asosiy kategoriya) —</option>
                 {getAllAdminCategories()
                   .filter((c) => c.id !== initial?.id)
@@ -6405,7 +6405,7 @@ function CategoryEditorModal({
                   Asosiy narx (Tanga)
                 </label>
                 <input type="number" min="0" value={baseCost} onChange={(e) => setBaseCost(e.target.value)}
-                  className="w-full px-4 py-3 rounded-xl border border-gray-200 bg-gray-50 text-sm focus:outline-none focus:ring-2 focus:ring-blue-300 focus:border-blue-400" />
+                  className="w-full px-4 py-3 rounded-xl border border-gray-200 bg-gray-50 text-sm text-gray-900 focus:outline-none focus:ring-2 focus:ring-blue-300 focus:border-blue-400" />
               </div>
               <div>
                 <label className="block text-[11px] font-black uppercase tracking-wide text-gray-400 mb-1.5">Holat</label>
