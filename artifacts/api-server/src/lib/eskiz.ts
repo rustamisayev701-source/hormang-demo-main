@@ -1,7 +1,7 @@
 import { getEskizConfig } from "./env.js";
 
 const ESKIZ_BASE_URL = "https://notify.eskiz.uz/api";
-const DEFAULT_OTP_TEMPLATE = "Hormang tasdiqlash kodi: {code}. Hech kimga aytmang!";
+const DEFAULT_OTP_TEMPLATE = "Hormang.uz saytida ro'yxatdan o'tish/kirish uchun tasdiqlash kodi: {code}";
 
 interface CachedToken {
   token: string;
