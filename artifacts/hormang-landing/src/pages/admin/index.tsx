@@ -38,7 +38,15 @@ import {
   upsertCategory as upsertAdminCategory,
   deleteCategory as deleteAdminCategory,
 } from "@/lib/categories";
-import { markAdminAuthenticated } from "@/lib/admin-client";
+import { markAdminAuthenticated, AdminApiError } from "@/lib/admin-client";
+import {
+  fetchPricingTiers, createPricingTier, updatePricingTier, setPricingTierActive, deletePricingTier,
+  fetchAdminWallets, fetchAllWalletTransactions, fetchWalletTransactions, adjustWalletBalance as adjustWalletBalanceBackend,
+  fetchAdminUsers, setUserSuspended as setUserSuspendedBackend, setUserVerified as setUserVerifiedBackend,
+  setUserFlagCountBackend, setUserTagsBackend, addUserNoteBackend, removeUserNoteBackend, deleteUserBackend,
+  type BackendPricingTier, type BackendWallet, type BackendTangaTx, type BackendAdminUser,
+  type BackendUserModeration, type PricingTierInput,
+} from "@/lib/admin-data";
 import { CategoryIcon } from "@/components/category-icon";
 import {
   CATEGORY_ICONS,
@@ -59,10 +67,10 @@ import { getAllQuestionsForCategory, collectActiveQuestions } from "@/lib/questi
 import { ImageGrid, getAnswerImageUrls } from "@/components/image-grid";
 import { OfferDetailModal } from "@/components/offer-detail-modal";
 import {
-  getAllTangaTransactions, getTangaTransactions, recordTangaTransaction,
+  getAllTangaTransactions,
   type TangaTransaction as TangaTx,
 } from "@/lib/tanga-history-store";
-import { getTangaBalance, addTangaBalance, spendTangaBalance } from "@/lib/tanga-store";
+import { getTangaBalance } from "@/lib/tanga-store";
 import { getReferralCode, getReferralStats, getInviterId, processReferralReward, TANGA_PER_REFERRAL } from "@/lib/referral-store";
 import { getOffers, getPhoneRegistry, getOffersByRequestId, markOfferCompleted, type Offer as BuyerOfferFull, updateOfferStatus, deleteRequestCascade, deleteUserDataCascade, getLast10RejectedEligibility, adminRefundProvider, getRecentRequestCount, getRequestById, REQUEST_DAILY_FLAG_THRESHOLD } from "@/lib/requests-store";
 import { getAvgResponseMinutes, formatAvgResponseTime } from "@/lib/response-time-store";
@@ -1331,23 +1339,9 @@ function AdvancedUserDetailModal({
   const [localUser, setLocalUser]   = useState<AdminUser>(user);
   const [refundDone, setRefundDone] = useState(false);
 
-  /* Refresh local copies of admin metadata */
-  function refreshMeta() {
-    const flags    = getUserFlags();
-    const tags     = getUserTags();
-    const notes    = getUserNotes();
-    const verified = getUserVerified();
-    setLocalUser((prev) => ({
-      ...prev,
-      flagCount:   flags[prev.userId]    ?? prev.flagCount    ?? 0,
-      tags:        tags[prev.userId]     ?? prev.tags         ?? [],
-      adminNotes:  notes[prev.userId]    ?? prev.adminNotes   ?? [],
-      verified:    verified[prev.userId] !== undefined
-                     ? verified[prev.userId]
-                     : prev.verified ?? false,
-    }));
+  function applyModeration(m: BackendUserModeration) {
+    setLocalUser((prev) => ({ ...prev, verified: m.verified, flagCount: m.flagCount, tags: m.tags, adminNotes: m.adminNotes }));
   }
-  useEffect(() => { refreshMeta(); }, []);
 
   const u = localUser;
   const roleBg  = u.role === "provider" ? "bg-violet-600"
@@ -1359,49 +1353,78 @@ function AdvancedUserDetailModal({
   const allRequests = readKey<CustomerRequest[]>(K.REQUESTS, []);
   const userOffers   = allOffers.filter((o) => o.masterId === u.userId);
   const userRequests = allRequests.filter((r) => r.customerId === u.userId);
-  const tangaTxs     = getTangaTransactions(u.userId);
-  const tangaBalance = parseInt(localStorage.getItem(`provider_tokens_${u.userId}`) ?? "0", 10);
+  const [tangaTxs, setTangaTxs] = useState<TangaTx[]>([]);
+  const tangaBalance = u.tangaBalance ?? 0;
+
+  useEffect(() => {
+    fetchWalletTransactions(u.userId)
+      .then(({ transactions }) => setTangaTxs(backendTxsToLocal(transactions)))
+      .catch((err) => console.error("Load user transactions failed:", err));
+  }, [u.userId]);
 
   /* Admin actions */
-  function handleFlagToggle() {
+  async function handleFlagToggle() {
     const cur = u.flagCount ?? 0;
     const next = cur > 0 ? 0 : 1;
-    setUserFlagCount(u.userId, next);
-    logAction({ actorId: ADMIN_USER, actorRole: "admin", action: next > 0 ? "FLAG_USER" : "UNFLAG_USER", category: "risk", targetId: u.userId, targetType: "user", description: `${u.name} ${next > 0 ? "flaglandi" : "flag olib tashlandi"}`, metadata: { userName: u.name, flagCount: next } });
-    refreshMeta();
+    try {
+      const { moderation } = await setUserFlagCountBackend(u.userId, next);
+      applyModeration(moderation);
+      logAction({ actorId: ADMIN_USER, actorRole: "admin", action: next > 0 ? "FLAG_USER" : "UNFLAG_USER", category: "risk", targetId: u.userId, targetType: "user", description: `${u.name} ${next > 0 ? "flaglandi" : "flag olib tashlandi"}`, metadata: { userName: u.name, flagCount: next } });
+    } catch (err) {
+      alert(err instanceof AdminApiError ? err.message : "Xatolik yuz berdi");
+    }
   }
-  function handleVerifyToggle() {
+  async function handleVerifyToggle() {
     const next = !(u.verified ?? false);
-    setUserVerifiedStatus(u.userId, next);
-    logAction({ actorId: ADMIN_USER, actorRole: "admin", action: next ? "VERIFY_USER" : "UNVERIFY_USER", category: "admin", targetId: u.userId, targetType: "user", description: `${u.name} ${next ? "tasdiqlandi" : "tasdiq bekor qilindi"}`, metadata: { userName: u.name, verified: next } });
-    refreshMeta();
+    try {
+      const { moderation } = await setUserVerifiedBackend(u.userId, next);
+      applyModeration(moderation);
+      logAction({ actorId: ADMIN_USER, actorRole: "admin", action: next ? "VERIFY_USER" : "UNVERIFY_USER", category: "admin", targetId: u.userId, targetType: "user", description: `${u.name} ${next ? "tasdiqlandi" : "tasdiq bekor qilindi"}`, metadata: { userName: u.name, verified: next } });
+    } catch (err) {
+      alert(err instanceof AdminApiError ? err.message : "Xatolik yuz berdi");
+    }
   }
-  function handleAddNote() {
+  async function handleAddNote() {
     const t = noteInput.trim();
     if (!t) return;
-    addAdminNote(u.userId, t);
-    logAction({ actorId: ADMIN_USER, actorRole: "admin", action: "ADD_NOTE", category: "admin", targetId: u.userId, targetType: "user", description: `Izoh: ${t.slice(0, 60)}`, metadata: { userName: u.name } });
-    setNoteInput("");
-    refreshMeta();
+    try {
+      const { moderation } = await addUserNoteBackend(u.userId, t);
+      applyModeration(moderation);
+      logAction({ actorId: ADMIN_USER, actorRole: "admin", action: "ADD_NOTE", category: "admin", targetId: u.userId, targetType: "user", description: `Izoh: ${t.slice(0, 60)}`, metadata: { userName: u.name } });
+      setNoteInput("");
+    } catch (err) {
+      alert(err instanceof AdminApiError ? err.message : "Xatolik yuz berdi");
+    }
   }
-  function handleRemoveNote(idx: number) {
-    removeAdminNote(u.userId, idx);
-    refreshMeta();
+  async function handleRemoveNote(idx: number) {
+    try {
+      const { moderation } = await removeUserNoteBackend(u.userId, idx);
+      applyModeration(moderation);
+    } catch (err) {
+      alert(err instanceof AdminApiError ? err.message : "Xatolik yuz berdi");
+    }
   }
-  function handleAddTag() {
+  async function handleAddTag() {
     const t = tagInput.trim().toLowerCase().replace(/\s+/g, "-");
     if (!t) return;
     const cur = u.tags ?? [];
-    if (!cur.includes(t)) {
-      setUserTagsList(u.userId, [...cur, t]);
+    if (cur.includes(t)) { setTagInput(""); return; }
+    try {
+      const { moderation } = await setUserTagsBackend(u.userId, [...cur, t]);
+      applyModeration(moderation);
       logAction({ actorId: ADMIN_USER, actorRole: "admin", action: "ADD_TAG", category: "admin", targetId: u.userId, targetType: "user", description: `Tag qo'shildi: ${t}`, metadata: { userName: u.name, tag: t } });
+      setTagInput("");
+    } catch (err) {
+      alert(err instanceof AdminApiError ? err.message : "Xatolik yuz berdi");
     }
-    setTagInput("");
-    refreshMeta();
   }
-  function handleRemoveTag(tag: string) {
-    setUserTagsList(u.userId, (u.tags ?? []).filter((x) => x !== tag));
-    refreshMeta();
+  async function handleRemoveTag(tag: string) {
+    try {
+      const { moderation } = await setUserTagsBackend(u.userId, (u.tags ?? []).filter((x) => x !== tag));
+      applyModeration(moderation);
+    } catch (err) {
+      alert(err instanceof AdminApiError ? err.message : "Xatolik yuz berdi");
+    }
   }
 
   const TABS: { id: DetailTab; label: string }[] = [
@@ -1908,7 +1931,7 @@ function AdvancedUserDetailModal({
                     <Flag className="w-4 h-4" />
                     {(u.flagCount ?? 0) > 0 ? "Flaglangan 🚩" : "Flag qo'yish"}
                   </button>
-                  <button onClick={() => { onToggleSuspend(u); refreshMeta(); }}
+                  <button onClick={() => { onToggleSuspend(u); setLocalUser((prev) => ({ ...prev, status: prev.status === "suspended" ? "active" : "suspended" })); }}
                     className={`flex items-center justify-center gap-2 py-2.5 rounded-xl font-bold text-sm border transition-colors ${
                       u.status === "suspended"
                         ? "bg-emerald-50 text-emerald-700 border-emerald-200 hover:bg-emerald-100"
@@ -1926,7 +1949,7 @@ function AdvancedUserDetailModal({
                 <AdminBadgeManager
                   targetUser={{ userId: u.userId, name: u.name, role: u.role }}
                   adminId={ADMIN_USER}
-                  onChange={refreshMeta}
+                  onChange={() => setLocalUser((prev) => ({ ...prev }))}
                 />
 
                 {/* Tags */}
@@ -2841,9 +2864,6 @@ function UsersSection({ refreshKey, onGoToFeedback, openUserId, onOpenUserIdCons
   onOpenUserIdConsumed?: () => void;
 }) {
   const [users, setUsers]                     = useState<AdminUser[]>([]);
-  const [suspended, setSuspended]             = useState<Set<string>>(() =>
-    new Set(readKey<string[]>("hormang_admin_suspended_users", []))
-  );
   const [search, setSearch]                   = useState("");
   const [filterRole, setFilterRole]           = useState<RoleFilter>("all");
   const [filterActivity, setFilterActivity]   = useState<ActivityFilter>("all");
@@ -2854,6 +2874,7 @@ function UsersSection({ refreshKey, onGoToFeedback, openUserId, onOpenUserIdCons
   const [selectedUser, setSelectedUser]       = useState<AdminUser | null>(null);
   const [txUserId, setTxUserId]               = useState<string | null>(null);
   const [txUserName, setTxUserName]           = useState<string>("");
+  const [txUserBalance, setTxUserBalance]     = useState<number>(0);
 
   /* Auto-open detail modal when navigated here from another section */
   useEffect(() => {
@@ -2866,42 +2887,48 @@ function UsersSection({ refreshKey, onGoToFeedback, openUserId, onOpenUserIdCons
   }, [openUserId, users]);
 
   const load = useCallback(() => {
+    (async () => {
+    let backendUsers: BackendAdminUser[] = [];
+    try {
+      backendUsers = (await fetchAdminUsers()).users;
+    } catch (err) {
+      console.error("Load admin users failed:", err);
+    }
+
     const allOffers   = readKey<BuyerOffer[]>(K.OFFERS_BUYER, []);
     const allRequests = readKey<CustomerRequest[]>(K.REQUESTS, []);
     const registry    = readKey<Record<string, { name: string; initials: string }>>(
       "hormang_customer_registry", {}
     );
-    const suspended_  = readKey<string[]>("hormang_admin_suspended_users", []);
-    const suspSet     = new Set(suspended_);
 
     /* ── Phone registry — populated on every user login ── */
     const phoneRegistry = getPhoneRegistry();
 
-    /* ── Step 1a: Seed user map from canonical auth store (hormang_auth_users) ── */
-    /* This is the source of truth for who is a registered provider vs buyer.
-       A user marked role="provider" here MUST appear as a provider in admin,
-       even if they have not yet posted any offer. */
+    /* ── Step 1a: Seed user map from the real backend `users` table — shared
+       server-truth across every admin/browser, unlike the old per-browser
+       `hormang_auth_users` cache. A user marked role="provider" here MUST
+       appear as a provider in admin, even if they have not yet posted an offer. */
     const userMap = new Map<string, AdminUser>();
-    const authUsers = readKey<Array<{
-      id: string; firstName?: string; lastName?: string; phone?: string | null;
-      role: "buyer" | "provider"; createdAt?: string;
-    }>>("hormang_auth_users", []);
 
-    for (const au of authUsers) {
-      if (!au.id) continue;
-      const fullName = `${au.firstName ?? ""} ${au.lastName ?? ""}`.trim();
-      const initials = ((au.firstName?.[0] ?? "") + (au.lastName?.[0] ?? "")).toUpperCase()
+    for (const bu of backendUsers) {
+      const fullName = `${bu.firstName ?? ""} ${bu.lastName ?? ""}`.trim();
+      const initials = ((bu.firstName?.[0] ?? "") + (bu.lastName?.[0] ?? "")).toUpperCase()
                     || fullName[0]?.toUpperCase() || "U";
-      const isProvider = au.role === "provider";
-      userMap.set(au.id, {
-        userId:    au.id,
+      const isProvider = bu.role === "provider";
+      userMap.set(bu.id, {
+        userId:    bu.id,
         name:      fullName || (isProvider ? "Ijrochi" : "Mijoz"),
         initials,
         color:     isProvider ? "#7C3AED" : "#2563EB",
         role:      isProvider ? "provider" : "customer",
-        phone:     au.phone ?? phoneRegistry[au.id],
-        joinedAt:  au.createdAt,
-        status:    suspSet.has(au.id) ? "suspended" : "active",
+        phone:     bu.phone ?? phoneRegistry[bu.id],
+        joinedAt:  bu.createdAt,
+        status:    bu.suspended ? "suspended" : "active",
+        verified:    bu.verified,
+        flagCount:   bu.flagCount,
+        tags:        bu.tags,
+        adminNotes:  bu.adminNotes,
+        tangaBalance: bu.balance,
         offerCount:    isProvider ? 0 : undefined,
         acceptedCount: isProvider ? 0 : undefined,
         avgResponseTime: isProvider ? 0 : undefined,
@@ -2923,7 +2950,7 @@ function UsersSection({ refreshKey, onGoToFeedback, openUserId, onOpenUserIdCons
           acceptedCount: 0,
           avgResponseTime: 0,
           phone:     phoneRegistry[offer.masterId],
-          status:    suspSet.has(offer.masterId) ? "suspended" : "active",
+          status:    "active",
         };
         userMap.set(offer.masterId, p);
       } else {
@@ -3007,7 +3034,7 @@ function UsersSection({ refreshKey, onGoToFeedback, openUserId, onOpenUserIdCons
           requestCount: custRequests.length,
           location,
           phone:        phoneRegistry[userId],
-          status:       suspSet.has(userId) ? "suspended" : "active",
+          status:       "active",
         });
       }
     }
@@ -3080,38 +3107,35 @@ function UsersSection({ refreshKey, onGoToFeedback, openUserId, onOpenUserIdCons
       const diff = roleOrder[a.role] - roleOrder[b.role];
       return diff !== 0 ? diff : a.name.localeCompare(b.name);
     }));
+    })();
   }, []);
 
   useEffect(() => { load(); }, [load, refreshKey]);
 
   /* ── Actions ── */
-  function toggleSuspend(userId: string) {
-    const next = new Set(suspended);
-    if (next.has(userId)) next.delete(userId);
-    else next.add(userId);
-    setSuspended(next);
-    writeKey("hormang_admin_suspended_users", Array.from(next));
-    // Reflect immediately in local list
-    setUsers((prev) => prev.map((u) =>
-      u.userId === userId ? { ...u, status: next.has(userId) ? "suspended" : "active" } : u
-    ));
+  async function toggleSuspend(userId: string) {
     const u = users.find((x) => x.userId === userId);
-    logAction({ actorId: ADMIN_USER, actorRole: "admin", action: next.has(userId) ? "SUSPEND_USER" : "RESTORE_USER", category: "admin", targetId: userId, targetType: "user", description: `${u?.name ?? userId} ${next.has(userId) ? "to'xtatildi" : "faollashtirildi"}`, metadata: { userName: u?.name, suspended: next.has(userId) } });
+    const nextSuspended = u?.status !== "suspended";
+    try {
+      await setUserSuspendedBackend(userId, nextSuspended);
+      logAction({ actorId: ADMIN_USER, actorRole: "admin", action: nextSuspended ? "SUSPEND_USER" : "RESTORE_USER", category: "admin", targetId: userId, targetType: "user", description: `${u?.name ?? userId} ${nextSuspended ? "to'xtatildi" : "faollashtirildi"}`, metadata: { userName: u?.name, suspended: nextSuspended } });
+      load();
+    } catch (err) {
+      alert(err instanceof AdminApiError ? err.message : "Xatolik yuz berdi");
+    }
   }
 
-  function deleteUser(user: AdminUser) {
+  async function deleteUser(user: AdminUser) {
     if (!confirm(`"${user.name}" foydalanuvchisini o'chirishni tasdiqlaysizmi?\nUning so'rovlari, takliflari, suhbatlari va Tanga balansi ham yo'qotiladi. Bu amalni qaytarib bo'lmaydi.`)) return;
 
-    // Cascading delete of every per-user key + shared rows.
+    try {
+      await deleteUserBackend(user.userId);
+    } catch (err) {
+      console.error("Backend user delete failed:", err);
+    }
+    // Cascading delete of every per-user local key + shared rows (offers/requests/chats —
+    // still local-only, Phase D territory).
     deleteUserDataCascade(user.userId);
-
-    // Canonical auth user store + suspended list.
-    const authUsers = readKey<Array<{ id: string }>>("hormang_auth_users", []);
-    writeKey("hormang_auth_users", authUsers.filter((u) => u.id !== user.userId));
-    const next = new Set(suspended);
-    next.delete(user.userId);
-    setSuspended(next);
-    writeKey("hormang_admin_suspended_users", Array.from(next));
 
     setUsers((prev) => prev.filter((u) => u.userId !== user.userId));
     logAction({ actorId: ADMIN_USER, actorRole: "admin", action: "DELETE_USER", category: "risk", targetId: user.userId, targetType: "user", description: `${user.name} o'chirildi (cascade)`, metadata: { userName: user.name } });
@@ -3126,17 +3150,9 @@ function UsersSection({ refreshKey, onGoToFeedback, openUserId, onOpenUserIdCons
     });
   }
 
-  /* ── Enrich with admin metadata ── */
-  const flags    = getUserFlags();
-  const tags     = getUserTags();
-  const notes    = getUserNotes();
-  const verified = getUserVerified();
+  /* ── Enrich with report counts (Reports domain is still local-only, Phase C) ── */
   const enriched = users.map((u) => ({
     ...u,
-    flagCount:   flags[u.userId]    ?? 0,
-    tags:        tags[u.userId]     ?? [],
-    adminNotes:  notes[u.userId]    ?? [],
-    verified:    verified[u.userId] !== undefined ? verified[u.userId] : (u.verified ?? false),
     reportCount: getReportCountForUser(u.userId),
   }));
 
@@ -3337,7 +3353,7 @@ function UsersSection({ refreshKey, onGoToFeedback, openUserId, onOpenUserIdCons
                     u.role === "both"     ? "bg-gradient-to-br from-violet-500 to-blue-500 text-white"
                     : u.role === "provider" ? "bg-violet-100 text-violet-700"
                     :                        "bg-blue-100 text-blue-700";
-                  const tangaBal = parseInt(localStorage.getItem(`provider_tokens_${u.userId}`) ?? "0", 10);
+                  const tangaBal = u.tangaBalance ?? 0;
                   return (
                     <tr key={u.userId}
                       className="hover:bg-red-50/20 transition-colors group cursor-pointer"
@@ -3435,10 +3451,10 @@ function UsersSection({ refreshKey, onGoToFeedback, openUserId, onOpenUserIdCons
                           <span className={`text-[12px] font-extrabold ${tangaBal > 0 ? "text-amber-600" : "text-gray-300"}`}>
                             {tangaBal > 0 ? `${tangaBal} 🪙` : "—"}
                           </span>
-                          {getTangaTransactions(u.userId).length > 0 && (
-                            <button onClick={(e) => { e.stopPropagation(); setTxUserId(u.userId); setTxUserName(u.name); }}
+                          {(u.role === "provider" || u.role === "both") && (
+                            <button onClick={(e) => { e.stopPropagation(); setTxUserId(u.userId); setTxUserName(u.name); setTxUserBalance(u.tangaBalance ?? 0); }}
                               className="text-[9px] font-bold text-violet-600 hover:text-violet-800 underline whitespace-nowrap text-left">
-                              {getTangaTransactions(u.userId).length} tx
+                              Tarix
                             </button>
                           )}
                         </div>
@@ -3535,12 +3551,16 @@ function UsersSection({ refreshKey, onGoToFeedback, openUserId, onOpenUserIdCons
                             }`} title={u.status === "suspended" ? "Faollashtirish" : "To'xtatish"}>
                             {u.status === "suspended" ? <CheckCircle2 className="w-3.5 h-3.5" /> : <Ban className="w-3.5 h-3.5" />}
                           </button>
-                          <button onClick={() => {
-                            const cur = flags[u.userId] ?? 0;
-                            setUserFlagCount(u.userId, cur > 0 ? 0 : 1);
-                            load();
+                          <button onClick={async () => {
+                            const cur = u.flagCount ?? 0;
+                            try {
+                              await setUserFlagCountBackend(u.userId, cur > 0 ? 0 : 1);
+                              load();
+                            } catch (err) {
+                              alert(err instanceof AdminApiError ? err.message : "Xatolik yuz berdi");
+                            }
                           }} className={`p-1.5 rounded-lg transition-colors ${
-                            (flags[u.userId] ?? 0) > 0 ? "text-rose-600 bg-rose-50 hover:bg-rose-100" : "text-gray-300 hover:text-rose-400 hover:bg-rose-50"
+                            (u.flagCount ?? 0) > 0 ? "text-rose-600 bg-rose-50 hover:bg-rose-100" : "text-gray-300 hover:text-rose-400 hover:bg-rose-50"
                           }`} title="Flag qo'yish / olib tashlash">
                             <Flag className="w-3.5 h-3.5" />
                           </button>
@@ -3585,6 +3605,7 @@ function UsersSection({ refreshKey, onGoToFeedback, openUserId, onOpenUserIdCons
           <AdminUserTxModal
             userId={txUserId}
             userName={txUserName}
+            balance={txUserBalance}
             onClose={() => setTxUserId(null)}
           />
         )}
@@ -3596,16 +3617,21 @@ function UsersSection({ refreshKey, onGoToFeedback, openUserId, onOpenUserIdCons
 
 /* ─── Admin User Transactions Modal ─────────────────────────────────── */
 function AdminUserTxModal({
-  userId, userName, onClose,
+  userId, userName, balance, onClose,
 }: {
-  userId: string; userName: string; onClose: () => void;
+  userId: string; userName: string; balance: number; onClose: () => void;
 }) {
-  const txs = getTangaTransactions(userId);
+  const [txs, setTxs] = useState<TangaTx[]>([]);
   const allOffers = getOffers() as BuyerOfferFull[];
-  const balance = parseInt(localStorage.getItem(`provider_tokens_${userId}`) ?? "0", 10);
   const totalSpent = txs.filter(txIsOfferSpend).reduce((s, t) => s + t.amount, 0);
   const [viewOfferId, setViewOfferId] = useState<string | null>(null);
   const viewedOffer = viewOfferId ? allOffers.find((o) => o.id === viewOfferId) : undefined;
+
+  useEffect(() => {
+    fetchWalletTransactions(userId)
+      .then(({ transactions }) => setTxs(backendTxsToLocal(transactions)))
+      .catch((err) => console.error("Load user transactions failed:", err));
+  }, [userId]);
 
   return (
     <>
@@ -3758,20 +3784,101 @@ function getAllProviderSummaries(): ProviderSummary[] {
   }).sort((a, b) => b.balance - a.balance);
 }
 
+/* ─── Backend ↔ local shape converters (real pricing_tiers/wallets/tanga_transactions tables) ─── */
+function slugify(s: string): string {
+  return s.toLowerCase().trim().replace(/[^a-z0-9]+/g, "-").replace(/(^-|-$)/g, "") || "tier";
+}
+function toDatetimeLocal(iso?: string | null): string {
+  if (!iso) return "";
+  const d = new Date(iso);
+  if (Number.isNaN(d.getTime())) return "";
+  const pad = (n: number) => String(n).padStart(2, "0");
+  return `${d.getFullYear()}-${pad(d.getMonth() + 1)}-${pad(d.getDate())}T${pad(d.getHours())}:${pad(d.getMinutes())}`;
+}
+function backendTierToLocal(t: BackendPricingTier): PricingTier {
+  return {
+    id: t.id,
+    name: t.nameUz,
+    credits: t.credits,
+    price: t.priceSom,
+    salePrice: t.salePrice ?? undefined,
+    saleLimit: t.saleLimit ?? undefined,
+    salePurchaseCount: t.salePurchaseCount,
+    perUserLimit: t.perUserLimit ?? undefined,
+    bonusTokens: t.bonusTokens || undefined,
+    startsAt: t.startsAt ?? undefined,
+    validUntil: t.validUntil ?? undefined,
+    status: (t.status as PricingTier["status"]) ?? "active",
+    visibilityTarget: (t.visibilityTarget as PricingTier["visibilityTarget"]) ?? "all",
+    featured: t.featured || undefined,
+    hotOffer: t.hotOffer || undefined,
+    bonusPlan: t.bonusPlan || undefined,
+    badge: t.badgeUz ?? undefined,
+    badgeLocalized: t.badgeRu && t.badgeRu !== t.badgeUz ? { ru: t.badgeRu } : undefined,
+    desc: t.descUz ?? "",
+    descLocalized: t.descRu && t.descRu !== t.descUz ? { ru: t.descRu } : undefined,
+    nameLocalized: t.nameRu && t.nameRu !== t.nameUz ? { ru: t.nameRu } : undefined,
+    color: t.color ?? "bg-amber-50 text-amber-700",
+    active: t.active,
+  };
+}
+function backendWalletsToProviders(wallets: BackendWallet[]): ProviderSummary[] {
+  return wallets
+    .filter((w) => w.role === "provider")
+    .map((w) => ({
+      userId: w.userId,
+      name: `${w.firstName} ${w.lastName}`.trim() || `Ijrochi ${w.userId.slice(0, 6)}`,
+      balance: w.balance,
+      totalPurchased: w.totalPurchased,
+      totalSpent: w.totalSpent,
+      referralEarned: getReferralStats(w.userId).earned ?? 0,
+      txCount: w.txCount,
+    }))
+    .sort((a, b) => b.balance - a.balance);
+}
+function backendTxsToLocal(txs: BackendTangaTx[]): TangaTx[] {
+  return txs.map((tx) => ({
+    id: tx.id,
+    userId: tx.userId,
+    offerId: "",
+    requestId: "",
+    categoryName: tx.type === "purchase" ? (tx.tierName ?? "Tanga xaridi") : "Admin sozlamasi",
+    categoryEmoji: tx.type === "purchase" ? "💳" : "🛡",
+    description: tx.description ?? "",
+    amount: tx.amount,
+    type: tx.type,
+    direction: tx.direction,
+    priceSom: tx.priceSom ?? undefined,
+    createdAt: tx.createdAt,
+  }));
+}
+
 /* ─── Root MonetizationSection ───────────────────────────────────── */
 function MonetizationSection({ refreshKey }: { refreshKey: number }) {
   type MonoTab = "overview" | "plans" | "transactions" | "balances" | "referral";
   const [monoTab, setMonoTab] = useState<MonoTab>("overview");
-  const [tiers, setTiers] = useState<PricingTier[]>(() => readKey<PricingTier[]>(K.PRICING_TIERS, []));
+  const [tiers, setTiers] = useState<PricingTier[]>([]);
   const [txs, setTxs]           = useState<TangaTx[]>([]);
   const [providers, setProviders] = useState<ProviderSummary[]>([]);
+  const [loadError, setLoadError] = useState<string | null>(null);
 
   void refreshKey;
 
   const reload = useCallback(() => {
-    setTxs(getAllTangaTransactions());
-    setTiers(readKey<PricingTier[]>(K.PRICING_TIERS, []));
-    setProviders(getAllProviderSummaries());
+    (async () => {
+      try {
+        const [{ tiers: backendTiers }, { wallets }, { transactions }] = await Promise.all([
+          fetchPricingTiers(), fetchAdminWallets(), fetchAllWalletTransactions(),
+        ]);
+        setTiers(backendTiers.map(backendTierToLocal));
+        setProviders(backendWalletsToProviders(wallets));
+        setTxs(backendTxsToLocal(transactions));
+        setLoadError(null);
+      } catch (err) {
+        console.error("Load monetization data failed:", err);
+        setLoadError(err instanceof AdminApiError ? err.message : "Ma'lumotlarni yuklab bo'lmadi");
+      }
+    })();
   }, []);
 
   useEffect(() => { reload(); }, [reload, refreshKey]);
@@ -3807,8 +3914,14 @@ function MonetizationSection({ refreshKey }: { refreshKey: number }) {
         ))}
       </div>
 
+      {loadError && (
+        <div className="flex items-center gap-2 px-4 py-2.5 rounded-xl border text-sm font-semibold text-red-700 bg-red-50 border-red-200">
+          <AlertCircle className="w-4 h-4 flex-shrink-0" /> {loadError}
+        </div>
+      )}
+
       {monoTab === "overview"     && <MonoOverview txs={txs} providers={providers} tiers={tiers} />}
-      {monoTab === "plans"        && <MonoPlans tiers={tiers} setTiers={setTiers} reload={reload} />}
+      {monoTab === "plans"        && <MonoPlans tiers={tiers} txs={txs} reload={reload} />}
       {monoTab === "transactions" && <MonoTransactions txs={txs} reload={reload} />}
       {monoTab === "balances"     && <MonoBalances providers={providers} reload={reload} />}
       {monoTab === "referral"     && <MonoReferral providers={providers} />}
@@ -4083,17 +4196,16 @@ function planStatusMeta(t: PricingTier): { label: string; cls: string } {
   return { label: "Faol", cls: "bg-emerald-50 text-emerald-700" };
 }
 
-function MonoPlans({ tiers, setTiers, reload }: { tiers: PricingTier[]; setTiers: React.Dispatch<React.SetStateAction<PricingTier[]>>; reload: () => void }) {
+function MonoPlans({ tiers, txs, reload }: { tiers: PricingTier[]; txs: TangaTx[]; reload: () => void }) {
   const [editingId, setEditingId] = useState<string | null>(null);
   const [showForm, setShowForm]   = useState(false);
   const [draft, setDraft]         = useState<PlanDraft>(BLANK_DRAFT);
   const [errors, setErrors]       = useState<string[]>([]);
-  void reload;
+  const [saving, setSaving]       = useState(false);
 
-  const allTxs = useMemo(() => readKey<TangaTx[]>("hormang_tanga_history", []), []);
   const planStats = useMemo(() => {
     const map: Record<string, { count: number; revenue: number }> = {};
-    for (const tx of allTxs) {
+    for (const tx of txs) {
       if (tx.type !== "purchase") continue;
       const key = tx.categoryName;
       if (!map[key]) map[key] = { count: 0, revenue: 0 };
@@ -4101,7 +4213,7 @@ function MonoPlans({ tiers, setTiers, reload }: { tiers: PricingTier[]; setTiers
       map[key].revenue += typeof tx.priceSom === "number" ? tx.priceSom : 0;
     }
     return map;
-  }, [allTxs]);
+  }, [txs]);
 
   const totalRevenue   = Object.values(planStats).reduce((s, v) => s + v.revenue, 0);
   const totalPurchases = Object.values(planStats).reduce((s, v) => s + v.count, 0);
@@ -4113,8 +4225,6 @@ function MonoPlans({ tiers, setTiers, reload }: { tiers: PricingTier[]; setTiers
     return true;
   }).length;
 
-  function saveTiers(updated: PricingTier[]) { setTiers(updated); writeKey(K.PRICING_TIERS, updated); emitStoreChange(); }
-
   function startCreate() { setEditingId(null); setDraft(BLANK_DRAFT); setErrors([]); setShowForm(true); }
   function startEdit(t: PricingTier) {
     setEditingId(t.id);
@@ -4122,7 +4232,7 @@ function MonoPlans({ tiers, setTiers, reload }: { tiers: PricingTier[]; setTiers
       name: t.name, credits: t.credits, price: t.price,
       salePrice: t.salePrice ?? "", saleLimit: t.saleLimit ?? "",
       perUserLimit: t.perUserLimit ?? "", bonusTokens: t.bonusTokens ?? "",
-      startsAt: t.startsAt ?? "", validUntil: t.validUntil ?? "",
+      startsAt: toDatetimeLocal(t.startsAt), validUntil: toDatetimeLocal(t.validUntil),
       status: t.status ?? "active", visibilityTarget: t.visibilityTarget ?? "all",
       featured: t.featured ?? false, hotOffer: t.hotOffer ?? false, bonusPlan: t.bonusPlan ?? false,
       badge: t.badge ?? "", desc: t.desc,
@@ -4145,48 +4255,70 @@ function MonoPlans({ tiers, setTiers, reload }: { tiers: PricingTier[]; setTiers
     return errs;
   }
 
-  function save() {
-    const errs = validate();
-    if (errs.length) { setErrors(errs); return; }
-    const tier: PricingTier = {
-      id: editingId ?? uid(),
+  function toBackendInput(): PricingTierInput {
+    return {
+      ...(editingId ? {} : { key: `${slugify(draft.name)}-${Date.now().toString(36)}` }),
       name: draft.name.trim(),
+      nameRu: draft.nameLocalized.ru?.trim() || undefined,
+      desc: draft.desc,
+      descRu: draft.descLocalized.ru?.trim() || undefined,
+      badge: draft.badge.trim() || undefined,
+      badgeRu: draft.badgeLocalized.ru?.trim() || undefined,
       credits: Number(draft.credits),
-      price: Number(draft.price),
-      salePrice: draft.salePrice !== "" ? Number(draft.salePrice) : undefined,
-      saleLimit: draft.saleLimit !== "" ? Number(draft.saleLimit) : undefined,
-      salePurchaseCount: editingId ? (tiers.find((t) => t.id === editingId)?.salePurchaseCount ?? 0) : 0,
-      perUserLimit: draft.perUserLimit !== "" ? Number(draft.perUserLimit) : undefined,
-      bonusTokens: draft.bonusTokens !== "" ? Number(draft.bonusTokens) : undefined,
-      startsAt: draft.startsAt || undefined,
-      validUntil: draft.validUntil || undefined,
+      bonusTokens: draft.bonusTokens !== "" ? Number(draft.bonusTokens) : 0,
+      priceSom: Number(draft.price),
+      salePrice: draft.salePrice !== "" ? Number(draft.salePrice) : null,
+      saleLimit: draft.saleLimit !== "" ? Number(draft.saleLimit) : null,
+      perUserLimit: draft.perUserLimit !== "" ? Number(draft.perUserLimit) : null,
+      startsAt: draft.startsAt || null,
+      validUntil: draft.validUntil || null,
       status: draft.status,
       visibilityTarget: draft.visibilityTarget,
-      featured: draft.featured || undefined,
-      hotOffer: draft.hotOffer || undefined,
-      bonusPlan: draft.bonusPlan || undefined,
-      badge: draft.badge.trim() || undefined,
-      badgeLocalized: (draft.badgeLocalized.ru ?? "").trim() ? draft.badgeLocalized : undefined,
-      desc: draft.desc,
-      nameLocalized: (draft.nameLocalized.uz || draft.nameLocalized.ru) ? draft.nameLocalized : undefined,
-      descLocalized: (draft.descLocalized.uz || draft.descLocalized.ru) ? draft.descLocalized : undefined,
-      color: "bg-amber-50 text-amber-700",
+      featured: draft.featured,
+      hotOffer: draft.hotOffer,
+      bonusPlan: draft.bonusPlan,
       active: draft.status === "active",
     };
-    const updated = editingId
-      ? tiers.map((t) => t.id === editingId ? tier : t)
-      : [...tiers, tier];
-    saveTiers(updated);
-    logAction({ actorId: ADMIN_USER, actorRole: "admin", action: editingId ? "UPDATE_PRICING" : "ADD_PRICING_TIER", category: "financial", targetId: tier.id, targetType: "pricing", description: `${editingId ? "Yangilandi" : "Yangi reja"}: ${tier.name}` });
-    closeForm();
   }
 
-  function deleteTier(id: string) {
-    saveTiers(tiers.filter((t) => t.id !== id));
-    logAction({ actorId: ADMIN_USER, actorRole: "admin", action: "DELETE_PRICING_TIER", category: "financial", targetId: id, targetType: "pricing", description: "Reja o'chirildi" });
+  async function save() {
+    const errs = validate();
+    if (errs.length) { setErrors(errs); return; }
+    setSaving(true);
+    try {
+      const body = toBackendInput();
+      if (editingId) {
+        await updatePricingTier(editingId, body);
+        logAction({ actorId: ADMIN_USER, actorRole: "admin", action: "UPDATE_PRICING", category: "financial", targetId: editingId, targetType: "pricing", description: `Yangilandi: ${body.name}` });
+      } else {
+        const { tier } = await createPricingTier(body);
+        logAction({ actorId: ADMIN_USER, actorRole: "admin", action: "ADD_PRICING_TIER", category: "financial", targetId: tier.id, targetType: "pricing", description: `Yangi reja: ${body.name}` });
+      }
+      closeForm();
+      reload();
+    } catch (err) {
+      setErrors([err instanceof AdminApiError ? err.message : "Saqlashda xatolik yuz berdi"]);
+    } finally {
+      setSaving(false);
+    }
   }
-  function toggleTier(id: string) {
-    saveTiers(tiers.map((t) => t.id === id ? { ...t, active: !t.active, status: !t.active ? "active" : "draft" } : t));
+
+  async function deleteTier(id: string) {
+    try {
+      await deletePricingTier(id);
+      logAction({ actorId: ADMIN_USER, actorRole: "admin", action: "DELETE_PRICING_TIER", category: "financial", targetId: id, targetType: "pricing", description: "Reja o'chirildi" });
+      reload();
+    } catch (err) {
+      alert(err instanceof AdminApiError ? err.message : "O'chirishda xatolik yuz berdi");
+    }
+  }
+  async function toggleTier(t: PricingTier) {
+    try {
+      await setPricingTierActive(t.id, !t.active);
+      reload();
+    } catch (err) {
+      alert(err instanceof AdminApiError ? err.message : "Xatolik yuz berdi");
+    }
   }
 
   /* ── Live preview calculations ─────────────────────────────────── */
@@ -4250,7 +4382,7 @@ function MonoPlans({ tiers, setTiers, reload }: { tiers: PricingTier[]; setTiers
                       <span className={`inline-block text-[9px] font-bold px-1.5 py-0.5 rounded-full ${statusCls}`}>{statusLabel}</span>
                     </div>
                     <div className="flex gap-1 flex-shrink-0">
-                      <button onClick={() => toggleTier(t.id)} className={`text-xs font-semibold px-2 py-1 rounded-lg transition-colors ${t.active ? "text-orange-500 hover:bg-orange-50" : "text-emerald-600 hover:bg-emerald-50"}`}>
+                      <button onClick={() => toggleTier(t)} className={`text-xs font-semibold px-2 py-1 rounded-lg transition-colors ${t.active ? "text-orange-500 hover:bg-orange-50" : "text-emerald-600 hover:bg-emerald-50"}`}>
                         {t.active ? "O'ch" : "Yoq"}
                       </button>
                       <button onClick={() => { if (confirm(`"${t.name}" ni o'chirish?`)) deleteTier(t.id); }} className="text-xs text-gray-300 hover:text-red-500 px-1.5 py-1 rounded-lg hover:bg-red-50 transition-colors">✕</button>
@@ -4497,8 +4629,8 @@ function MonoPlans({ tiers, setTiers, reload }: { tiers: PricingTier[]; setTiers
 
             {/* Sticky save footer */}
             <div className="flex items-center gap-3 px-5 py-4 border-t border-gray-100 bg-gray-50/60">
-              <button onClick={save} className="flex-1 py-2.5 rounded-xl bg-amber-600 text-white text-sm font-bold hover:bg-amber-700 active:scale-[.98] transition-all shadow-sm">
-                {editingId ? "Saqlash" : "Reja qo'shish"}
+              <button onClick={save} disabled={saving} className="flex-1 py-2.5 rounded-xl bg-amber-600 text-white text-sm font-bold hover:bg-amber-700 active:scale-[.98] transition-all shadow-sm disabled:opacity-60">
+                {saving ? "Saqlanmoqda…" : editingId ? "Saqlash" : "Reja qo'shish"}
               </button>
               <button onClick={closeForm} className="px-5 py-2.5 rounded-xl bg-white border border-gray-200 text-sm font-bold text-gray-600 hover:bg-gray-50 transition-colors">
                 Bekor
@@ -4732,23 +4864,24 @@ function MonoBalances({ providers, reload }: { providers: ProviderSummary[]; rel
     return true;
   });
 
-  function applyAdjust(userId: string, name: string) {
+  async function applyAdjust(userId: string, name: string) {
     if (adjustAmt <= 0) return;
-    if (adjustType === "add") {
-      addTangaBalance(userId, adjustAmt);
-      recordTangaTransaction({ userId, offerId: "", requestId: "", categoryName: "Admin sozlamasi", categoryEmoji: "🛡", description: `Admin +${adjustAmt} Tanga qo'shdi`, amount: adjustAmt, type: "admin_adjustment", direction: "in" });
-      logAction({ actorId: ADMIN_USER, actorRole: "admin", action: "ADMIN_ADD_TANGA", category: "financial", targetId: userId, targetType: "tanga", description: `${name}ga +${adjustAmt} Tanga qo'shildi`, metadata: { amount: adjustAmt } });
-    } else {
-      const bal    = getTangaBalance(userId);
-      const deduct = Math.min(adjustAmt, bal);
-      if (deduct > 0) {
-        spendTangaBalance(userId, deduct);
-        recordTangaTransaction({ userId, offerId: "", requestId: "", categoryName: "Admin sozlamasi", categoryEmoji: "🛡", description: `Admin −${deduct} Tanga ayirdi`, amount: deduct, type: "admin_adjustment", direction: "out" });
-        logAction({ actorId: ADMIN_USER, actorRole: "admin", action: "ADMIN_REMOVE_TANGA", category: "financial", targetId: userId, targetType: "tanga", description: `${name}dan −${deduct} Tanga ayirildi`, metadata: { amount: deduct } });
-      }
+    const direction = adjustType === "add" ? "in" : "out";
+    const reason = adjustType === "add" ? `Admin +${adjustAmt} Tanga qo'shdi` : `Admin −${adjustAmt} Tanga ayirdi`;
+    try {
+      await adjustWalletBalanceBackend(userId, adjustAmt, direction, reason);
+      logAction({
+        actorId: ADMIN_USER, actorRole: "admin",
+        action: adjustType === "add" ? "ADMIN_ADD_TANGA" : "ADMIN_REMOVE_TANGA",
+        category: "financial", targetId: userId, targetType: "tanga",
+        description: adjustType === "add" ? `${name}ga +${adjustAmt} Tanga qo'shildi` : `${name}dan −${adjustAmt} Tanga ayirildi`,
+        metadata: { amount: adjustAmt },
+      });
+      setAdjustId(null); setAdjustAmt(0);
+      reload();
+    } catch (err) {
+      alert(err instanceof AdminApiError ? err.message : "Balansni o'zgartirishda xatolik yuz berdi");
     }
-    setAdjustId(null); setAdjustAmt(0);
-    reload();
   }
 
   return (
