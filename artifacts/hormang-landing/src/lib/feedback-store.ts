@@ -1,4 +1,11 @@
-import { emitStoreChange } from "@/lib/store-events";
+/**
+ * feedback-store.ts
+ * User feedback (problems/complaints/suggestions) — submitted/reviewed
+ * against the real backend (requireAuth for submission, admin-key for
+ * review), so a report filed by a user reaches every admin/device.
+ */
+import { apiFetch } from "@/lib/api-client";
+import { adminFetch } from "@/lib/admin-client";
 
 export type FeedbackType     = "problem" | "complaint" | "suggestion";
 export type FeedbackStatus   = "new" | "in_review" | "resolved" | "rejected";
@@ -26,62 +33,30 @@ export interface Feedback {
   updatedAt: string;
 }
 
-const FEEDBACK_KEY = "hormang_feedbacks";
-
-function readFeedbacks(): Feedback[] {
-  try {
-    const raw = localStorage.getItem(FEEDBACK_KEY);
-    return raw ? (JSON.parse(raw) as Feedback[]) : [];
-  } catch {
-    return [];
-  }
+export async function getAllFeedbacks(): Promise<Feedback[]> {
+  const { feedbacks } = await adminFetch<{ feedbacks: Feedback[] }>("/feedback/admin");
+  return feedbacks;
 }
 
-function writeFeedbacks(feedbacks: Feedback[]) {
-  try {
-    localStorage.setItem(FEEDBACK_KEY, JSON.stringify(feedbacks));
-  } catch {
-    const slim = feedbacks.map(f => ({ ...f, attachments: [] }));
-    localStorage.setItem(FEEDBACK_KEY, JSON.stringify(slim));
-  }
-  emitStoreChange();
+export async function getFeedbacksByUser(): Promise<Feedback[]> {
+  const { feedbacks } = await apiFetch<{ feedbacks: Feedback[] }>("/feedback/mine");
+  return feedbacks;
 }
 
-export function getAllFeedbacks(): Feedback[] {
-  return readFeedbacks().sort(
-    (a, b) => new Date(b.createdAt).getTime() - new Date(a.createdAt).getTime(),
-  );
-}
-
-export function getFeedbacksByUser(userId: string): Feedback[] {
-  return readFeedbacks()
-    .filter(f => f.userId === userId)
-    .sort((a, b) => new Date(b.createdAt).getTime() - new Date(a.createdAt).getTime());
-}
-
-export function saveFeedback(
+export async function saveFeedback(
   data: Omit<Feedback, "id" | "createdAt" | "updatedAt" | "status" | "priority">,
-): Feedback {
-  const now   = new Date().toISOString();
-  const entry: Feedback = {
-    ...data,
-    id: Math.random().toString(36).slice(2, 10) + Date.now().toString(36),
-    status:   "new",
-    priority: "medium",
-    createdAt: now,
-    updatedAt: now,
-  };
-  writeFeedbacks([entry, ...readFeedbacks()]);
-  return entry;
+): Promise<Feedback> {
+  const { feedback } = await apiFetch<{ feedback: Feedback }>("/feedback", { method: "POST", body: data });
+  return feedback;
 }
 
-export function updateFeedback(
+export async function updateFeedback(
   id: string,
   updates: Partial<Pick<Feedback, "status" | "priority" | "adminNote" | "rejectionReason">>,
-): void {
-  const all = readFeedbacks();
-  const idx = all.findIndex(f => f.id === id);
-  if (idx === -1) return;
-  all[idx] = { ...all[idx], ...updates, updatedAt: new Date().toISOString() };
-  writeFeedbacks(all);
+): Promise<Feedback> {
+  const { feedback } = await adminFetch<{ feedback: Feedback }>(`/feedback/admin/${id}`, {
+    method: "PATCH",
+    body: updates,
+  });
+  return feedback;
 }

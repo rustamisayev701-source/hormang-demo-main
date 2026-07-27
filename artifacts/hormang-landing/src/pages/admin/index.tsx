@@ -85,7 +85,7 @@ import { getAllFeedbacks, type Feedback as FeedbackEntry } from "@/lib/feedback-
 import type { LocalizedText } from "@/lib/localization";
 import { getLocalizedText } from "@/lib/localization";
 import {
-  getAllReports, getReportCountForUser, updateReportStatus,
+  getAllReports, updateReportStatus,
   type UserReport, type ReportStatus as RptStatus,
 } from "@/lib/report-store";
 
@@ -2899,6 +2899,13 @@ function UsersSection({ refreshKey, onGoToFeedback, openUserId, onOpenUserIdCons
     } catch (err) {
       console.error("Load admin users failed:", err);
     }
+    let reportCountByUser = new Map<string, number>();
+    try {
+      const allReports = await getAllReports();
+      reportCountByUser = allReports.reduce((m, r) => m.set(r.reportedUserId, (m.get(r.reportedUserId) ?? 0) + 1), new Map<string, number>());
+    } catch (err) {
+      console.error("Load reports for user counts failed:", err);
+    }
 
     const allOffers   = readKey<BuyerOffer[]>(K.OFFERS_BUYER, []);
     const allRequests = readKey<CustomerRequest[]>(K.REQUESTS, []);
@@ -3085,7 +3092,12 @@ function UsersSection({ refreshKey, onGoToFeedback, openUserId, onOpenUserIdCons
     }
 
     /* ── Step 6: Feedback counts per user ── */
-    const allFeedbacks = getAllFeedbacks();
+    let allFeedbacks: FeedbackEntry[] = [];
+    try {
+      allFeedbacks = await getAllFeedbacks();
+    } catch (err) {
+      console.error("Load feedbacks for user counts failed:", err);
+    }
     for (const u of result) {
       const uFbs = allFeedbacks.filter(f => f.userId === u.userId);
       if (uFbs.length > 0) {
@@ -3105,6 +3117,8 @@ function UsersSection({ refreshKey, onGoToFeedback, openUserId, onOpenUserIdCons
         }
       } catch { /* skip */ }
     }
+
+    for (const u of result) u.reportCount = reportCountByUser.get(u.userId) ?? 0;
 
     setUsers(result.sort((a, b) => {
       // providers + both first, then customers; within groups alphabetical
@@ -3155,11 +3169,7 @@ function UsersSection({ refreshKey, onGoToFeedback, openUserId, onOpenUserIdCons
     });
   }
 
-  /* ── Enrich with report counts (Reports domain is still local-only, Phase C) ── */
-  const enriched = users.map((u) => ({
-    ...u,
-    reportCount: getReportCountForUser(u.userId),
-  }));
+  const enriched = users;
 
   /* ── Filtering ── */
   const now7  = Date.now() - 7  * 24 * 60 * 60 * 1000;
@@ -6667,20 +6677,24 @@ const RPT_STATUS_MAP: Record<string, { label: string; cls: string }> = {
   dismissed:  { label: "Rad etildi",          cls: "bg-gray-100 text-gray-500 border-gray-200" },
 };
 
-function resolveUser(userId: string): { name: string; initials: string; role: "provider" | "customer" | "both" } {
+/* Resolves reporter/reported names against the real backend user list
+   (fetchAdminUsers), not the per-browser hormang_auth_users cache — a report
+   filed from any device must still show a readable name here. */
+let userResolveCache = new Map<string, { name: string; initials: string; role: "provider" | "customer" }>();
+async function refreshUserResolveCache(): Promise<void> {
   try {
-    const authUsers = readKey<Array<{
-      id: string; firstName?: string; lastName?: string; role?: string;
-    }>>("hormang_auth_users", []);
-    const au = authUsers.find((u) => u.id === userId);
-    if (au) {
-      const name = `${au.firstName ?? ""} ${au.lastName ?? ""}`.trim() || "Foydalanuvchi";
-      const initials = ((au.firstName?.[0] ?? "") + (au.lastName?.[0] ?? "")).toUpperCase() || name[0]?.toUpperCase() || "U";
-      const role = au.role === "provider" ? "provider" : "customer";
-      return { name, initials, role };
-    }
-  } catch { /* ignore */ }
-  return { name: userId.slice(0, 8) + "…", initials: "?", role: "customer" };
+    const { users } = await fetchAdminUsers();
+    userResolveCache = new Map(users.map((u) => {
+      const name = `${u.firstName ?? ""} ${u.lastName ?? ""}`.trim() || "Foydalanuvchi";
+      const initials = ((u.firstName?.[0] ?? "") + (u.lastName?.[0] ?? "")).toUpperCase() || name[0]?.toUpperCase() || "U";
+      return [u.id, { name, initials, role: u.role === "provider" ? "provider" as const : "customer" as const }];
+    }));
+  } catch (err) {
+    console.error("Load admin users for resolveUser failed:", err);
+  }
+}
+function resolveUser(userId: string): { name: string; initials: string; role: "provider" | "customer" } {
+  return userResolveCache.get(userId) ?? { name: userId.slice(0, 8) + "…", initials: "?", role: "customer" };
 }
 
 function UserPill({ userId }: { userId: string }) {
@@ -6703,25 +6717,36 @@ function UserPill({ userId }: { userId: string }) {
 }
 
 function ReportsSection({ refreshKey }: { refreshKey: number }) {
-  void refreshKey;
   const [reports,     setReports]     = useState<UserReport[]>([]);
   const [filterStatus, setFilterStatus] = useState<RptStatus | "all">("all");
   const [expanded,    setExpanded]    = useState<string | null>(null);
   const [noteInputs,  setNoteInputs]  = useState<Record<string, string>>({});
 
-  function load() { setReports(getAllReports()); }
-  useEffect(() => { load(); }, []);
+  function load() {
+    Promise.all([getAllReports(), refreshUserResolveCache()])
+      .then(([r]) => setReports(r))
+      .catch((err) => console.error("Load reports failed:", err));
+  }
+  useEffect(() => { load(); }, [refreshKey]);
 
-  function changeStatus(id: string, status: RptStatus) {
-    updateReportStatus(id, status, noteInputs[id]);
-    load();
+  async function changeStatus(id: string, status: RptStatus) {
+    try {
+      await updateReportStatus(id, status, noteInputs[id]);
+      load();
+    } catch (err) {
+      alert(err instanceof AdminApiError ? err.message : "Xatolik yuz berdi");
+    }
   }
 
-  function saveNote(id: string) {
+  async function saveNote(id: string) {
     const r = reports.find((r) => r.id === id);
     if (!r) return;
-    updateReportStatus(id, r.status, noteInputs[id]);
-    load();
+    try {
+      await updateReportStatus(id, r.status, noteInputs[id]);
+      load();
+    } catch (err) {
+      alert(err instanceof AdminApiError ? err.message : "Xatolik yuz berdi");
+    }
   }
 
   const filtered = filterStatus === "all"

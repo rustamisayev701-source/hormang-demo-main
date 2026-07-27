@@ -6,11 +6,11 @@ import { useI18n } from "@/contexts/i18n-context";
 import { tFormat } from "@/lib/i18n";
 import {
   submitReport,
-  canSubmitReport,
   blockUser,
   isBlockedBy,
   type ReportReason,
 } from "@/lib/report-store";
+import { ApiError } from "@/lib/api-client";
 
 async function compressToDataUrl(file: File, maxPx = 900): Promise<string> {
   return new Promise((resolve) => {
@@ -85,14 +85,9 @@ export function ReportModal({
 
   async function handleSubmit() {
     if (!reason) return;
-    const check = canSubmitReport(reporterUserId, reportedUserId);
-    if (!check.ok) {
-      toast({ title: check.reason, variant: "destructive" });
-      return;
-    }
     setSubmitting(true);
     try {
-      submitReport({
+      await submitReport({
         reporterUserId,
         reportedUserId,
         reason,
@@ -107,6 +102,8 @@ export function ReportModal({
       }
       toast({ title: tt.submittedToast });
       onClose();
+    } catch (err) {
+      toast({ title: err instanceof ApiError ? err.message : tt.title, variant: "destructive" });
     } finally {
       setSubmitting(false);
     }

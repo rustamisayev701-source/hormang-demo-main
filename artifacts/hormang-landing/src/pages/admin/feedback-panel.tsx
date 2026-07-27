@@ -9,7 +9,8 @@ import {
   getAllFeedbacks, updateFeedback,
   type Feedback, type FeedbackType, type FeedbackStatus, type FeedbackPriority,
 } from "@/lib/feedback-store";
-import { onStoreChange } from "@/lib/store-events";
+import { fetchAdminUsers } from "@/lib/admin-data";
+import { AdminApiError } from "@/lib/admin-client";
 
 /* ── Helpers ─────────────────────────────────────────────────────── */
 const UZ_MONTHS = ["Yan","Fev","Mar","Apr","May","Iyun","Iyul","Avg","Sen","Okt","Noy","Dek"];
@@ -27,15 +28,10 @@ interface AdminUserData {
   phone?: string;
 }
 
-function loadAdminUsers(): AdminUserData[] {
+async function loadAdminUsers(): Promise<AdminUserData[]> {
   try {
-    const raw = localStorage.getItem("hormang_auth_users");
-    if (!raw) return [];
-    const arr = JSON.parse(raw) as Array<{
-      id: string; firstName?: string; lastName?: string;
-      phone?: string | null; role?: string;
-    }>;
-    return arr.map(u => {
+    const { users } = await fetchAdminUsers();
+    return users.map((u) => {
       const name = `${u.firstName ?? ""} ${u.lastName ?? ""}`.trim() || "Foydalanuvchi";
       const initials = ((u.firstName?.[0] ?? "") + (u.lastName?.[0] ?? "")).toUpperCase() || "?";
       return {
@@ -46,7 +42,10 @@ function loadAdminUsers(): AdminUserData[] {
         phone: u.phone ?? undefined,
       } satisfies AdminUserData;
     });
-  } catch { return []; }
+  } catch (err) {
+    console.error("Load admin users failed:", err);
+    return [];
+  }
 }
 
 /* ── UserCell ────────────────────────────────────────────────────── */
@@ -142,7 +141,7 @@ function FeedbackDrawer({ fb, user, onClose, onUpdate, onNavigateToUser }: {
   fb: Feedback;
   user?: AdminUserData;
   onClose: () => void;
-  onUpdate: () => void;
+  onUpdate: (updated: Feedback) => void;
   onNavigateToUser?: (userId: string) => void;
 }) {
   const [status, setStatus]     = useState<FeedbackStatus>(fb.status);
@@ -157,14 +156,19 @@ function FeedbackDrawer({ fb, user, onClose, onUpdate, onNavigateToUser }: {
   async function save(overrides?: Partial<{ status: FeedbackStatus; priority: FeedbackPriority }>) {
     setSaving(true);
     const next = { ...overrides };
-    updateFeedback(fb.id, {
-      status:   next.status   ?? status,
-      priority: next.priority ?? priority,
-      adminNote: note.trim() || undefined,
-      rejectionReason: (next.status === "rejected" || status === "rejected") ? rejectReason.trim() || undefined : undefined,
-    });
-    setSaving(false);
-    onUpdate();
+    try {
+      const updated = await updateFeedback(fb.id, {
+        status:   next.status   ?? status,
+        priority: next.priority ?? priority,
+        adminNote: note.trim() || undefined,
+        rejectionReason: (next.status === "rejected" || status === "rejected") ? rejectReason.trim() || undefined : undefined,
+      });
+      onUpdate(updated);
+    } catch (err) {
+      alert(err instanceof AdminApiError ? err.message : "Xatolik yuz berdi");
+    } finally {
+      setSaving(false);
+    }
   }
 
   function handleStatusChange(s: FeedbackStatus) {
@@ -402,20 +406,19 @@ export function FeedbackAdminSection({
   }, [filterUserId]);
 
   function load() {
-    setFeedbacks(getAllFeedbacks());
-    const loaded = loadAdminUsers();
-    setUsers(new Map(loaded.map(u => [u.id, u])));
+    Promise.all([getAllFeedbacks(), loadAdminUsers()])
+      .then(([fbs, loadedUsers]) => {
+        setFeedbacks(fbs);
+        setUsers(new Map(loadedUsers.map(u => [u.id, u])));
+      })
+      .catch((err) => console.error("Load feedback failed:", err));
   }
 
-  useEffect(() => {
-    load();
-    const unsub = onStoreChange(load);
-    return unsub;
-  }, [refreshKey]);
+  useEffect(() => { load(); }, [refreshKey]);
 
-  function handleUpdate() {
-    load();
-    setSelected(s => s ? feedbacks.find(f => f.id === s.id) ?? null : null);
+  function handleUpdate(updated: Feedback) {
+    setFeedbacks((prev) => prev.map((f) => (f.id === updated.id ? updated : f)));
+    setSelected(updated);
   }
 
   const filtered = feedbacks.filter(f => {

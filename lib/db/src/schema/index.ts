@@ -11,3 +11,5 @@ export * from "./common_questions";
 export * from "./user_moderation";
 export * from "./announcements";
 export * from "./audit_log";
+export * from "./user_reports";
+export * from "./feedbacks";

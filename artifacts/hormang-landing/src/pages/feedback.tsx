@@ -1,4 +1,4 @@
-import { useState, useRef, useCallback } from "react";
+import { useState, useRef, useCallback, useEffect } from "react";
 import { useLocation } from "wouter";
 import { motion, AnimatePresence } from "framer-motion";
 import { useAuth } from "@/contexts/auth-context";
@@ -173,7 +173,7 @@ function FeedbackFormDrawer({
   async function handleSubmit() {
     setSubmitting(true);
     try {
-      saveFeedback({
+      await saveFeedback({
         userId,
         userRole: activeRole === "provider" ? "provider" : "customer",
         type: type!,
@@ -560,13 +560,16 @@ export default function FeedbackPage() {
 
   const [showForm, setShowForm]   = useState(false);
   const [selected, setSelected]  = useState<Feedback | null>(null);
-  const [history, setHistory]    = useState<Feedback[]>(() => user?.id ? getFeedbacksByUser(user.id) : []);
+  const [history, setHistory]    = useState<Feedback[]>([]);
 
   const myRequests = user?.id ? getRequestsByCustomer(user.id) : [];
 
   const refreshHistory = useCallback(() => {
-    if (user?.id) setHistory(getFeedbacksByUser(user.id));
+    if (!user?.id) return;
+    getFeedbacksByUser().then(setHistory).catch((err) => console.error("Load feedback history failed:", err));
   }, [user?.id]);
+
+  useEffect(() => { refreshHistory(); }, [refreshHistory]);
 
   return (
     <div className="min-h-screen bg-gray-50 flex flex-col pb-24">

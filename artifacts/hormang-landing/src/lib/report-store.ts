@@ -1,11 +1,16 @@
 /**
  * report-store.ts
- * User Report System — localStorage-backed, event-driven.
+ * User Report System — reports are submitted/reviewed against the real
+ * backend (requireAuth for submission, admin-key for review) so a report
+ * filed by a user reaches every admin/device, not just the filer's browser.
  *
- * Storage keys:
- *   hormang_user_reports          — UserReport[]
- *   hormang_blocked_users_<uid>   — string[] of blocked userIds (per blocker)
+ * Block/unblock stays local — a per-viewer safety toggle, not admin-facing,
+ * so per-browser storage is an acceptable tradeoff for now.
+ *
+ * Storage key: hormang_blocked_users_<uid> — string[] of blocked userIds (per blocker)
  */
+import { apiFetch } from "@/lib/api-client";
+import { adminFetch } from "@/lib/admin-client";
 import { emitStoreChange } from "@/lib/store-events";
 
 export type ReportReason =
@@ -39,114 +44,40 @@ export interface UserReport {
   lastMessageId?: string;
 }
 
-const REPORTS_KEY = "hormang_user_reports";
-const BLOCKED_PREFIX = "hormang_blocked_users_";
+/* ── Submit / admin review — real backend ────────────────────────────── */
 
-/* ── Internal read/write ─────────────────────────────────────────── */
-
-function readReports(): UserReport[] {
-  try {
-    const raw = localStorage.getItem(REPORTS_KEY);
-    return raw ? (JSON.parse(raw) as UserReport[]) : [];
-  } catch {
-    return [];
-  }
-}
-
-function writeReports(reports: UserReport[]): void {
-  try {
-    localStorage.setItem(REPORTS_KEY, JSON.stringify(reports));
-  } catch {
-    const slim = reports.map((r) => ({ ...r, attachments: [] }));
-    localStorage.setItem(REPORTS_KEY, JSON.stringify(slim));
-  }
-  emitStoreChange();
-}
-
-function uid(): string {
-  return Math.random().toString(36).slice(2, 10) + Date.now().toString(36);
-}
-
-/* ── Public API — reports ────────────────────────────────────────── */
-
-export function getAllReports(): UserReport[] {
-  return readReports().sort(
-    (a, b) => new Date(b.createdAt).getTime() - new Date(a.createdAt).getTime(),
-  );
-}
-
-export function getReportCountForUser(userId: string): number {
-  return readReports().filter((r) => r.reportedUserId === userId).length;
-}
-
-export function getReporterIdsForUser(userId: string): string[] {
-  const seen = new Set<string>();
-  return readReports()
-    .filter((r) => r.reportedUserId === userId)
-    .map((r) => r.reporterUserId)
-    .filter((id) => {
-      if (seen.has(id)) return false;
-      seen.add(id);
-      return true;
-    });
-}
-
-/**
- * Safeguard check before submitting.
- * Returns { ok: true } if allowed, otherwise { ok: false, reason: string }.
- */
-export function canSubmitReport(
-  reporterUserId: string,
-  reportedUserId: string,
-): { ok: true } | { ok: false; reason: string } {
-  if (reporterUserId === reportedUserId) {
-    return { ok: false, reason: "O'zingizga shikoyat qilib bo'lmaydi" };
-  }
-  const duplicate = readReports().find(
-    (r) =>
-      r.reporterUserId === reporterUserId &&
-      r.reportedUserId === reportedUserId &&
-      Date.now() - new Date(r.createdAt).getTime() < 24 * 60 * 60 * 1000,
-  );
-  if (duplicate) {
-    return {
-      ok: false,
-      reason: "Bu foydalanuvchi haqida shikoyat qilingan",
-    };
-  }
-  return { ok: true };
-}
-
-export function submitReport(
+export async function submitReport(
   data: Omit<UserReport, "id" | "status" | "createdAt">,
-): UserReport {
-  const entry: UserReport = {
-    ...data,
-    id: uid(),
-    status: "new",
-    createdAt: new Date().toISOString(),
-  };
-  writeReports([entry, ...readReports()]);
-  return entry;
+): Promise<UserReport> {
+  const { report } = await apiFetch<{ report: UserReport }>("/reports", { method: "POST", body: data });
+  return report;
 }
 
-export function updateReportStatus(
+export async function getReportCountForUser(userId: string): Promise<number> {
+  const { count } = await apiFetch<{ count: number }>(`/reports/count/${userId}`, { auth: false });
+  return count;
+}
+
+export async function getAllReports(): Promise<UserReport[]> {
+  const { reports } = await adminFetch<{ reports: UserReport[] }>("/reports/admin");
+  return reports;
+}
+
+export async function updateReportStatus(
   reportId: string,
   status: ReportStatus,
   adminNote?: string,
-): void {
-  const all = readReports();
-  const idx = all.findIndex((r) => r.id === reportId);
-  if (idx === -1) return;
-  all[idx] = {
-    ...all[idx],
-    status,
-    ...(adminNote !== undefined ? { adminNote } : {}),
-  };
-  writeReports(all);
+): Promise<UserReport> {
+  const { report } = await adminFetch<{ report: UserReport }>(`/reports/admin/${reportId}/status`, {
+    method: "PATCH",
+    body: { status, adminNote },
+  });
+  return report;
 }
 
-/* ── Public API — block/unblock ─────────────────────────────────── */
+/* ── Public API — block/unblock (local, per-viewer) ─────────────────── */
+
+const BLOCKED_PREFIX = "hormang_blocked_users_";
 
 function readBlocked(userId: string): string[] {
   try {

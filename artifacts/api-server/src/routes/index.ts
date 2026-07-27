@@ -9,6 +9,8 @@ import adminPricingRouter from "./admin-pricing";
 import adminWalletsRouter from "./admin-wallets";
 import adminUsersRouter from "./admin-users";
 import adminAuditLogRouter from "./admin-audit-log";
+import reportsRouter from "./reports";
+import feedbackRouter from "./feedback";
 
 const router: IRouter = Router();
 
@@ -18,6 +20,8 @@ router.use("/wallet", walletRouter);
 router.use("/payments", paymentsRouter);
 router.use("/categories", categoriesRouter);
 router.use("/announcements", announcementsRouter);
+router.use("/reports", reportsRouter);
+router.use("/feedback", feedbackRouter);
 router.use("/admin/pricing-tiers", adminPricingRouter);
 router.use("/admin/wallets", adminWalletsRouter);
 router.use("/admin/users", adminUsersRouter);
