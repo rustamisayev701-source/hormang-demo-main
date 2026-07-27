@@ -6971,6 +6971,15 @@ export default function AdminDashboard() {
   const [feedbackFilterUserId, setFeedbackFilterUserId] = useState<string | null>(null);
   const [openUserIdInUsers,   setOpenUserIdInUsers]     = useState<string | null>(null);
 
+  /* Re-arm the backend admin key whenever this tab is authed — covers both a
+     fresh login (LoginGate already does this too, redundant but harmless)
+     and a persisted `authed` flag from sessionStorage on reload/remount,
+     which otherwise skips LoginGate entirely and leaves admin write calls
+     403ing with no x-admin-key header. */
+  useEffect(() => {
+    if (authed) markAdminAuthenticated();
+  }, [authed]);
+
   /* Subscribe to main app store events + cross-tab storage events */
   useEffect(() => {
     if (!authed) return;
