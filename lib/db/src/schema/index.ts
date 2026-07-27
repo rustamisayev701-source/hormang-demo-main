@@ -5,3 +5,6 @@ export * from "./wallets";
 export * from "./payment_orders";
 export * from "./tanga_transactions";
 export * from "./telegram_links";
+export * from "./categories";
+export * from "./category_questions";
+export * from "./common_questions";

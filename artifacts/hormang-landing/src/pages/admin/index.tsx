@@ -38,6 +38,7 @@ import {
   upsertCategory as upsertAdminCategory,
   deleteCategory as deleteAdminCategory,
 } from "@/lib/categories";
+import { markAdminAuthenticated } from "@/lib/admin-client";
 import { CategoryIcon } from "@/components/category-icon";
 import {
   CATEGORY_ICONS,
@@ -393,6 +394,7 @@ function LoginGate({ onSuccess }: { onSuccess: () => void }) {
     setTimeout(() => {
       if (username === ADMIN_USER && password === ADMIN_PASS) {
         setSession();
+        markAdminAuthenticated();
         logAction({ actorId: ADMIN_USER, actorRole: "admin", action: "LOGIN", category: "admin", description: "Admin tizimga kirdi" });
         onSuccess();
       } else {
@@ -5906,7 +5908,7 @@ function CategoryManagementPanel() {
     return onStoreChange(reload);
   }, []);
 
-  function handleToggleActive(id: string, active: boolean) {
+  async function handleToggleActive(id: string, active: boolean) {
     if (!active) {
       const row = cats.find((c) => c.id === id);
       const consequences =
@@ -5918,7 +5920,7 @@ function CategoryManagementPanel() {
         `Davom etamizmi?`;
       if (!confirm(consequences)) return;
     }
-    setAdminCategoryActive(id, active);
+    await setAdminCategoryActive(id, active);
     logAction({
       actorId: ADMIN_USER, actorRole: "admin",
       action: active ? "CATEGORY_ENABLED" : "CATEGORY_DISABLED",
@@ -5928,7 +5930,7 @@ function CategoryManagementPanel() {
     reload();
   }
 
-  function handleDelete(id: string) {
+  async function handleDelete(id: string) {
     const row = cats.find((c) => c.id === id);
     if (!row) return;
     const consequences =
@@ -5942,7 +5944,7 @@ function CategoryManagementPanel() {
       `Davom etamizmi?`;
     if (!confirm(consequences)) return;
 
-    const result = deleteAdminCategory(id);
+    const result = await deleteAdminCategory(id);
     if (!result.ok) {
       alert("Kategoriyani o'chirib bo'lmadi.");
       return;
@@ -6109,7 +6111,7 @@ function CategoryEditorModal({
   // Auto-generated preview ID (new categories only). On save we ensure uniqueness.
   const previewId = isNew ? slugifyCategoryId(nameUz) : initial!.id;
 
-  function handleSave() {
+  async function handleSave() {
     setError("");
     if (!nameUz.trim()) { setError("O'zbekcha nomini kiriting"); return; }
 
@@ -6133,23 +6135,27 @@ function CategoryEditorModal({
           ...(descRu.trim() ? { ru: descRu.trim() } : {}),
         }
       : undefined;
-    upsertAdminCategory({
-      id: finalId,
-      nameLocalized: {
-        uz: nameUz.trim(),
-        ...(nameRu.trim() ? { ru: nameRu.trim() } : {}),
-      },
-      ...(descriptionLocalized ? { descriptionLocalized } : {}),
-      emoji, // kept as legacy fallback
-      icon: icon ?? undefined,
-      iconFamily: icon ? "phosphor" : undefined,
-      color,
-      gradient: gradient ?? null,
-      baseCost: isNaN(cost) ? 0 : Math.max(0, cost),
-      active,
-      parentCategoryId: parentCategoryId.trim() || null,
-    });
-    onSaved(finalId, isNew);
+    try {
+      await upsertAdminCategory({
+        id: finalId,
+        nameLocalized: {
+          uz: nameUz.trim(),
+          ...(nameRu.trim() ? { ru: nameRu.trim() } : {}),
+        },
+        ...(descriptionLocalized ? { descriptionLocalized } : {}),
+        emoji, // kept as legacy fallback
+        icon: icon ?? undefined,
+        iconFamily: icon ? "phosphor" : undefined,
+        color,
+        gradient: gradient ?? null,
+        baseCost: isNaN(cost) ? 0 : Math.max(0, cost),
+        active,
+        parentCategoryId: parentCategoryId.trim() || null,
+      });
+      onSaved(finalId, isNew);
+    } catch (e) {
+      setError(e instanceof Error ? e.message : "Saqlab bo'lmadi");
+    }
   }
 
   return (

@@ -22,6 +22,7 @@ import {
   type CategoryConfig, type Question, type QuestionType, type QuestionOption,
 } from "@/lib/questionnaire-store";
 import { getCategory, getCategoryDisplayName } from "@/lib/categories";
+import { markAdminAuthenticated } from "@/lib/admin-client";
 import { onStoreChange } from "@/lib/store-events";
 import logoImg from "/hormang-logo.png";
 
@@ -230,7 +231,7 @@ function PasswordGate({ onSuccess }: { onSuccess: () => void }) {
   const [error, setError] = useState(false);
   function submit(e: React.FormEvent) {
     e.preventDefault();
-    if (pw === ADMIN_PASSWORD) { onSuccess(); }
+    if (pw === ADMIN_PASSWORD) { markAdminAuthenticated(); onSuccess(); }
     else { setError(true); setTimeout(() => setError(false), 1500); }
   }
   return (
@@ -1399,14 +1400,15 @@ export function QuestionsEmbedded() {
   function updateCommon(qs: Question[]) {
     setCommonQuestions(qs); setDirty(true); setSaved(false);
   }
-  function handleSave() {
-    saveCategories(categories);
-    saveCommonQuestions(commonQuestions);
+  async function handleSave() {
+    await saveCategories(categories);
+    await saveCommonQuestions(commonQuestions);
+    setCategories(getCategories()); setCommonQuestions(getCommonQuestions());
     setSaved(true); setDirty(false);
     setTimeout(() => setSaved(false), 2500);
   }
-  function handleReset() {
-    resetCategories(); resetCommonQuestions();
+  async function handleReset() {
+    await resetCategories();
     setCategories(getCategories()); setCommonQuestions(getCommonQuestions());
     setDirty(false); setSaved(false); setShowResetConfirm(false);
   }
@@ -1552,14 +1554,15 @@ export default function AdminQuestionsPage() {
   function updateCommon(qs: Question[]) {
     setCommonQuestions(qs); setDirty(true); setSaved(false);
   }
-  function handleSave() {
-    saveCategories(categories);
-    saveCommonQuestions(commonQuestions);
+  async function handleSave() {
+    await saveCategories(categories);
+    await saveCommonQuestions(commonQuestions);
+    setCategories(getCategories()); setCommonQuestions(getCommonQuestions());
     setSaved(true); setDirty(false);
     setTimeout(() => setSaved(false), 2500);
   }
-  function handleReset() {
-    resetCategories(); resetCommonQuestions();
+  async function handleReset() {
+    await resetCategories();
     setCategories(getCategories()); setCommonQuestions(getCommonQuestions());
     setDirty(false); setSaved(false); setShowResetConfirm(false);
   }

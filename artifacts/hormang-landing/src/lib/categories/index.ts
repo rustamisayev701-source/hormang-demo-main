@@ -2,19 +2,20 @@
  * lib/categories
  * Single source of truth for service categories.
  *
- * - Identifies categories by immutable string IDs (e.g. "tozalash").
- * - Stores multilingual display name (UZ + RU) + emoji + color + active flag.
- * - Persists to localStorage key `hormang_categories_v1`; seeds from
- *   CATEGORY_META in data/categories.ts on first load.
- * - Built-in categories are protected from hard delete (only deactivation).
- *
- * Provides a migration layer that maps legacy translated category names
- * stored on provider profiles / requests to canonical IDs.
+ * Backed by the real `categories` table on the server (shared across every
+ * admin/browser/device) — see `artifacts/api-server/src/routes/categories.ts`.
+ * Most consumers throughout the app read this module's synchronous getters
+ * (`getCategoryDisplayName`, `getActiveCategories`, etc.) from many call
+ * sites; rewriting every one of them to be async would be a large, risky
+ * refactor. Instead this module keeps an in-memory cache, refreshed once on
+ * app boot (see `App.tsx`) and again after every admin mutation — the
+ * getters read the cache synchronously, unchanged for every existing caller.
  */
 import type { LocalizedText, Locale } from "@/lib/localization";
 import { getLocalizedText } from "@/lib/localization";
-import { CATEGORY_META } from "@/data/categories";
 import { emitStoreChange } from "@/lib/store-events";
+import { apiFetch } from "@/lib/api-client";
+import { adminFetch } from "@/lib/admin-client";
 import { migrateLegacyCategoryValueWith } from "./categoryMigration";
 
 export { LEGACY_NAME_MAP } from "./categoryMigration";
@@ -56,93 +57,81 @@ export interface Category {
   baseCost: number;
   /** When false, hidden from selectors / new requests but kept for history. */
   active: boolean;
-  /** Original built-in categories cannot be hard-deleted (only deactivated). */
+  /** Built-in categories are seeded by default but are no longer protected from deletion. */
   builtIn: boolean;
   /** Optional parent category ID (reserved for future subcategory support; flat for now). */
   parentCategoryId?: string | null;
   createdAt: string;
+  /** Present when fetched from the API list endpoint; number of questions configured for this category. */
+  questionCount?: number;
 }
 
 /** Backwards-compatible alias. */
 export type CategoryModel = Category;
 
-export const CATEGORIES_STORAGE_KEY = "hormang_categories_v1";
-
-/** Default hex colors for built-in categories. */
-const DEFAULT_COLORS: Record<string, string> = {
-  tamirlash:  "#3B82F6",
-  tozalash:   "#10B981",
-  avto:       "#F59E0B",
-  kochirish:  "#8B5CF6",
-  repetitor:  "#EC4899",
-  tadbir:     "#F43F5E",
-  gozallik:   "#EAB308",
-  enaga:      "#06B6D4",
-  ustachilik: "#64748B",
-};
-
 const FALLBACK_COLOR = "#3B82F6";
 
-function seedCategories(): Category[] {
-  return CATEGORY_META.map((m) => ({
-    id: m.id,
-    nameLocalized: m.name,
-    emoji: m.emoji,
-    color: DEFAULT_COLORS[m.id] ?? FALLBACK_COLOR,
-    baseCost: 0,
-    active: true,
-    builtIn: true,
-    createdAt: new Date(0).toISOString(),
-  }));
+/* ─── In-memory cache ────────────────────────────────────────────── */
+
+let cache: Category[] = [];
+let cacheLoaded = false;
+
+interface CategoryApiRow {
+  id: string;
+  nameLocalized: LocalizedText;
+  descriptionLocalized?: LocalizedText;
+  emoji: string;
+  icon?: string;
+  iconFamily?: string;
+  color: string;
+  gradient?: string | null;
+  baseCost: number;
+  active: boolean;
+  builtIn: boolean;
+  parentCategoryId?: string | null;
+  createdAt: string;
+  questionCount: number;
 }
 
-/* ─── Storage ────────────────────────────────────────────────────── */
-
-function readStore(): Category[] | null {
-  try {
-    const raw = localStorage.getItem(CATEGORIES_STORAGE_KEY);
-    if (!raw) return null;
-    const parsed = JSON.parse(raw) as Category[];
-    if (!Array.isArray(parsed)) return null;
-    return parsed.map((c) => ({
-      id: c.id,
-      nameLocalized: c.nameLocalized ?? { uz: c.id },
-      descriptionLocalized: c.descriptionLocalized,
-      emoji: c.emoji ?? "📋",
-      icon: c.icon,
-      iconFamily: c.iconFamily,
-      color: c.color ?? DEFAULT_COLORS[c.id] ?? FALLBACK_COLOR,
-      gradient: c.gradient ?? null,
-      baseCost: typeof c.baseCost === "number" ? c.baseCost : 0,
-      active: c.active !== false,
-      builtIn: !!c.builtIn,
-      parentCategoryId: c.parentCategoryId ?? null,
-      createdAt: c.createdAt ?? new Date().toISOString(),
-    }));
-  } catch {
-    return null;
-  }
+function fromApiRow(row: CategoryApiRow): Category {
+  return {
+    id: row.id,
+    nameLocalized: row.nameLocalized,
+    descriptionLocalized: row.descriptionLocalized,
+    emoji: row.emoji ?? "📋",
+    icon: row.icon,
+    iconFamily: row.iconFamily,
+    color: row.color ?? FALLBACK_COLOR,
+    gradient: row.gradient ?? null,
+    baseCost: row.baseCost ?? 0,
+    active: row.active !== false,
+    builtIn: !!row.builtIn,
+    parentCategoryId: row.parentCategoryId ?? null,
+    createdAt: row.createdAt,
+    questionCount: row.questionCount,
+  };
 }
 
-function writeStore(cats: Category[]): void {
+/** Fetches the current category list from the server and refreshes the cache. Call on app boot and after any admin mutation. */
+export async function refreshCategoriesCache(): Promise<void> {
   try {
-    localStorage.setItem(CATEGORIES_STORAGE_KEY, JSON.stringify(cats));
+    const res = await apiFetch<{ categories: CategoryApiRow[] }>("/categories", { auth: false });
+    cache = res.categories.map(fromApiRow);
+    cacheLoaded = true;
     emitStoreChange();
   } catch (e) {
-    console.warn("[Hormang] categories saqlanmadi:", e);
+    console.warn("[Hormang] kategoriyalarni yuklab bo'lmadi:", e);
   }
+}
+
+export function isCategoriesCacheLoaded(): boolean {
+  return cacheLoaded;
 }
 
 /* ─── Public API ─────────────────────────────────────────────────── */
 
 export function getAllCategories(): Category[] {
-  const stored = readStore();
-  if (stored && stored.length) {
-    return stored;
-  }
-  const seed = seedCategories();
-  writeStore(seed);
-  return seed;
+  return cache;
 }
 
 export function getActiveCategories(): Category[] {
@@ -153,51 +142,29 @@ export function getCategory(id: string): Category | undefined {
   return getAllCategories().find((c) => c.id === id);
 }
 
-export function saveCategories(cats: Category[]): void {
-  writeStore(cats);
+export async function upsertCategory(input: Partial<Category> & { id: string }): Promise<Category> {
+  const row = await adminFetch<CategoryApiRow>(`/categories/${encodeURIComponent(input.id)}`, {
+    method: "PUT",
+    body: {
+      nameLocalized: input.nameLocalized,
+      descriptionLocalized: input.descriptionLocalized,
+      emoji: input.emoji,
+      icon: input.icon ?? null,
+      iconFamily: input.iconFamily ?? null,
+      color: input.color,
+      gradient: input.gradient ?? null,
+      baseCost: input.baseCost,
+      active: input.active,
+      parentCategoryId: input.parentCategoryId ?? null,
+    },
+  });
+  await refreshCategoriesCache();
+  return fromApiRow(row);
 }
 
-export function upsertCategory(input: Partial<Category> & { id: string }): Category {
-  const all = getAllCategories();
-  const idx = all.findIndex((c) => c.id === input.id);
-  if (idx >= 0) {
-    const next: Category = {
-      ...all[idx],
-      ...input,
-      // builtIn flag is immutable
-      builtIn: all[idx].builtIn,
-      nameLocalized: input.nameLocalized ?? all[idx].nameLocalized,
-    };
-    all[idx] = next;
-    writeStore(all);
-    return next;
-  }
-  const created: Category = {
-    id: input.id,
-    nameLocalized: input.nameLocalized ?? { uz: input.id },
-    descriptionLocalized: input.descriptionLocalized,
-    emoji: input.emoji ?? "📋",
-    icon: input.icon,
-    iconFamily: input.iconFamily,
-    color: input.color ?? FALLBACK_COLOR,
-    gradient: input.gradient ?? null,
-    baseCost: input.baseCost ?? 0,
-    active: input.active !== false,
-    builtIn: false,
-    parentCategoryId: input.parentCategoryId ?? null,
-    createdAt: new Date().toISOString(),
-  };
-  all.push(created);
-  writeStore(all);
-  return created;
-}
-
-export function setCategoryActive(id: string, active: boolean): void {
-  const all = getAllCategories();
-  const idx = all.findIndex((c) => c.id === id);
-  if (idx < 0) return;
-  all[idx] = { ...all[idx], active };
-  writeStore(all);
+export async function setCategoryActive(id: string, active: boolean): Promise<void> {
+  await adminFetch(`/categories/${encodeURIComponent(id)}/active`, { method: "PATCH", body: { active } });
+  await refreshCategoriesCache();
 }
 
 /**
@@ -206,17 +173,14 @@ export function setCategoryActive(id: string, active: boolean): void {
  * the display name (falls back to showing the ID itself — see
  * `getCategoryDisplayName`'s `fallback` param).
  */
-export function deleteCategory(id: string): { ok: boolean; reason?: string } {
-  const all = getAllCategories();
-  const idx = all.findIndex((c) => c.id === id);
-  if (idx < 0) return { ok: false, reason: "not_found" };
-  all.splice(idx, 1);
-  writeStore(all);
-  return { ok: true };
-}
-
-export function resetCategoriesToSeed(): void {
-  writeStore(seedCategories());
+export async function deleteCategory(id: string): Promise<{ ok: boolean; reason?: string }> {
+  try {
+    const result = await adminFetch<{ ok: boolean; reason?: string }>(`/categories/${encodeURIComponent(id)}`, { method: "DELETE" });
+    await refreshCategoriesCache();
+    return result;
+  } catch (e) {
+    return { ok: false, reason: e instanceof Error ? e.message : "error" };
+  }
 }
 
 /* ─── Display helpers ────────────────────────────────────────────── */

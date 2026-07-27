@@ -60,6 +60,21 @@ export function getPaymeConfig(): PaymeConfig {
   return { merchantId, key, testEnv: process.env.PAYME_ENV !== "prod" };
 }
 
+/**
+ * Shared secret protecting admin write endpoints. Mirrors today's single
+ * shared admin password (there's no per-admin account system) — falls back
+ * to an insecure dev default the same way JWT_SECRET does.
+ */
+export function getAdminApiKey(): string {
+  const key = process.env.ADMIN_API_KEY;
+  if (key) return key;
+  if (env.isProduction) {
+    throw new Error("ADMIN_API_KEY must be set in production.");
+  }
+  console.warn("[env] ADMIN_API_KEY not set — using an insecure development default.");
+  return "hormang-admin-dev-key";
+}
+
 export function isTelegramConfigured(): boolean {
   return Boolean(process.env.TELEGRAM_BOT_TOKEN);
 }

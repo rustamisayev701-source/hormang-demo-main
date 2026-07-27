@@ -7,8 +7,11 @@ import { AuthProvider, useAuth } from "@/contexts/auth-context";
 import { ThemeProvider } from "@/contexts/theme-context";
 import { I18nProvider } from "@/contexts/i18n-context";
 import { migrateOnce } from "@/lib/migration";
+import { refreshCategoriesCache } from "@/lib/categories";
+import { refreshQuestionsCache } from "@/lib/questionnaire-store";
 
 migrateOnce();
+void refreshCategoriesCache().then(() => refreshQuestionsCache());
 import NotFound from "@/pages/not-found";
 import LandingPage from "@/pages/landing";
 import RoleSelectPage from "@/pages/auth/role-select";
