@@ -9,3 +9,5 @@ export * from "./categories";
 export * from "./category_questions";
 export * from "./common_questions";
 export * from "./user_moderation";
+export * from "./announcements";
+export * from "./audit_log";

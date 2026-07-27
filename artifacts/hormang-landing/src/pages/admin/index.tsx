@@ -38,7 +38,7 @@ import {
   upsertCategory as upsertAdminCategory,
   deleteCategory as deleteAdminCategory,
 } from "@/lib/categories";
-import { markAdminAuthenticated, AdminApiError } from "@/lib/admin-client";
+import { markAdminAuthenticated, AdminApiError, adminFetch } from "@/lib/admin-client";
 import {
   fetchPricingTiers, createPricingTier, updatePricingTier, setPricingTierActive, deletePricingTier,
   fetchAdminWallets, fetchAllWalletTransactions, fetchWalletTransactions, adjustWalletBalance as adjustWalletBalanceBackend,
@@ -202,7 +202,6 @@ function readKey<T>(key: string, fallback: T): T {
   catch { return fallback; }
 }
 function writeKey<T>(key: string, val: T) { localStorage.setItem(key, JSON.stringify(val)); }
-function uid() { return Math.random().toString(36).slice(2, 10) + Date.now().toString(36); }
 
 /* ─── Answer-field extractors (mirrors provider-store.ts) ─────────── */
 function urgencyFrom(answers: Record<string, unknown>): string {
@@ -227,11 +226,13 @@ function locationFrom(answers: Record<string, unknown>): string {
   return "Toshkent";
 }
 
-/* ─── Audit log ─────────────────────────────────────────────────── */
+/* ─── Audit log — fire-and-forget write to the real backend, shared across
+   every admin/browser instead of being trapped in one admin's localStorage.
+   A failed write never blocks the action that triggered it. ─────────── */
 function logAction(params: Omit<AuditLog, "id" | "createdAt">) {
-  const entry: AuditLog = { ...params, id: uid(), createdAt: new Date().toISOString() };
-  const log = readKey<AuditLog[]>(K.ADMIN_LOG, []);
-  writeKey(K.ADMIN_LOG, [entry, ...log].slice(0, 1000));
+  adminFetch("/admin/audit-log", { method: "POST", body: params }).catch((err) => {
+    console.error("Audit log write failed:", err);
+  });
 }
 
 /* ─── User Metadata Helpers (flags / tags / notes / verified) ──── */
@@ -586,14 +587,18 @@ function MetricCard({ label, value, sub, icon: Icon, accent }: {
 const DAY_NAMES = ["Ya", "Du", "Se", "Ch", "Pa", "Ju", "Sh"];
 
 function OverviewSection({ refreshKey, setSection }: { refreshKey: number; setSection: (s: Section) => void }) {
-  void refreshKey;
+  const [auditLog, setAuditLog] = useState<AuditLog[]>([]);
+  useEffect(() => {
+    adminFetch<{ log: AuditLog[] }>("/admin/audit-log")
+      .then((res) => setAuditLog(res.log))
+      .catch((err) => console.error("Load audit log failed:", err));
+  }, [refreshKey]);
 
   /* ─── Raw data sources (all real, all from localStorage) ──────── */
   const requests   = readKey<CustomerRequest[]>(K.REQUESTS, []);
   const offers     = readKey<BuyerOffer[]>(K.OFFERS_BUYER, []);
   const txs        = getAllTangaTransactions();
   const tiers      = readKey<PricingTier[]>(K.PRICING_TIERS, []);
-  const auditLog   = readKey<AuditLog[]>(K.ADMIN_LOG, []);
   const authUsers  = readKey<{ id: string; firstName?: string; lastName?: string; role: string; createdAt?: string }[]>("hormang_auth_users", []);
   const userFlags  = getUserFlags();
   const providers  = getAllProviderSummaries();
@@ -5072,12 +5077,21 @@ function AuditLogSection({ refreshKey }: { refreshKey: number }) {
   const [page, setPage]                     = useState(1);
   const PAGE_SIZE = 50;
 
-  const load = useCallback(() => { setLog(readKey<AuditLog[]>(K.ADMIN_LOG, [])); }, []);
+  const load = useCallback(() => {
+    adminFetch<{ log: AuditLog[] }>("/admin/audit-log")
+      .then((res) => setLog(res.log))
+      .catch((err) => console.error("Load audit log failed:", err));
+  }, []);
   useEffect(() => { load(); }, [load, refreshKey]);
 
-  function clearLog() {
+  async function clearLog() {
     if (!confirm("Barcha audit loglarni o'chirishni tasdiqlaysizmi?")) return;
-    writeKey(K.ADMIN_LOG, []); setLog([]);
+    try {
+      await adminFetch("/admin/audit-log", { method: "DELETE" });
+      setLog([]);
+    } catch (err) {
+      alert(err instanceof AdminApiError ? err.message : "Xatolik yuz berdi");
+    }
   }
 
   function exportCSV() {
@@ -5389,7 +5403,9 @@ function AnnouncementsSection({ refreshKey }: { refreshKey: number }) {
   const [contentTab, setContentTab]     = useState<"write" | "preview">("write");
   const [errors, setErrors]             = useState<Record<string, string>>({});
 
-  function load() { setItems(getAllAnnouncements()); }
+  function load() {
+    getAllAnnouncements().then(setItems).catch((err) => console.error("Load announcements failed:", err));
+  }
   useEffect(() => { load(); }, [refreshKey]);
 
   function openCreate() { setEditing(null); setForm(EMPTY_FORM); setErrors({}); setContentTab("write"); setShowForm(true); }
@@ -5435,7 +5451,7 @@ function AnnouncementsSection({ refreshKey }: { refreshKey: number }) {
     reader.readAsDataURL(file);
   }
 
-  function handleSave() {
+  async function handleSave() {
     if (!validate()) return;
     setSaving(true);
     const hasTitleLoc = !!(form.titleLocalized?.ru?.trim());
@@ -5453,33 +5469,52 @@ function AnnouncementsSection({ refreshKey }: { refreshKey: number }) {
       contentLocalized: hasContentLoc ? { uz: form.content, ...form.contentLocalized } : undefined,
       ctaTextLocalized: hasCtaLoc     ? form.ctaTextLocalized : undefined,
     };
-    const saved = saveAnnouncement(payload as Parameters<typeof saveAnnouncement>[0]);
-    logAction({
-      actorId: ADMIN_USER, actorRole: "admin",
-      action: editing ? "ANNOUNCEMENT_UPDATED" : "ANNOUNCEMENT_CREATED",
-      category: "admin", targetId: saved.id, targetType: "platform",
-      description: `E'lon ${editing ? "tahrirlandi" : "yaratildi"}: ${saved.title}`,
-      metadata: { title: saved.title, type: saved.type, status: saved.status },
-    });
-    load(); closeForm(); setSaving(false);
-  }
-
-  function handleDelete(a: Announcement) {
-    if (!confirm(`"${a.title}" o'chirilsinmi?`)) return;
-    deleteAnnouncement(a.id);
-    logAction({ actorId: ADMIN_USER, actorRole: "admin", action: "ANNOUNCEMENT_DELETED", category: "admin", targetId: a.id, targetType: "platform", description: `E'lon o'chirildi: ${a.title}` });
-    load();
-  }
-
-  function handleTogglePublish(a: Announcement) {
-    const updated = toggleAnnouncementPublished(a.id);
-    if (updated) {
-      logAction({ actorId: ADMIN_USER, actorRole: "admin", action: updated.status === "published" ? "ANNOUNCEMENT_PUBLISHED" : "ANNOUNCEMENT_UNPUBLISHED", category: "admin", targetId: a.id, targetType: "platform", description: `E'lon ${updated.status === "published" ? "chop etildi" : "qoralama qilindi"}: ${a.title}` });
-      load();
+    try {
+      const saved = await saveAnnouncement(payload as Parameters<typeof saveAnnouncement>[0]);
+      logAction({
+        actorId: ADMIN_USER, actorRole: "admin",
+        action: editing ? "ANNOUNCEMENT_UPDATED" : "ANNOUNCEMENT_CREATED",
+        category: "admin", targetId: saved.id, targetType: "platform",
+        description: `E'lon ${editing ? "tahrirlandi" : "yaratildi"}: ${saved.title}`,
+        metadata: { title: saved.title, type: saved.type, status: saved.status },
+      });
+      load(); closeForm();
+    } catch (err) {
+      setErrors({ title: err instanceof AdminApiError ? err.message : "Saqlashda xatolik yuz berdi" });
+    } finally {
+      setSaving(false);
     }
   }
 
-  function handleTogglePin(a: Announcement) { toggleAnnouncementPinned(a.id); load(); }
+  async function handleDelete(a: Announcement) {
+    if (!confirm(`"${a.title}" o'chirilsinmi?`)) return;
+    try {
+      await deleteAnnouncement(a.id);
+      logAction({ actorId: ADMIN_USER, actorRole: "admin", action: "ANNOUNCEMENT_DELETED", category: "admin", targetId: a.id, targetType: "platform", description: `E'lon o'chirildi: ${a.title}` });
+      load();
+    } catch (err) {
+      alert(err instanceof AdminApiError ? err.message : "Xatolik yuz berdi");
+    }
+  }
+
+  async function handleTogglePublish(a: Announcement) {
+    try {
+      const updated = await toggleAnnouncementPublished(a.id);
+      logAction({ actorId: ADMIN_USER, actorRole: "admin", action: updated.status === "published" ? "ANNOUNCEMENT_PUBLISHED" : "ANNOUNCEMENT_UNPUBLISHED", category: "admin", targetId: a.id, targetType: "platform", description: `E'lon ${updated.status === "published" ? "chop etildi" : "qoralama qilindi"}: ${a.title}` });
+      load();
+    } catch (err) {
+      alert(err instanceof AdminApiError ? err.message : "Xatolik yuz berdi");
+    }
+  }
+
+  async function handleTogglePin(a: Announcement) {
+    try {
+      await toggleAnnouncementPinned(a.id);
+      load();
+    } catch (err) {
+      alert(err instanceof AdminApiError ? err.message : "Xatolik yuz berdi");
+    }
+  }
 
   const f = form;
   const set = (k: keyof AnnForm, v: unknown) => setForm((p) => ({ ...p, [k]: v }));

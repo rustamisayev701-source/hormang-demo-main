@@ -9,9 +9,11 @@ import { I18nProvider } from "@/contexts/i18n-context";
 import { migrateOnce } from "@/lib/migration";
 import { refreshCategoriesCache } from "@/lib/categories";
 import { refreshQuestionsCache } from "@/lib/questionnaire-store";
+import { refreshAnnouncementsCache } from "@/lib/announcements-store";
 
 migrateOnce();
 void refreshCategoriesCache().then(() => refreshQuestionsCache());
+void refreshAnnouncementsCache();
 import NotFound from "@/pages/not-found";
 import LandingPage from "@/pages/landing";
 import RoleSelectPage from "@/pages/auth/role-select";
