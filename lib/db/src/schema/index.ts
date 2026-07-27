@@ -14,3 +14,6 @@ export * from "./audit_log";
 export * from "./user_reports";
 export * from "./feedbacks";
 export * from "./user_badges";
+export * from "./requests";
+export * from "./offers";
+export * from "./chats";

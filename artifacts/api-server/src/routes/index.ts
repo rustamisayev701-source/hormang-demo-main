@@ -12,6 +12,9 @@ import adminAuditLogRouter from "./admin-audit-log";
 import reportsRouter from "./reports";
 import feedbackRouter from "./feedback";
 import badgesRouter from "./badges";
+import requestsRouter from "./requests";
+import offersRouter from "./offers";
+import chatsRouter from "./chats";
 
 const router: IRouter = Router();
 
@@ -24,6 +27,9 @@ router.use("/announcements", announcementsRouter);
 router.use("/reports", reportsRouter);
 router.use("/feedback", feedbackRouter);
 router.use("/badges", badgesRouter);
+router.use("/requests", requestsRouter);
+router.use("/offers", offersRouter);
+router.use("/chats", chatsRouter);
 router.use("/admin/pricing-tiers", adminPricingRouter);
 router.use("/admin/wallets", adminWalletsRouter);
 router.use("/admin/users", adminUsersRouter);

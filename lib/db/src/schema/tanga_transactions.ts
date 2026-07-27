@@ -22,6 +22,10 @@ export const tangaTransactionsTable = pgTable("tanga_transactions", {
   amount: integer("amount").notNull(),
   priceSom: integer("price_som"),
   description: text("description"),
+  /** Informational only (no FK) — a financial ledger row must survive the
+   * offer/request it references being deleted. */
+  offerId: text("offer_id"),
+  requestId: text("request_id"),
   createdAt: timestamp("created_at").notNull().defaultNow(),
 });
 
