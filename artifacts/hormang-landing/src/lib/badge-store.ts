@@ -7,16 +7,20 @@
  *   • 2 ADMIN-ONLY badges: recommended_by_hormang (provider-only),
  *     under_review (BOTH providers and customers — only badge for customers).
  *
- * Storage key: hormang_badges_<userId> → Badge[]
+ * Auto badges: localStorage (hormang_badges_<userId>), still tied to local
+ * review/completion/tanga data — evaluateAutoBadges() re-derives them lazily
+ * whenever a provider views their own profile.
  *
- * Auto badges are recalculated lazily on every getBadges() read; the function
- * compares the auto-set with what's stored and only mutates + emits a change
- * event when the diff is non-empty (preventing render loops).
+ * Admin badges: real user_badges table, fetched in bulk into an in-memory
+ * cache (refreshBadgesCache, called on app boot) and merged with the local
+ * auto set at read time — so getBadges()/hasBadge() stay synchronous for
+ * their many render-time callers while a grant/remove is visible to every
+ * admin/device, not just the granting browser.
  *
- * Admin badges persist until explicitly removed by an admin.
- *
- * All grant/remove actions append to the admin audit log (`hormang_admin_log`)
- * so badge moderation history is queryable from the AuditLogSection.
+ * Grant/remove actions write to the real audit_log table (admin/index.tsx's
+ * logAction backs the same table) — auto-eval changes are not audit-logged,
+ * since they run on every regular user's own profile view, not an admin
+ * session, and are re-derivable rather than a discrete admin decision.
  */
 import type { SafeUser } from "./auth-client";
 import { getStoredProviderProfile } from "./auth-client";
@@ -29,6 +33,8 @@ import {
 } from "./completion-store";
 import { getTangaTransactions } from "./tanga-history-store";
 import { emitStoreChange } from "./store-events";
+import { apiFetch } from "./api-client";
+import { adminFetch, AdminApiError } from "./admin-client";
 
 /* ─── Types ────────────────────────────────────────────────────────── */
 
@@ -196,7 +202,12 @@ export const AUTO_BADGE_TYPES: BadgeType[] = ALL_BADGE_TYPES
 export const ADMIN_BADGE_TYPES: BadgeType[] = ALL_BADGE_TYPES
   .filter((t) => BADGE_META[t].source === "admin");
 
-/* ─── Storage primitives ───────────────────────────────────────────── */
+/* ─── Storage primitives — AUTO badges only ──────────────────────────
+ * Auto badges are computed from still-local review/completion/tanga data
+ * (Phase D territory) so they stay in localStorage. Admin-granted badges
+ * (recommended_by_hormang, under_review) live in the real user_badges
+ * table instead — see the cache section below — so a grant/remove is
+ * visible to every admin/device, not just the granting browser. ────── */
 
 const KEY = (userId: string): string => `hormang_badges_${userId}`;
 
@@ -215,36 +226,47 @@ function writeBadges(userId: string, badges: Badge[]): void {
   localStorage.setItem(KEY(userId), JSON.stringify(badges));
 }
 
-/* ─── Audit log integration ────────────────────────────────────────── */
+/* ─── Admin-granted badges — real backend, in-memory cache ───────────
+ * Small, platform-wide dataset (privileged grants only), so it's fetched
+ * in bulk once (App.tsx boot) and refreshed after every grant/remove,
+ * same pattern as lib/categories — keeps getBadges()/hasBadge() sync. */
 
-const ADMIN_LOG_KEY = "hormang_admin_log";
+interface BackendBadge { userId: string; type: BadgeType; grantedAt: string; grantedBy: string; }
 
-interface AuditLogEntry {
-  id:          string;
-  actorId:     string;
-  actorRole:   "admin" | "system";
-  action:      string;
-  category:    "admin" | "marketplace" | "financial" | "referral" | "risk";
-  targetId?:   string;
-  targetType?: "user";
-  description: string;
-  metadata?:   Record<string, unknown>;
-  createdAt:   string;
+let adminBadgesCache = new Map<string, Badge[]>();
+
+export async function refreshBadgesCache(): Promise<void> {
+  try {
+    const res = await apiFetch<{ badges: BackendBadge[] }>("/badges", { auth: false });
+    const next = new Map<string, Badge[]>();
+    for (const b of res.badges) {
+      const list = next.get(b.userId) ?? [];
+      list.push({ type: b.type, source: "admin", grantedAt: b.grantedAt, grantedBy: b.grantedBy, visible: true });
+      next.set(b.userId, list);
+    }
+    adminBadgesCache = next;
+    emitStoreChange();
+  } catch (e) {
+    console.warn("[Hormang] nishonlarni yuklab bo'lmadi:", e);
+  }
 }
 
-function appendAuditLog(entry: Omit<AuditLogEntry, "id" | "createdAt">): void {
-  try {
-    const raw = localStorage.getItem(ADMIN_LOG_KEY);
-    const log: AuditLogEntry[] = raw ? JSON.parse(raw) : [];
-    const full: AuditLogEntry = {
-      ...entry,
-      id: `audit_${Date.now()}_${Math.random().toString(36).slice(2, 8)}`,
-      createdAt: new Date().toISOString(),
-    };
-    localStorage.setItem(ADMIN_LOG_KEY, JSON.stringify([full, ...log].slice(0, 1000)));
-  } catch {
-    /* swallow — audit failures never break UI */
-  }
+function adminBadgesFor(userId: string): Badge[] {
+  return adminBadgesCache.get(userId) ?? [];
+}
+
+/* ─── Audit log — real backend, shared across every admin/browser.
+ * Consolidates what used to be a second, drifted local implementation of
+ * the same hormang_admin_log store admin/index.tsx also wrote to. ───── */
+
+function appendAuditLog(entry: {
+  actorId: string; actorRole: "admin" | "system"; action: string;
+  category: "admin" | "marketplace" | "financial" | "referral" | "risk";
+  targetId?: string; targetType?: "user"; description: string; metadata?: Record<string, unknown>;
+}): void {
+  adminFetch("/admin/audit-log", { method: "POST", body: entry }).catch((err) => {
+    console.error("Audit log write failed:", err);
+  });
 }
 
 /* ─── Auto-badge evaluation ────────────────────────────────────────── */
@@ -338,14 +360,11 @@ export function computeQualifiedAutoBadges(user: SafeUser): Set<BadgeType> {
  * Idempotent: if nothing changed, no write or event is emitted.
  */
 export function evaluateAutoBadges(user: SafeUser): { added: BadgeType[]; removed: BadgeType[] } {
-  const stored    = readBadges(user.id);
+  const stored    = readBadges(user.id); // auto badges only — see storage primitives note above
   const qualified = computeQualifiedAutoBadges(user);
   const now       = new Date().toISOString();
 
-  // Keep all admin badges as-is; rebuild auto set from qualifying types,
-  // preserving original grantedAt for badges that already existed.
-  const adminBadges = stored.filter((b) => b.source === "admin");
-  const oldAutoMap  = new Map(stored.filter((b) => b.source === "auto").map((b) => [b.type, b]));
+  const oldAutoMap = new Map(stored.map((b) => [b.type, b]));
 
   const newAutoBadges: Badge[] = Array.from(qualified).map((type) => {
     const prev = oldAutoMap.get(type);
@@ -368,26 +387,10 @@ export function evaluateAutoBadges(user: SafeUser): { added: BadgeType[]; remove
     return { added, removed };
   }
 
-  writeBadges(user.id, [...adminBadges, ...newAutoBadges]);
-  // Audit auto-changes (system actor) so they show up in moderation log
-  for (const t of added) {
-    appendAuditLog({
-      actorId: "system", actorRole: "system",
-      action: "BADGE_AUTO_GRANT", category: "admin",
-      targetId: user.id, targetType: "user",
-      description: `Avtomatik nishon berildi: ${BADGE_META[t].label}`,
-      metadata: { badgeType: t, userName: `${user.firstName} ${user.lastName}` },
-    });
-  }
-  for (const t of removed) {
-    appendAuditLog({
-      actorId: "system", actorRole: "system",
-      action: "BADGE_AUTO_REMOVE", category: "admin",
-      targetId: user.id, targetType: "user",
-      description: `Avtomatik nishon olib tashlandi: ${BADGE_META[t].label}`,
-      metadata: { badgeType: t, userName: `${user.firstName} ${user.lastName}` },
-    });
-  }
+  // Not audit-logged server-side: this runs on every regular user's own
+  // profile view (no admin session), and it's a re-derivable computation,
+  // not an admin decision — unlike grant/remove below.
+  writeBadges(user.id, newAutoBadges);
   emitStoreChange();
   return { added, removed };
 }
@@ -401,7 +404,7 @@ export function evaluateAutoBadges(user: SafeUser): { added: BadgeType[]; remove
  */
 export function getBadges(userId: string, _user?: SafeUser | null): Badge[] {
   if (!userId) return [];
-  const badges = readBadges(userId).filter((b) => b.visible !== false);
+  const badges = [...readBadges(userId), ...adminBadgesFor(userId)].filter((b) => b.visible !== false);
   return badges.sort(
     (a, b) => (BADGE_META[a.type]?.order ?? 99) - (BADGE_META[b.type]?.order ?? 99),
   );
@@ -409,17 +412,17 @@ export function getBadges(userId: string, _user?: SafeUser | null): Badge[] {
 
 /** Same as getBadges but skips re-evaluation — for read-only displays. */
 export function getStoredBadges(userId: string): Badge[] {
-  return readBadges(userId)
+  return [...readBadges(userId), ...adminBadgesFor(userId)]
     .filter((b) => b.visible !== false)
     .sort((a, b) => (BADGE_META[a.type]?.order ?? 99) - (BADGE_META[b.type]?.order ?? 99));
 }
 
 /** Has the user been granted a specific badge? */
 export function hasBadge(userId: string, type: BadgeType): boolean {
-  return readBadges(userId).some((b) => b.type === type && b.visible !== false);
+  return [...readBadges(userId), ...adminBadgesFor(userId)].some((b) => b.type === type && b.visible !== false);
 }
 
-/* ─── Admin grant / remove ─────────────────────────────────────────── */
+/* ─── Admin grant / remove — real backend ────────────────────────────── */
 
 export interface AdminBadgeContext {
   adminId:      string;
@@ -428,10 +431,10 @@ export interface AdminBadgeContext {
   targetRole:   "provider" | "customer" | "both";
 }
 
-export function adminGrantBadge(
+export async function adminGrantBadge(
   type: BadgeType,
   ctx: AdminBadgeContext,
-): { ok: true } | { ok: false; reason: string } {
+): Promise<{ ok: true } | { ok: false; reason: string }> {
   const meta = BADGE_META[type];
   if (!meta) return { ok: false, reason: "Noma'lum nishon turi" };
   if (meta.source !== "admin") {
@@ -440,21 +443,15 @@ export function adminGrantBadge(
   if (meta.scope === "provider" && ctx.targetRole === "customer") {
     return { ok: false, reason: "Bu nishon faqat ijrochilarga beriladi" };
   }
-
-  const stored = readBadges(ctx.targetUserId);
-  if (stored.some((b) => b.type === type)) {
+  if (adminBadgesFor(ctx.targetUserId).some((b) => b.type === type)) {
     return { ok: false, reason: "Bu nishon allaqachon berilgan" };
   }
 
-  const badge: Badge = {
-    type,
-    source: "admin",
-    grantedAt: new Date().toISOString(),
-    grantedBy: ctx.adminId,
-    visible: true,
-    lastEvaluatedAt: new Date().toISOString(),
-  };
-  writeBadges(ctx.targetUserId, [...stored, badge]);
+  try {
+    await adminFetch("/badges/admin", { method: "POST", body: { userId: ctx.targetUserId, type, grantedBy: ctx.adminId } });
+  } catch (err) {
+    return { ok: false, reason: err instanceof AdminApiError ? err.message : "Xatolik yuz berdi" };
+  }
   appendAuditLog({
     actorId: ctx.adminId, actorRole: "admin",
     action: "BADGE_GRANT", category: "admin",
@@ -462,25 +459,25 @@ export function adminGrantBadge(
     description: `${ctx.targetName}ga "${meta.label}" nishoni berildi`,
     metadata: { badgeType: type, userName: ctx.targetName },
   });
-  emitStoreChange();
+  await refreshBadgesCache();
   return { ok: true };
 }
 
-export function adminRemoveBadge(
+export async function adminRemoveBadge(
   type: BadgeType,
   ctx: AdminBadgeContext,
-): { ok: true } | { ok: false; reason: string } {
+): Promise<{ ok: true } | { ok: false; reason: string }> {
   const meta = BADGE_META[type];
   if (!meta) return { ok: false, reason: "Noma'lum nishon turi" };
 
-  const stored = readBadges(ctx.targetUserId);
-  const target = stored.find((b) => b.type === type);
+  const target = adminBadgesFor(ctx.targetUserId).find((b) => b.type === type);
   if (!target) return { ok: false, reason: "Bu nishon mavjud emas" };
-  if (target.source === "auto") {
-    return { ok: false, reason: "Avtomatik nishonlarni qo'lda olib tashlab bo'lmaydi (shartlar bajarilmasa o'zi olinadi)" };
-  }
 
-  writeBadges(ctx.targetUserId, stored.filter((b) => b.type !== type));
+  try {
+    await adminFetch(`/badges/admin/${ctx.targetUserId}/${type}`, { method: "DELETE" });
+  } catch (err) {
+    return { ok: false, reason: err instanceof AdminApiError ? err.message : "Xatolik yuz berdi" };
+  }
   appendAuditLog({
     actorId: ctx.adminId, actorRole: "admin",
     action: "BADGE_REMOVE", category: "admin",
@@ -488,7 +485,7 @@ export function adminRemoveBadge(
     description: `${ctx.targetName}dan "${meta.label}" nishoni olib tashlandi`,
     metadata: { badgeType: type, userName: ctx.targetName },
   });
-  emitStoreChange();
+  await refreshBadgesCache();
   return { ok: true };
 }
 

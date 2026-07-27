@@ -293,8 +293,8 @@ export function AdminBadgeManager({
     s.replace(/\{\{(\w+)\}\}/g, (_, k) => String(vars[k] ?? ""));
   const stored = getBadges(targetUser.userId);
 
-  function grant(type: BadgeType) {
-    const r = adminGrantBadge(type, {
+  async function grant(type: BadgeType) {
+    const r = await adminGrantBadge(type, {
       adminId,
       targetUserId: targetUser.userId,
       targetName:   targetUser.name,
@@ -304,8 +304,8 @@ export function AdminBadgeManager({
     onChange?.();
   }
 
-  function remove(type: BadgeType) {
-    const r = adminRemoveBadge(type, {
+  async function remove(type: BadgeType) {
+    const r = await adminRemoveBadge(type, {
       adminId,
       targetUserId: targetUser.userId,
       targetName:   targetUser.name,

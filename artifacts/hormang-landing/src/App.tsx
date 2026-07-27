@@ -10,10 +10,12 @@ import { migrateOnce } from "@/lib/migration";
 import { refreshCategoriesCache } from "@/lib/categories";
 import { refreshQuestionsCache } from "@/lib/questionnaire-store";
 import { refreshAnnouncementsCache } from "@/lib/announcements-store";
+import { refreshBadgesCache } from "@/lib/badge-store";
 
 migrateOnce();
 void refreshCategoriesCache().then(() => refreshQuestionsCache());
 void refreshAnnouncementsCache();
+void refreshBadgesCache();
 import NotFound from "@/pages/not-found";
 import LandingPage from "@/pages/landing";
 import RoleSelectPage from "@/pages/auth/role-select";

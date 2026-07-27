@@ -11,6 +11,7 @@ import adminUsersRouter from "./admin-users";
 import adminAuditLogRouter from "./admin-audit-log";
 import reportsRouter from "./reports";
 import feedbackRouter from "./feedback";
+import badgesRouter from "./badges";
 
 const router: IRouter = Router();
 
@@ -22,6 +23,7 @@ router.use("/categories", categoriesRouter);
 router.use("/announcements", announcementsRouter);
 router.use("/reports", reportsRouter);
 router.use("/feedback", feedbackRouter);
+router.use("/badges", badgesRouter);
 router.use("/admin/pricing-tiers", adminPricingRouter);
 router.use("/admin/wallets", adminWalletsRouter);
 router.use("/admin/users", adminUsersRouter);

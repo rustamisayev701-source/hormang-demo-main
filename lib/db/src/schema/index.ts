@@ -13,3 +13,4 @@ export * from "./announcements";
 export * from "./audit_log";
 export * from "./user_reports";
 export * from "./feedbacks";
+export * from "./user_badges";
