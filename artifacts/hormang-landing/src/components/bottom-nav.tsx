@@ -1,4 +1,4 @@
-import { useEffect } from "react";
+import { useEffect, useState } from "react";
 import { useLocation } from "wouter";
 import { Home, LayoutGrid, ClipboardList, MessageCircle, LayoutDashboard, Wallet, List } from "lucide-react";
 import { useAuth } from "@/contexts/auth-context";
@@ -6,7 +6,6 @@ import { useI18n } from "@/contexts/i18n-context";
 import { getOffersByCustomer, getTotalCustomerUnread } from "@/lib/requests-store";
 import { getTotalUnread, getUnseenRequests } from "@/lib/provider-store";
 import { getLocalProfile } from "@/lib/local-profile";
-import { useStoreRefresh } from "@/hooks/use-store-refresh";
 import { useToast } from "@/hooks/use-toast";
 
 export function BottomNav() {
@@ -14,13 +13,10 @@ export function BottomNav() {
   const { user, activeRole, providerProfile } = useAuth();
   const { t } = useI18n();
   const { toast } = useToast();
-  useStoreRefresh();
 
   useEffect(() => {
     window.scrollTo(0, 0);
   }, [window.location.pathname]);
-
-  if (!user) return null;
 
   const isProvider = activeRole === "provider";
   const selectedCategories = providerProfile?.categories ?? [];
@@ -29,10 +25,41 @@ export function BottomNav() {
   const serviceAreas = localProfile?.serviceAreas ?? [];
   const serviceAreaV2 = localProfile?.serviceAreaV2;
 
-  const pendingOffers = isProvider ? 0 : getOffersByCustomer(user?.id ?? "").filter((o) => o.status === "pending").length;
-  const customerChatUnread = isProvider ? 0 : getTotalCustomerUnread(user?.id ?? "");
-  const unseenCount = isProvider ? getUnseenRequests(selectedCategories, serviceAreas, user?.id ?? "", serviceAreaV2).length : 0;
-  const unreadChats = isProvider ? getTotalUnread(user?.id ?? "") : 0;
+  const [pendingOffers, setPendingOffers] = useState(0);
+  const [customerChatUnread, setCustomerChatUnread] = useState(0);
+  const [unseenCount, setUnseenCount] = useState(0);
+  const [unreadChats, setUnreadChats] = useState(0);
+
+  useEffect(() => {
+    if (!user?.id) return;
+    let cancelled = false;
+    async function load() {
+      try {
+        if (isProvider) {
+          const [unseen, unread] = await Promise.all([
+            getUnseenRequests(selectedCategories, serviceAreas, user!.id, serviceAreaV2),
+            getTotalUnread(user!.id),
+          ]);
+          if (cancelled) return;
+          setUnseenCount(unseen.length);
+          setUnreadChats(unread);
+        } else {
+          const [offers, unread] = await Promise.all([getOffersByCustomer(user!.id), getTotalCustomerUnread(user!.id)]);
+          if (cancelled) return;
+          setPendingOffers(offers.filter((o) => o.status === "pending").length);
+          setCustomerChatUnread(unread);
+        }
+      } catch (err) {
+        console.error("Load bottom nav badges failed:", err);
+      }
+    }
+    load();
+    const interval = setInterval(load, 15000);
+    return () => { cancelled = true; clearInterval(interval); };
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [user?.id, isProvider]);
+
+  if (!user) return null;
 
   const BUYER_TABS = [
     { label: t.bottomNav.buyer.home,       icon: Home,            href: "/customer-home" },

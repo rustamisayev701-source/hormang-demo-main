@@ -72,7 +72,7 @@ import {
 } from "@/lib/tanga-history-store";
 import { getTangaBalance } from "@/lib/tanga-store";
 import { getReferralCode, getReferralStats, getInviterId, processReferralReward, TANGA_PER_REFERRAL } from "@/lib/referral-store";
-import { getOffers, getPhoneRegistry, getOffersByRequestId, markOfferCompleted, type Offer as BuyerOfferFull, updateOfferStatus, deleteRequestCascade, deleteUserDataCascade, getLast10RejectedEligibility, adminRefundProvider, getRecentRequestCount, getRequestById, REQUEST_DAILY_FLAG_THRESHOLD } from "@/lib/requests-store";
+import { getAllOffersAdmin, getAllRequestsAdmin, getAllChatsAdmin, getPhoneRegistry, getOffersByRequestId, markOfferCompleted, type Offer as BuyerOfferFull, type CustomerRequest as StoreCustomerRequest, type Chat as StoreChat, updateOfferStatus, deleteRequestCascade, adminSetRequestStatus, adminDeleteOffer, deleteUserDataCascade, getLast10RejectedEligibility, adminRefundProvider, getRecentRequestCount, getRequestById, REQUEST_DAILY_FLAG_THRESHOLD } from "@/lib/requests-store";
 import { getAvgResponseMinutes, formatAvgResponseTime } from "@/lib/response-time-store";
 import {
   getAllAnnouncements, saveAnnouncement, deleteAnnouncement,
@@ -161,21 +161,8 @@ interface AuditLog {
   metadata?: Record<string, unknown>;
   createdAt: string;
 }
-interface CustomerRequest {
-  id: string; categoryId: string; categoryName: string; emoji: string;
-  answers: Record<string, unknown>; status: string; createdAt: string; offerCount: number;
-  customerId?: string; customerName?: string;
-  region?: string; district?: string;
-  requestPhotos?: string[];
-}
-interface BuyerOffer {
-  id: string; requestId: string; masterId: string; masterName: string;
-  masterInitials: string; masterColor: string; price: number; message: string;
-  priceLabel?: string; completionTime?: string; startDate?: string;
-  avgResponseTime: number; createdAt: string; status: string;
-  tangaSpent?: number;
-  refunded?: boolean;
-}
+type CustomerRequest = StoreCustomerRequest;
+type BuyerOffer = BuyerOfferFull;
 interface PricingTier {
   id: string; name: string; credits: number; price: number;
   salePrice?: number; saleLimit?: number; salePurchaseCount?: number;
@@ -594,14 +581,20 @@ function OverviewSection({ refreshKey, setSection }: { refreshKey: number; setSe
       .catch((err) => console.error("Load audit log failed:", err));
   }, [refreshKey]);
 
-  /* ─── Raw data sources (all real, all from localStorage) ──────── */
-  const requests   = readKey<CustomerRequest[]>(K.REQUESTS, []);
-  const offers     = readKey<BuyerOffer[]>(K.OFFERS_BUYER, []);
+  /* ─── Raw data sources (marketplace rows are real, backend-fetched) ── */
+  const [requests, setRequests] = useState<CustomerRequest[]>([]);
+  const [offers, setOffers] = useState<BuyerOffer[]>([]);
+  useEffect(() => {
+    Promise.all([getAllRequestsAdmin(), getAllOffersAdmin()]).then(([reqs, ofrs]) => {
+      setRequests(reqs);
+      setOffers(ofrs);
+    }).catch((err) => console.error("Load marketplace overview data failed:", err));
+  }, [refreshKey]);
   const txs        = getAllTangaTransactions();
   const tiers      = readKey<PricingTier[]>(K.PRICING_TIERS, []);
   const authUsers  = readKey<{ id: string; firstName?: string; lastName?: string; role: string; createdAt?: string }[]>("hormang_auth_users", []);
   const userFlags  = getUserFlags();
-  const providers  = getAllProviderSummaries();
+  const providers  = getAllProviderSummaries(offers);
 
   /* ─── Time helpers ────────────────────────────────────────────── */
   const now       = Date.now();
@@ -974,40 +967,37 @@ function RequestsSection({ refreshKey }: { refreshKey: number }) {
   const [filterCat, setFilterCat]       = useState("all");
 
   const load = useCallback(() => {
-    setRequests(
-      readKey<CustomerRequest[]>(K.REQUESTS, [])
-        .sort((a, b) => new Date(b.createdAt).getTime() - new Date(a.createdAt).getTime())
-    );
+    getAllRequestsAdmin()
+      .then((rows) => setRequests(rows.sort((a, b) => new Date(b.createdAt).getTime() - new Date(a.createdAt).getTime())))
+      .catch((err) => console.error("Load requests failed:", err));
   }, []);
 
   useEffect(() => { load(); }, [load, refreshKey]);
 
-  function updateStatus(id: string, status: string) {
+  async function updateStatus(id: string, status: CustomerRequest["status"]) {
     if (status === "completed") {
       // Route through markOfferCompleted so offer status is updated,
       // counters are incremented for both provider and customer, and
       // a system message is sent. Falls back to direct request update
       // if no accepted/in_progress offer exists for this request.
-      const requestOffers = getOffersByRequestId(id);
+      const requestOffers = await getOffersByRequestId(id);
       const activeOffer = requestOffers.find(
         (o) => o.status === "accepted" || o.status === "in_progress"
       );
       if (activeOffer) {
-        markOfferCompleted(activeOffer.id);
+        await markOfferCompleted(activeOffer.id);
         setRequests((prev) => prev.map((r) => r.id === id ? { ...r, status: "completed" } : r));
         logAction({ actorId: ADMIN_USER, actorRole: "admin", action: "UPDATE_REQUEST_STATUS", category: "marketplace", targetId: id, targetType: "request", description: `Status o'zgartirildi: completed`, metadata: { newStatus: "completed" } });
         return;
       }
     }
-    const updated = requests.map((r) => r.id === id ? { ...r, status } : r);
-    writeKey(K.REQUESTS, updated);
-    setRequests(updated);
-    emitStoreChange();
+    await adminSetRequestStatus(id, status);
+    setRequests((prev) => prev.map((r) => r.id === id ? { ...r, status } : r));
     logAction({ actorId: ADMIN_USER, actorRole: "admin", action: "UPDATE_REQUEST_STATUS", category: "marketplace", targetId: id, targetType: "request", description: `Status o'zgartirildi: ${status}`, metadata: { newStatus: status } });
   }
-  function deleteRequest(id: string) {
+  async function deleteRequest(id: string) {
     if (!confirm("Bu so'rovni o'chirishni tasdiqlaysizmi?\nBog'liq takliflar va suhbatlar ham o'chiriladi, ijrochilarga Tanga qaytariladi.")) return;
-    deleteRequestCascade(id);
+    await deleteRequestCascade(id);
     setRequests((prev) => prev.filter((r) => r.id !== id));
     logAction({ actorId: ADMIN_USER, actorRole: "admin", action: "DELETE_REQUEST", category: "marketplace", targetId: id, targetType: "request", description: "So'rov o'chirildi (cascade)" });
   }
@@ -1160,10 +1150,9 @@ function OffersSection({ refreshKey }: { refreshKey: number }) {
   const [search, setSearch]               = useState("");
 
   const load = useCallback(() => {
-    setOffers(
-      readKey<BuyerOffer[]>(K.OFFERS_BUYER, [])
-        .sort((a, b) => new Date(b.createdAt).getTime() - new Date(a.createdAt).getTime())
-    );
+    getAllOffersAdmin()
+      .then((rows) => setOffers(rows.sort((a, b) => new Date(b.createdAt).getTime() - new Date(a.createdAt).getTime())))
+      .catch((err) => console.error("Load offers failed:", err));
   }, []);
 
   useEffect(() => { load(); }, [load, refreshKey]);
@@ -1262,7 +1251,7 @@ function OffersSection({ refreshKey }: { refreshKey: number }) {
                       {o.priceLabel ?? fmtMoney(o.price)}
                     </td>
                     <td className="px-4 py-3 text-xs text-gray-600">
-                      {o.completionTime ?? "—"}
+                      {o.completionDurationMinutes ? `${o.completionDurationMinutes} daqiqa` : "—"}
                     </td>
                     <td className="px-4 py-3"><StatusBadge status={o.status} /></td>
                     <td className="px-4 py-3 font-mono text-[10px] text-gray-400">{o.requestId?.slice(0, 8)}</td>
@@ -1354,10 +1343,9 @@ function AdvancedUserDetailModal({
                 :                        "bg-blue-600";
 
   /* Data for sub-tabs */
-  const allOffers   = readKey<BuyerOffer[]>(K.OFFERS_BUYER, []);
-  const allRequests = readKey<CustomerRequest[]>(K.REQUESTS, []);
-  const userOffers   = allOffers.filter((o) => o.masterId === u.userId);
-  const userRequests = allRequests.filter((r) => r.customerId === u.userId);
+  const [userOffers, setUserOffers] = useState<BuyerOffer[]>([]);
+  const [userRequests, setUserRequests] = useState<CustomerRequest[]>([]);
+  const [recentRequestCount, setRecentRequestCount] = useState(0);
   const [tangaTxs, setTangaTxs] = useState<TangaTx[]>([]);
   const tangaBalance = u.tangaBalance ?? 0;
 
@@ -1366,6 +1354,19 @@ function AdvancedUserDetailModal({
       .then(({ transactions }) => setTangaTxs(backendTxsToLocal(transactions)))
       .catch((err) => console.error("Load user transactions failed:", err));
   }, [u.userId]);
+
+  useEffect(() => {
+    Promise.all([getAllOffersAdmin(), getAllRequestsAdmin()]).then(([offers, requests]) => {
+      setUserOffers(offers.filter((o) => o.masterId === u.userId));
+      setUserRequests(requests.filter((r) => r.customerId === u.userId));
+    }).catch((err) => console.error("Load user marketplace data failed:", err));
+    getRecentRequestCount(u.userId).then(setRecentRequestCount).catch(() => {});
+  }, [u.userId]);
+
+  const [eligibility, setEligibility] = useState<{ eligible: boolean; refundAmount: number; offers: BuyerOffer[] }>({ eligible: false, refundAmount: 0, offers: [] });
+  useEffect(() => {
+    getLast10RejectedEligibility(u.userId).then(setEligibility).catch((err) => console.error("Load refund eligibility failed:", err));
+  }, [u.userId, refundDone]);
 
   /* Admin actions */
   async function handleFlagToggle() {
@@ -1477,18 +1478,14 @@ function AdvancedUserDetailModal({
                     <Flag className="w-2.5 h-2.5" /> Flaglangan
                   </span>
                 )}
-                {(() => {
-                  const last24h = getRecentRequestCount(u.userId);
-                  if (last24h < REQUEST_DAILY_FLAG_THRESHOLD) return null;
-                  return (
-                    <span
-                      className="px-1.5 py-0.5 rounded-full text-[9px] font-bold bg-amber-50 text-amber-700 border border-amber-200 flex items-center gap-0.5"
-                      title="Shubhali faollik — oxirgi 24 soatda 5+ ta so'rov"
-                    >
-                      ⚠️ {last24h} ta so'rov bugun
-                    </span>
-                  );
-                })()}
+                {recentRequestCount >= REQUEST_DAILY_FLAG_THRESHOLD && (
+                  <span
+                    className="px-1.5 py-0.5 rounded-full text-[9px] font-bold bg-amber-50 text-amber-700 border border-amber-200 flex items-center gap-0.5"
+                    title="Shubhali faollik — oxirgi 24 soatda 5+ ta so'rov"
+                  >
+                    ⚠️ {recentRequestCount} ta so'rov bugun
+                  </span>
+                )}
               </div>
               <div className="flex items-center gap-1.5 flex-wrap mt-1">
                 {(u.role === "provider" || u.role === "both") && (
@@ -1684,13 +1681,12 @@ function AdvancedUserDetailModal({
 
             {/* ── OFFERS ── */}
             {tab === "offers" && (() => {
-              const eligibility = getLast10RejectedEligibility(u.userId);
               const { offers: last10, eligible, refundAmount } = eligibility;
               const alreadyRefunded = !refundDone && last10.length === 10 && last10.every((o) => o.refunded);
 
-              function handleAdminRefund() {
+              async function handleAdminRefund() {
                 if (!confirm(`${u.name}ga ${refundAmount} Tanga (50%) qaytarilsinmi?`)) return;
-                const result = adminRefundProvider(ADMIN_USER, u.userId);
+                const result = await adminRefundProvider(u.userId);
                 if (result.ok) {
                   logAction({
                     actorId: ADMIN_USER, actorRole: "admin", action: "PROVIDER_REFUND",
@@ -1700,7 +1696,7 @@ function AdvancedUserDetailModal({
                   });
                   setRefundDone(true);
                 } else {
-                  alert("Qaytarish amalga oshmadi: " + (result.reason ?? "noma'lum xato"));
+                  alert("Qaytarish amalga oshmadi: noma'lum xato");
                 }
               }
 
@@ -1897,7 +1893,7 @@ function AdvancedUserDetailModal({
                       const isIn   = signed >= 0;
                       return (
                         <div key={tx.id} className="bg-gray-50 rounded-xl p-3 flex items-center gap-3 border border-gray-100">
-                          <CategoryIcon categoryId={getRequestById(tx.requestId)?.categoryId ?? null} emoji={tx.categoryEmoji || "📋"} size={24} shape="square" className="flex-shrink-0" />
+                          <CategoryIcon categoryId={null} emoji={tx.categoryEmoji || "📋"} size={24} shape="square" className="flex-shrink-0" />
                           <div className="flex-1 min-w-0">
                             <p className="font-semibold text-gray-800 text-xs truncate">{tx.categoryName}</p>
                             <p className="text-[10px] text-gray-400">{new Date(tx.createdAt).toLocaleDateString("uz-UZ")}</p>
@@ -2041,22 +2037,9 @@ function AdvancedUserDetailModal({
    MARKETPLACE SECTION — Unified Request + Offers Control Center
    ════════════════════════════════════════════════════════════════════ */
 
-/* ── Shared admin-chat interfaces (read from hormang_chats) ───────── */
-interface AdminChatMsg {
-  id: string;
-  sender: "customer" | "master" | "system";
-  text: string;
-  timestamp: string;
-  attachment?: { type: "image" | "file"; url: string };
-}
-interface AdminChatRow {
-  id: string;
-  requestId: string;
-  masterId: string;
-  masterName?: string;
-  customerName?: string;
-  messages: AdminChatMsg[];
-}
+/* ── Shared admin-chat types (backed by the real /chats/admin/all endpoint) ── */
+type AdminChatMsg = StoreChat["messages"][number];
+type AdminChatRow = StoreChat;
 
 /* ── Kanban column classifier ─────────────────────────────────────── */
 type KanbanCol = "new" | "incoming" | "assigned" | "completed" | "problem";
@@ -2259,7 +2242,7 @@ function RequestCommandCenter({ row, onClose, onAcceptOffer, onRejectOffer, onRe
   onAcceptOffer: (offerId: string, requestId: string) => void;
   onRejectOffer: (offerId: string) => void;
   onRemoveOffer: (offerId: string) => void;
-  onUpdateStatus: (reqId: string, status: string) => void;
+  onUpdateStatus: (reqId: string, status: CustomerRequest["status"]) => void;
   onDelete: (reqId: string) => void;
 }) {
   const [tab, setTab] = useState<"overview" | "offers" | "timeline" | "chat" | "metrics">("overview");
@@ -2486,7 +2469,7 @@ function RequestCommandCenter({ row, onClose, onAcceptOffer, onRejectOffer, onRe
                           <StatusBadge status={o.status} />
                         </div>
                         <p className="text-red-600 font-extrabold text-base mt-0.5">{o.priceLabel ?? fmtMoney(o.price)}</p>
-                        {o.completionTime && <p className="text-xs text-gray-500 mt-0.5">⏱ {o.completionTime}</p>}
+                        {o.completionDurationMinutes ? <p className="text-xs text-gray-500 mt-0.5">⏱ {o.completionDurationMinutes} daqiqa</p> : null}
                         {o.message && <p className="text-sm text-gray-700 mt-2 leading-relaxed">{o.message}</p>}
                         {Array.isArray((o as any).fileUrls) && (o as any).fileUrls.length > 0 && (
                           <div className="flex gap-2 mt-2 flex-wrap">
@@ -2644,13 +2627,11 @@ function MarketplaceSection({ refreshKey }: { refreshKey: number }) {
   const [commandId, setCommandId] = useState<string | null>(null);
 
   const load = useCallback(() => {
-    const reqs = readKey<CustomerRequest[]>(K.REQUESTS, [])
-      .sort((a, b) => new Date(b.createdAt).getTime() - new Date(a.createdAt).getTime());
-    const ofrs = readKey<BuyerOffer[]>(K.OFFERS_BUYER, []);
-    const cts = readKey<AdminChatRow[]>(K.CHATS_BUYER, []);
-    setRequests(reqs);
-    setOffers(ofrs);
-    setChats(cts);
+    Promise.all([getAllRequestsAdmin(), getAllOffersAdmin(), getAllChatsAdmin()]).then(([reqs, ofrs, cts]) => {
+      setRequests(reqs.sort((a, b) => new Date(b.createdAt).getTime() - new Date(a.createdAt).getTime()));
+      setOffers(ofrs);
+      setChats(cts);
+    }).catch((err) => console.error("Load marketplace data failed:", err));
   }, []);
 
   useEffect(() => { load(); }, [load, refreshKey]);
@@ -2658,51 +2639,31 @@ function MarketplaceSection({ refreshKey }: { refreshKey: number }) {
   const offersFor = (requestId: string) => offers.filter((o) => o.requestId === requestId);
   const chatFor = (requestId: string) => chats.find((c) => c.requestId === requestId);
 
-  function acceptOffer(offerId: string, requestId: string) {
-    // Route through the shared helper so sibling rejects refund Tanga properly.
-    updateOfferStatus(offerId, "accepted");
-    const updatedReqs = requests.map((r) => r.id === requestId ? { ...r, status: "accepted" } : r);
-    writeKey(K.REQUESTS, updatedReqs);
-    setRequests(updatedReqs);
-    setOffers((prev) => prev.map((o) => ({
-      ...o,
-      status: o.requestId === requestId
-        ? (o.id === offerId ? "accepted" : o.status === "pending" ? "rejected" : o.status)
-        : o.status,
-    })));
-    logAction({ actorId: ADMIN_USER, actorRole: "admin", action: "ADMIN_ACCEPT_OFFER", category: "marketplace", targetId: offerId, targetType: "offer", description: "Taklif qabul qilindi (Tanga qaytarildi)", metadata: { requestId } });
+  async function acceptOffer(offerId: string, requestId: string) {
+    await updateOfferStatus(offerId, "accepted");
+    load();
+    logAction({ actorId: ADMIN_USER, actorRole: "admin", action: "ADMIN_ACCEPT_OFFER", category: "marketplace", targetId: offerId, targetType: "offer", description: "Taklif qabul qilindi", metadata: { requestId } });
   }
-  function rejectOffer(offerId: string) {
-    // Use the shared store helper so the provider's Tanga is refunded.
-    updateOfferStatus(offerId, "rejected");
-    setOffers((prev) => prev.map((o) => o.id === offerId ? { ...o, status: "rejected" } : o));
-    logAction({ actorId: ADMIN_USER, actorRole: "admin", action: "ADMIN_REJECT_OFFER", category: "marketplace", targetId: offerId, targetType: "offer", description: "Taklif rad etildi (Tanga qaytarildi)" });
+  async function rejectOffer(offerId: string) {
+    await updateOfferStatus(offerId, "rejected");
+    load();
+    logAction({ actorId: ADMIN_USER, actorRole: "admin", action: "ADMIN_REJECT_OFFER", category: "marketplace", targetId: offerId, targetType: "offer", description: "Taklif rad etildi" });
   }
-  function removeOffer(offerId: string) {
-    if (!confirm("Bu taklifni o'chirishni tasdiqlaysizmi? Pending bo'lsa, ijrochiga Tanga qaytariladi.")) return;
-    const target = offers.find((o) => o.id === offerId);
-    if (target && target.status === "pending") {
-      updateOfferStatus(offerId, "rejected");
-    }
-    const updated = offers.filter((o) => o.id !== offerId);
-    writeKey(K.OFFERS_BUYER, updated);
-    setOffers(updated);
-    emitStoreChange();
+  async function removeOffer(offerId: string) {
+    if (!confirm("Bu taklifni o'chirishni tasdiqlaysizmi?")) return;
+    await adminDeleteOffer(offerId);
+    load();
     logAction({ actorId: ADMIN_USER, actorRole: "admin", action: "ADMIN_REMOVE_OFFER", category: "marketplace", targetId: offerId, targetType: "offer", description: "Taklif o'chirildi" });
   }
-  function updateRequestStatus(reqId: string, status: string) {
-    const updated = requests.map((r) => r.id === reqId ? { ...r, status } : r);
-    writeKey(K.REQUESTS, updated);
-    setRequests(updated);
-    emitStoreChange();
+  async function updateRequestStatus(reqId: string, status: CustomerRequest["status"]) {
+    await adminSetRequestStatus(reqId, status);
+    load();
     logAction({ actorId: ADMIN_USER, actorRole: "admin", action: "ADMIN_UPDATE_REQUEST", category: "marketplace", targetId: reqId, targetType: "request", description: `So'rov statusi yangilandi: ${status}`, metadata: { newStatus: status } });
   }
-  function deleteRequest(reqId: string) {
+  async function deleteRequest(reqId: string) {
     if (!confirm("Bu so'rovni o'chirish tasdiqlaysizmi?\nBog'liq takliflar va suhbatlar ham o'chiriladi, ijrochilarga Tanga qaytariladi.")) return;
-    deleteRequestCascade(reqId);
-    setRequests((prev) => prev.filter((r) => r.id !== reqId));
-    setOffers((prev) => prev.filter((o) => o.requestId !== reqId));
-    setChats((prev) => prev.filter((c) => c.requestId !== reqId));
+    await deleteRequestCascade(reqId);
+    load();
     if (commandId === reqId) setCommandId(null);
     logAction({ actorId: ADMIN_USER, actorRole: "admin", action: "ADMIN_DELETE_REQUEST", category: "marketplace", targetId: reqId, targetType: "request", description: "So'rov o'chirildi (cascade)" });
   }
@@ -2907,8 +2868,13 @@ function UsersSection({ refreshKey, onGoToFeedback, openUserId, onOpenUserIdCons
       console.error("Load reports for user counts failed:", err);
     }
 
-    const allOffers   = readKey<BuyerOffer[]>(K.OFFERS_BUYER, []);
-    const allRequests = readKey<CustomerRequest[]>(K.REQUESTS, []);
+    let allOffers: BuyerOffer[] = [];
+    let allRequests: CustomerRequest[] = [];
+    try {
+      [allOffers, allRequests] = await Promise.all([getAllOffersAdmin(), getAllRequestsAdmin()]);
+    } catch (err) {
+      console.error("Load marketplace data for user list failed:", err);
+    }
     const registry    = readKey<Record<string, { name: string; initials: string }>>(
       "hormang_customer_registry", {}
     );
@@ -3637,7 +3603,7 @@ function AdminUserTxModal({
   userId: string; userName: string; balance: number; onClose: () => void;
 }) {
   const [txs, setTxs] = useState<TangaTx[]>([]);
-  const allOffers = getOffers() as BuyerOfferFull[];
+  const [allOffers, setAllOffers] = useState<BuyerOfferFull[]>([]);
   const totalSpent = txs.filter(txIsOfferSpend).reduce((s, t) => s + t.amount, 0);
   const [viewOfferId, setViewOfferId] = useState<string | null>(null);
   const viewedOffer = viewOfferId ? allOffers.find((o) => o.id === viewOfferId) : undefined;
@@ -3646,6 +3612,7 @@ function AdminUserTxModal({
     fetchWalletTransactions(userId)
       .then(({ transactions }) => setTxs(backendTxsToLocal(transactions)))
       .catch((err) => console.error("Load user transactions failed:", err));
+    getAllOffersAdmin().then(setAllOffers).catch((err) => console.error("Load offers failed:", err));
   }, [userId]);
 
   return (
@@ -3707,7 +3674,7 @@ function AdminUserTxModal({
                   const isIn   = signed >= 0;
                   return (
                     <div key={tx.id} className="bg-gray-50 rounded-xl p-3 flex items-center gap-3 border border-gray-100">
-                      <CategoryIcon categoryId={getRequestById(tx.requestId)?.categoryId ?? null} emoji={tx.categoryEmoji || "📋"} size={28} shape="square" className="flex-shrink-0" />
+                      <CategoryIcon categoryId={null} emoji={tx.categoryEmoji || "📋"} size={28} shape="square" className="flex-shrink-0" />
                       <div className="flex-1 min-w-0">
                         <p className="font-semibold text-gray-800 text-xs truncate">{tx.categoryName}</p>
                         <p className="text-[10px] text-gray-400">
@@ -3753,7 +3720,7 @@ type ProviderSummary = {
   totalPurchased: number; totalSpent: number; referralEarned: number; txCount: number;
 };
 
-function getAllProviderSummaries(): ProviderSummary[] {
+function getAllProviderSummaries(offers: BuyerOffer[] = []): ProviderSummary[] {
   const map = new Map<string, { userId: string; name: string }>();
 
   // 1. Real registered users (canonical source — auth-client.ts USERS_KEY)
@@ -3768,7 +3735,6 @@ function getAllProviderSummaries(): ProviderSummary[] {
   } catch {}
 
   const allTxs    = getAllTangaTransactions();
-  const offers    = readKey<BuyerOffer[]>(K.OFFERS_BUYER, []);
 
   // 2. Anyone who ever spent/purchased/received Tanga (catches role-swapped buyers, legacy users)
   for (const tx of allTxs) {
@@ -3947,7 +3913,14 @@ function MonetizationSection({ refreshKey }: { refreshKey: number }) {
 /* ─── Overview Tab ───────────────────────────────────────────────── */
 function MonoOverview({ txs, providers, tiers }: { txs: TangaTx[]; providers: ProviderSummary[]; tiers: PricingTier[] }) {
   const [flowPeriod, setFlowPeriod] = useState<"daily" | "weekly" | "monthly" | "yearly">("monthly");
-  const allOffers = readKey<BuyerOffer[]>(K.OFFERS_BUYER, []);
+  const [allOffers, setAllOffers] = useState<BuyerOffer[]>([]);
+  const [requests, setRequests] = useState<CustomerRequest[]>([]);
+  useEffect(() => {
+    Promise.all([getAllOffersAdmin(), getAllRequestsAdmin()]).then(([ofrs, reqs]) => {
+      setAllOffers(ofrs);
+      setRequests(reqs);
+    }).catch((err) => console.error("Load marketplace stats failed:", err));
+  }, []);
   const now = new Date();
   const todayStr = now.toISOString().slice(0, 10);
   const weekAgo  = new Date(now.getTime() - 7 * 86400000);
@@ -3977,7 +3950,6 @@ function MonoOverview({ txs, providers, tiers }: { txs: TangaTx[]; providers: Pr
   const totalCirc  = providers.reduce((s, p) => s + p.balance, 0);
 
   const avgTangaPerProv = providers.length > 0 ? Math.round(totalCirc / providers.length) : 0;
-  const requests        = readKey<CustomerRequest[]>(K.REQUESTS, []);
   const avgOffersPerReq = requests.length > 0 ? (allOffers.length / requests.length).toFixed(1) : "—";
   const spendTxs        = txs.filter((t) => t.type === "spend" || (!t.type && t.amount > 0));
   const avgCostPerOffer = spendTxs.length > 0 ? Math.round(spendTxs.reduce((s, t) => s + t.amount, 0) / spendTxs.length) : 0;
@@ -4664,7 +4636,10 @@ function MonoTransactions({ txs, reload }: { txs: TangaTx[]; reload: () => void 
   const [filterType, setFilterType]   = useState<"all" | "spend" | "purchase" | "referral" | "admin_adjustment">("all");
   const [filterDate, setFilterDate]   = useState<"all" | "today" | "week" | "month">("all");
   const [viewOfferId, setViewOfferId] = useState<string | null>(null);
-  const allOffers = getOffers() as BuyerOfferFull[];
+  const [allOffers, setAllOffers] = useState<BuyerOfferFull[]>([]);
+  useEffect(() => {
+    getAllOffersAdmin().then(setAllOffers).catch((err) => console.error("Load offers failed:", err));
+  }, []);
 
   /* ── User lookup: id → { name, phone } ────────────────────────── */
   const userLookup = useMemo(() => {
@@ -7055,10 +7030,15 @@ export default function AdminDashboard() {
     setAuthed(false);
   }
 
-  if (!authed) return <LoginGate onSuccess={() => setAuthed(true)} />;
+  const [unseenAlerts, setUnseenAlerts] = useState(0);
+  useEffect(() => {
+    if (!authed) return;
+    getAllRequestsAdmin()
+      .then((requests) => setUnseenAlerts(requests.filter((r) => r.status === "open" && r.offerCount === 0).length))
+      .catch((err) => console.error("Load unseen alerts count failed:", err));
+  }, [authed, refreshKey]);
 
-  const requests     = readKey<CustomerRequest[]>(K.REQUESTS, []);
-  const unseenAlerts = requests.filter((r) => r.status === "open" && r.offerCount === 0).length;
+  if (!authed) return <LoginGate onSuccess={() => setAuthed(true)} />;
 
   const sectionProps = { refreshKey };
 

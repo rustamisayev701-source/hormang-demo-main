@@ -1,7 +1,6 @@
-import { useState, useRef, useEffect } from "react";
+import { useState, useRef, useEffect, useCallback } from "react";
 import { useLocation } from "wouter";
 
-import { useStoreRefresh } from "@/hooks/use-store-refresh";
 import { motion, AnimatePresence } from "framer-motion";
 import {
   Search, MessageCircle, ChevronRight, X, ChevronDown, SlidersHorizontal,
@@ -11,14 +10,14 @@ import { compressImage } from "@/lib/image-utils";
 import { BottomNav } from "@/components/bottom-nav";
 import {
   getProviderChats, markChatRead, sendProviderMessage, getProviderChatById,
-  addUpcomingService, getUpcomingServices,
+  addUpcomingService, getUpcomingServices, getOffers,
   type ProviderChat, type ProviderChatMessage,
 } from "@/lib/provider-store";
 import {
-  getOfferForChat, confirmCompletion, getRequestById, sendSystemMessage,
+  getOfferForChat, confirmCompletion, getRequestById,
   deleteMessageForEveryone, deleteMessageForMe,
-  clearChatForProvider, getChatClearedAt,
-  type Offer,
+  clearChatForProvider,
+  type Offer, type CustomerRequest,
 } from "@/lib/requests-store";
 import { getAvgResponseMinutes, formatAvgResponseTime } from "@/lib/response-time-store";
 import { addReview, hasReviewedRequest } from "@/lib/completion-store";
@@ -383,7 +382,6 @@ function ScheduleModal({ onSave, onClose, defaultLocation = "" }: ScheduleModalP
 }
 
 function ChatView({ chatId, onClose }: { chatId: string; onClose: () => void }) {
-  useStoreRefresh();
   const { t } = useI18n();
   const [text, setText] = useState("");
   const [attachPreview, setAttachPreview] = useState<string | null>(null);
@@ -402,17 +400,37 @@ function ChatView({ chatId, onClose }: { chatId: string; onClose: () => void }) 
   const { toast } = useToast();
   const masterId = user?.id ?? "";
 
-  const chat = getProviderChatById(chatId) ?? null;
+  const [chat, setChat] = useState<ProviderChat | null>(null);
+  const [offer, setOffer] = useState<Offer | undefined>(undefined);
+  const [request, setRequest] = useState<CustomerRequest | undefined>(undefined);
+
+  const loadChat = useCallback(async () => {
+    if (!chatId) return;
+    try {
+      const c = (await getProviderChatById(chatId)) ?? null;
+      setChat(c);
+      if (c) {
+        const [o, r] = await Promise.all([getOfferForChat(c.requestId, c.masterId), getRequestById(c.requestId)]);
+        setOffer(o);
+        setRequest(r);
+      }
+    } catch (err) {
+      console.error("Load provider chat failed:", err);
+    }
+  }, [chatId]);
+
+  /* Poll for new messages/status while the thread is open. */
+  useEffect(() => {
+    loadChat();
+    const interval = setInterval(loadChat, 4000);
+    return () => clearInterval(interval);
+  }, [loadChat]);
 
   /* Mark this chat as read for the provider on mount, on chatId change,
-   * and whenever new customer messages arrive while the thread is open.
-   * The store function is idempotent (no-op when nothing changed), so we
-   * call it unconditionally to also backfill readAt on legacy messages. */
+   * and whenever new customer messages arrive while the thread is open. */
   useEffect(() => {
     if (chatId) markChatRead(chatId);
   }, [chatId, chat?.unread, chat?.messages.length]);
-  const offer = chat ? getOfferForChat(chat.requestId, chat.masterId) : undefined;
-  const request = chat ? getRequestById(chat.requestId) : undefined;
   const isRejected = offer?.status === "rejected";
   const isCompleted = offer?.status === "completed";
   const canComplete =
@@ -449,16 +467,17 @@ function ChatView({ chatId, onClose }: { chatId: string; onClose: () => void }) 
     isBlockedBy(user.id, chat.customerId) || isBlockedBy(chat.customerId, user.id)
   ));
 
-  function send() {
-    if ((!text.trim() && !attachPreview) || isRejected) return;
+  async function send() {
+    if ((!text.trim() && !attachPreview) || isRejected || !chat) return;
     if (isBlocked) {
       toast({ title: t.chatPage.blockedCannotSend, variant: "destructive" });
       return;
     }
     const attachment = attachPreview ? { type: "image" as const, url: attachPreview } : undefined;
-    sendProviderMessage(chatId, "provider", text.trim(), attachment, user?.id);
     setText("");
     setAttachPreview(null);
+    await sendProviderMessage(chat.id, "provider", text.trim(), attachment, user?.id);
+    loadChat();
   }
 
   async function handleImageSelect(e: React.ChangeEvent<HTMLInputElement>) {
@@ -469,21 +488,18 @@ function ChatView({ chatId, onClose }: { chatId: string; onClose: () => void }) 
     e.target.value = "";
   }
 
-  function handleComplete(details: CompletionDetails) {
+  async function handleComplete(details: CompletionDetails) {
     if (!offer || !chat) return;
-    const result = confirmCompletion(offer.id, "provider", {
-      providerConfirmed: t.chatPage.systemMsgProviderConfirmed,
-      customerConfirmed: t.chatPage.systemMsgCustomerConfirmed,
-      completed:         t.chatPage.systemMsgCompleted,
-    }, details);
+    const result = await confirmCompletion(offer.id, "provider", details);
     if (result === "completed" && !hasReviewedRequest(chat.requestId, masterId)) {
       setShowReview(true);
     }
+    loadChat();
   }
 
-  function handleScheduleSave(date: string, time: string, location: string) {
+  async function handleScheduleSave(date: string, time: string, location: string) {
     if (!chat || !offer) return;
-    addUpcomingService({
+    await addUpcomingService({
       offerId: offer.id,
       requestId: chat.requestId,
       masterId,
@@ -498,7 +514,11 @@ function ChatView({ chatId, onClose }: { chatId: string; onClose: () => void }) 
       categoryEmoji: chat.categoryEmoji,
     });
     setShowSchedule(false);
-    sendSystemMessage(chatId, tFormat(t.providerChats.schedule.systemMsgTpl, { date, time }));
+    // Upcoming-service scheduling stays local (no backend model for it yet),
+    // so this announcement rides as a regular provider message rather than
+    // a true system notice.
+    await sendProviderMessage(chat.id, "provider", tFormat(t.providerChats.schedule.systemMsgTpl, { date, time }));
+    loadChat();
   }
 
   function handleReviewSubmit(data: ReviewSubmitData) {
@@ -515,9 +535,9 @@ function ChatView({ chatId, onClose }: { chatId: string; onClose: () => void }) 
       photoUrl: data.photoUrl,
       platformSentiment: data.platformSentiment,
       platformFeedback: data.platformFeedback,
-      reviewerName: chat.masterName,
-      reviewerInitials: chat.masterInitials,
-      reviewerColor: chat.masterColor,
+      reviewerName: offer.masterName,
+      reviewerInitials: offer.masterInitials,
+      reviewerColor: offer.masterColor,
       reviewedName: chat.customerName,
       serviceCategory: chat.categoryName,
     });
@@ -529,8 +549,7 @@ function ChatView({ chatId, onClose }: { chatId: string; onClose: () => void }) 
 
   const defaultLocation = [request?.district, request?.region].filter(Boolean).join(", ");
 
-  const providerClearedAt = getChatClearedAt(chatId, "provider");
-  const visibleMessages = chat.messages.filter((m) => new Date(m.timestamp).getTime() > providerClearedAt);
+  const visibleMessages = chat.messages.filter((m) => new Date(m.timestamp).getTime() > chat.providerClearedAt);
 
   const grouped: Array<{ day: string; messages: ProviderChatMessage[] }> = [];
   for (const msg of visibleMessages) {
@@ -579,7 +598,7 @@ function ChatView({ chatId, onClose }: { chatId: string; onClose: () => void }) 
               <p className="text-[11px] text-gray-400">
                 {tFormat(t.providerChats.header.avgResponseTpl, {
                   n: formatAvgResponseTime(
-                    getAvgResponseMinutes(getRequestById(chat.requestId)?.customerId ?? ""),
+                    getAvgResponseMinutes(request?.customerId ?? ""),
                     t.shared.responseTime,
                   ),
                 })}
@@ -654,8 +673,8 @@ function ChatView({ chatId, onClose }: { chatId: string; onClose: () => void }) 
                     currentUserId={masterId}
                     onLongPress={msg.sender !== "system" ? () => setSelectedMsgId(msg.id) : undefined}
                     selected={selectedMsgId === msg.id}
-                    onDeleteForEveryone={() => { deleteMessageForEveryone(chatId, msg.id); setSelectedMsgId(null); }}
-                    onDeleteForMe={() => { deleteMessageForMe(chatId, msg.id, masterId); setSelectedMsgId(null); }}
+                    onDeleteForEveryone={() => { deleteMessageForEveryone(chat.id, msg.id).then(loadChat); setSelectedMsgId(null); }}
+                    onDeleteForMe={() => { deleteMessageForMe(chat.id, msg.id).then(loadChat); setSelectedMsgId(null); }}
                     onCopy={() => { navigator.clipboard.writeText(msg.text); setSelectedMsgId(null); }}
                   />
                 ))}
@@ -813,7 +832,7 @@ function ChatView({ chatId, onClose }: { chatId: string; onClose: () => void }) 
             title={t.chatPage.clearChatTitle}
             message={t.chatPage.clearChatMsg}
             confirmText={t.chatPage.clearChatYes}
-            onConfirm={() => { clearChatForProvider(chatId); setShowClearConfirm(false); setSelectedMsgId(null); }}
+            onConfirm={() => { clearChatForProvider(chat.id).then(loadChat); setShowClearConfirm(false); setSelectedMsgId(null); }}
             onClose={() => setShowClearConfirm(false)}
           />
         )}
@@ -857,10 +876,9 @@ function ChatView({ chatId, onClose }: { chatId: string; onClose: () => void }) 
   );
 }
 
-function ChatRow({ chat, index, onClick, t }: { chat: ProviderChat; index: number; onClick: () => void; t: Dict }) {
+function ChatRow({ chat, offer, index, onClick, t }: { chat: ProviderChat; offer: Offer | undefined; index: number; onClick: () => void; t: Dict }) {
   const { locale } = useI18n();
   const lastMsg = chat.messages[chat.messages.length - 1];
-  const offer = getOfferForChat(chat.requestId, chat.masterId);
   const customerLocal = chat.customerId ? getLocalProfile(chat.customerId) : null;
   const st = offer?.status ?? "pending";
 
@@ -952,7 +970,6 @@ function ChatRow({ chat, index, onClick, t }: { chat: ProviderChat; index: numbe
 type SortTab = "all" | "unread";
 
 export default function ProviderChatsPage() {
-  useStoreRefresh();
   const { t, locale } = useI18n();
   const [, setLocation] = useLocation();
   const [tab, setTab] = useState<SortTab>("all");
@@ -965,7 +982,25 @@ export default function ProviderChatsPage() {
   const { user } = useAuth();
   const masterId = user?.id ?? "";
 
-  const chats = getProviderChats(masterId);
+  const [chats, setChats] = useState<ProviderChat[]>([]);
+  const [offerByPair, setOfferByPair] = useState<Map<string, Offer>>(new Map());
+
+  useEffect(() => {
+    if (!masterId) return;
+    let cancelled = false;
+    (async () => {
+      try {
+        const [chatsRes, offersRes] = await Promise.all([getProviderChats(masterId), getOffers(masterId)]);
+        if (cancelled) return;
+        setChats(chatsRes);
+        setOfferByPair(new Map(offersRes.map((o) => [`${o.requestId}_${o.masterId}`, o])));
+      } catch (err) {
+        console.error("Load provider chats failed:", err);
+      }
+    })();
+    return () => { cancelled = true; };
+  }, [masterId]);
+
   const totalUnread = chats.reduce((s, c) => s + c.unread, 0);
 
   const allChatCategoryIds = Array.from(
@@ -1241,6 +1276,7 @@ export default function ProviderChatsPage() {
               <ChatRow
                 key={chat.id}
                 chat={chat}
+                offer={offerByPair.get(`${chat.requestId}_${chat.masterId}`)}
                 index={i}
                 onClick={() => setOpenChatId(chat.id)}
                 t={t}

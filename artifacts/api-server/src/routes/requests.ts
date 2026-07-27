@@ -44,6 +44,39 @@ async function computeCooldown(customerId: string) {
   return { blocked: true, remainingMs: durationMs - elapsed, until: latest.createdAt.getTime() + durationMs, durationMs, recentCount, extended };
 }
 
+// ─── GET /popularity — per-category request/offer/completed counts, public ─
+router.get("/popularity", async (_req, res) => {
+  try {
+    const [byRequest, byOffer] = await Promise.all([
+      db
+        .select({
+          categoryId: requestsTable.categoryId,
+          requestCount: sql<number>`count(*)::int`,
+          completedCount: sql<number>`count(*) filter (where ${requestsTable.status} = 'completed')::int`,
+        })
+        .from(requestsTable)
+        .groupBy(requestsTable.categoryId),
+      db
+        .select({ categoryId: requestsTable.categoryId, offerCount: sql<number>`count(*)::int` })
+        .from(offersTable)
+        .innerJoin(requestsTable, eq(requestsTable.id, offersTable.requestId))
+        .groupBy(requestsTable.categoryId),
+    ]);
+    const offerCountByCategory = new Map(byOffer.map((r) => [r.categoryId, r.offerCount]));
+    res.json({
+      categories: byRequest.map((r) => ({
+        categoryId: r.categoryId,
+        requestCount: r.requestCount,
+        completedCount: r.completedCount,
+        offerCount: offerCountByCategory.get(r.categoryId) ?? 0,
+      })),
+    });
+  } catch (err) {
+    console.error("Get request popularity error:", err);
+    res.status(500).json({ error: "Xatolik yuz berdi" });
+  }
+});
+
 // ─── GET /cooldown — live cooldown state for the authenticated customer ────
 router.get("/cooldown", requireAuth, async (req: AuthRequest, res) => {
   try {
@@ -54,6 +87,17 @@ router.get("/cooldown", requireAuth, async (req: AuthRequest, res) => {
   }
 });
 
+async function withOfferCounts(rows: RequestRow[]) {
+  if (rows.length === 0) return rows.map((r) => ({ ...toJson(r), offerCount: 0 }));
+  const counts = await db
+    .select({ requestId: offersTable.requestId, count: sql<number>`count(*)::int` })
+    .from(offersTable)
+    .where(sql`${offersTable.requestId} in ${rows.map((r) => r.id)}`)
+    .groupBy(offersTable.requestId);
+  const countByRequest = new Map(counts.map((c) => [c.requestId, c.count]));
+  return rows.map((r) => ({ ...toJson(r), offerCount: countByRequest.get(r.id) ?? 0 }));
+}
+
 // ─── GET /mine — the authenticated customer's own requests ─────────────────
 router.get("/mine", requireAuth, async (req: AuthRequest, res) => {
   try {
@@ -62,7 +106,7 @@ router.get("/mine", requireAuth, async (req: AuthRequest, res) => {
       .from(requestsTable)
       .where(eq(requestsTable.customerId, req.user!.id))
       .orderBy(desc(requestsTable.createdAt));
-    res.json({ requests: rows.map(toJson) });
+    res.json({ requests: await withOfferCounts(rows) });
   } catch (err) {
     console.error("List my requests error:", err);
     res.status(500).json({ error: "Xatolik yuz berdi" });
@@ -77,7 +121,7 @@ router.get("/open", requireAuth, async (_req, res) => {
       .from(requestsTable)
       .where(eq(requestsTable.status, "open"))
       .orderBy(desc(requestsTable.createdAt));
-    res.json({ requests: rows.map(toJson) });
+    res.json({ requests: await withOfferCounts(rows) });
   } catch (err) {
     console.error("List open requests error:", err);
     res.status(500).json({ error: "Xatolik yuz berdi" });
@@ -194,6 +238,38 @@ router.delete("/:id", requireAuth, async (req: AuthRequest, res) => {
   } catch (err) {
     console.error("Delete request error:", err);
     res.status(500).json({ ok: false });
+  }
+});
+
+// ─── PATCH /admin/:id/status — admin force-sets any request's status ───────
+router.patch("/admin/:id/status", requireAdminKey, async (req, res) => {
+  try {
+    const id: string = String(req.params.id);
+    const { status } = req.body as { status?: RequestRow["status"] };
+    if (!status) {
+      res.status(400).json({ error: "status talab qilinadi" });
+      return;
+    }
+    const [row] = await db.update(requestsTable).set({ status }).where(eq(requestsTable.id, id)).returning();
+    if (!row) {
+      res.status(404).json({ error: "So'rov topilmadi" });
+      return;
+    }
+    res.json({ request: toJson(row) });
+  } catch (err) {
+    console.error("Admin update request status error:", err);
+    res.status(500).json({ error: "Xatolik yuz berdi" });
+  }
+});
+
+// ─── GET /admin/all — every request, any status, admin only ────────────────
+router.get("/admin/all", requireAdminKey, async (_req, res) => {
+  try {
+    const rows = await db.select().from(requestsTable).orderBy(desc(requestsTable.createdAt));
+    res.json({ requests: await withOfferCounts(rows) });
+  } catch (err) {
+    console.error("Admin list all requests error:", err);
+    res.status(500).json({ error: "Xatolik yuz berdi" });
   }
 });
 

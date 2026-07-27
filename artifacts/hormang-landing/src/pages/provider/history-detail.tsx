@@ -18,7 +18,7 @@ import { useI18n } from "@/contexts/i18n-context";
 import { formatDate } from "@/lib/date-utils";
 import { getCategoryDisplayName } from "@/lib/categories";
 import { getRequestLocation } from "@/lib/regions";
-import { getOfferById } from "@/lib/requests-store";
+import { getOfferById, type Offer } from "@/lib/requests-store";
 import { compressImage } from "@/lib/image-utils";
 import {
   getServiceHistoryByIdForProvider,
@@ -86,10 +86,13 @@ export default function ProviderHistoryDetailPage() {
     [user?.id, params.id, storeVersion]
   );
 
-  const offerSnap = useMemo(
-    () => (item ? getOfferById(item.offerId) : undefined),
-    [item?.offerId]
-  );
+  const [offerSnap, setOfferSnap] = useState<Offer | undefined>(undefined);
+  useEffect(() => {
+    if (!item) { setOfferSnap(undefined); return; }
+    let cancelled = false;
+    getOfferById(item.offerId).then((o) => { if (!cancelled) setOfferSnap(o); });
+    return () => { cancelled = true; };
+  }, [item?.offerId]);
 
   useEffect(() => {
     const sp = new URLSearchParams(window.location.search);

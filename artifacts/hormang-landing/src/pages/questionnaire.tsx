@@ -13,8 +13,9 @@ import {
 } from "@/lib/questionnaire-store";
 import {
   saveNewRequest,
-  getRequestCooldown,
+  type CooldownState,
 } from "@/lib/requests-store";
+import { fetchRequestCooldown } from "@/lib/requests-client";
 import { savePendingRequest, getPendingRequest, clearPendingRequest } from "@/lib/pending-request-store";
 import { useToast } from "@/hooks/use-toast";
 import { useAuth } from "@/contexts/auth-context";
@@ -1391,28 +1392,36 @@ export default function QuestionnairePage() {
     if (!pending) { setResumeChecked(true); return; }
     clearPendingRequest();
     const customerName = `${user.firstName ?? ""} ${user.lastName ?? ""}`.trim() || undefined;
-    try {
-      const req = saveNewRequest(pending.categoryId, pending.categoryName, pending.answers, undefined, user.id, customerName, pending.photos);
-      setCategoryId(pending.categoryId);
-      setAnswers(pending.answers);
-      setCurrentRequestId(req.id);
-      setStage("recommendations");
-    } catch (e) {
-      const err = e as Error & { code?: string };
-      toast({ title: tt.cantCreateRequest, description: err.message ?? tt.pleaseWait, variant: "destructive" });
-    }
-    setResumeChecked(true);
+    (async () => {
+      try {
+        const req = await saveNewRequest(pending.categoryId, pending.categoryName, pending.answers, undefined, user.id, customerName, pending.photos);
+        setCategoryId(pending.categoryId);
+        setAnswers(pending.answers);
+        setCurrentRequestId(req.id);
+        setStage("recommendations");
+      } catch (e) {
+        const err = e as Error & { code?: string };
+        toast({ title: tt.cantCreateRequest, description: err.message ?? tt.pleaseWait, variant: "destructive" });
+      }
+      setResumeChecked(true);
+    })();
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [resume, authLoading, user]);
 
-  /* Live cooldown ticker (updates every second) */
-  const [cooldown, setCooldown] = useState(() => getRequestCooldown(user?.id ?? ""));
+  /* Cooldown: fetched once from the server, then ticked down locally every second. */
+  const [cooldown, setCooldown] = useState<CooldownState | null>(null);
   useEffect(() => {
-    const tick = () => setCooldown(getRequestCooldown(user?.id ?? ""));
-    tick();
-    const id = window.setInterval(tick, 1000);
-    return () => window.clearInterval(id);
+    let cancelled = false;
+    fetchRequestCooldown().then((c) => { if (!cancelled) setCooldown(c); }).catch(() => {});
+    return () => { cancelled = true; };
   }, [user?.id]);
+  useEffect(() => {
+    if (!cooldown?.blocked) return;
+    const id = window.setInterval(() => {
+      setCooldown((c) => (c ? { ...c, remainingMs: Math.max(0, c.remainingMs - 1000) } : c));
+    }, 1000);
+    return () => window.clearInterval(id);
+  }, [cooldown?.blocked]);
 
   function handleSelectCategory(id: string) {
     setCategoryId(id);
@@ -1424,7 +1433,7 @@ export default function QuestionnairePage() {
     setStage("summary");
   }
 
-  function handleSeeProviders(photos: string[]) {
+  async function handleSeeProviders(photos: string[]) {
     const cat = getCategoryById(categoryId);
 
     if (!user) {
@@ -1442,7 +1451,7 @@ export default function QuestionnairePage() {
 
     const customerName = `${user.firstName ?? ""} ${user.lastName ?? ""}`.trim() || undefined;
     try {
-      const req = saveNewRequest(categoryId, cat?.name ?? categoryId, answers, undefined, user.id, customerName, photos.length ? photos : undefined);
+      const req = await saveNewRequest(categoryId, cat?.name ?? categoryId, answers, undefined, user.id, customerName, photos.length ? photos : undefined);
       setCurrentRequestId(req.id);
       setStage("recommendations");
     } catch (e) {
@@ -1470,7 +1479,7 @@ export default function QuestionnairePage() {
    * Scoped to pre-creation stages only so the post-submit recommendations
    * page (which renders for the just-created request) is never hidden. */
   const isPreCreationStage = stage === "select-category" || stage === "questions" || stage === "summary";
-  if (cooldown.blocked && isPreCreationStage) {
+  if (cooldown?.blocked && isPreCreationStage) {
     return (
       <div className="min-h-screen bg-gradient-to-br from-blue-50 via-white to-blue-50 flex items-center justify-center px-5 py-10">
         <motion.div

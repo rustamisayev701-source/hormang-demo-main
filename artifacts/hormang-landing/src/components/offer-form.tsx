@@ -7,7 +7,7 @@
  *  - "Mijoz profilini ko'rish" profile preview button
  *  - No editable avg-response-time field (removed)
  */
-import { useState } from "react";
+import { useState, useEffect } from "react";
 import { TangaCoin } from "@/components/tanga-coin";
 import { CompactMediaUpload } from "@/components/media-upload";
 import { useStoreRefresh } from "@/hooks/use-store-refresh";
@@ -20,19 +20,18 @@ import {
 import { useToast } from "@/hooks/use-toast";
 import { useAuth } from "@/contexts/auth-context";
 import {
-  saveOffer, createChatFromOffer, updateProviderRequestStatus, markSeen,
+  saveOffer, updateProviderRequestStatus, markSeen,
   getAvgResponseMinutes,
   type ProviderRequest,
 } from "@/lib/provider-store";
-import { getRequests, getOffers, canSubmitOffer, offerBlockLabel } from "@/lib/requests-store";
+import { canSubmitOffer, offerBlockLabel, ApiError, type CanSubmitOfferReason } from "@/lib/requests-store";
 import { getAllQuestionsForCategory, collectActiveQuestions, type QuestionOption } from "@/lib/questionnaire-store";
 import { PublicProfilePreviewModal } from "@/components/public-profile-preview-modal";
 import { getLocalizedText } from "@/lib/localization";
 import { getRequestLocation } from "@/lib/regions";
 import { ImageGrid, getAnswerImageUrls } from "@/components/image-grid";
-import { getTangaBalance, spendTangaBalance, addTangaBalance } from "@/lib/tanga-store";
+import { getWallet } from "@/lib/wallet-client";
 import { calculateOfferCost } from "@/lib/offer-cost";
-import { recordTangaTransaction } from "@/lib/tanga-history-store";
 import { isUserSuspended, SUSPENDED_MESSAGE } from "@/lib/safety-store";
 import { useLocation } from "wouter";
 import { useI18n } from "@/contexts/i18n-context";
@@ -111,16 +110,24 @@ export function OfferForm({ request, onClose, onSubmitted }: Props) {
   const { user } = useAuth();
   const [, setLocation] = useLocation();
   const { t, locale } = useI18n();
-  /* Tanga cost calculation */
+  /* Tanga cost calculation — client-computed from the (already backend-cached)
+     category/question config; the server floors it at its own minimum. */
   const offerCost = calculateOfferCost({
     categoryId: request.categoryId,
     answers: (request.answers ?? {}) as Record<string, unknown>,
   });
-  const balance = user ? getTangaBalance(user.id) : 0;
-  const hasEnoughTanga = balance >= offerCost;
 
-  /* Offer-limit / acceptance-lock validation (must succeed BEFORE Tanga deduction) */
-  const submissionCheck = canSubmitOffer(request.id, user?.id ?? "");
+  /* Real wallet balance + offer-limit/acceptance-lock validation — both
+     fetched from the backend since they're now the actual source of truth. */
+  const [balance, setBalance] = useState(0);
+  const [submissionCheck, setSubmissionCheck] = useState<{ ok: boolean; reason?: CanSubmitOfferReason; active: number; total: number }>({ ok: true, active: 0, total: 0 });
+  useEffect(() => {
+    let cancelled = false;
+    getWallet().then((w) => { if (!cancelled) setBalance(w.balance); }).catch(() => {});
+    canSubmitOffer(request.id, user?.id ?? "").then((c) => { if (!cancelled) setSubmissionCheck(c); }).catch(() => {});
+    return () => { cancelled = true; };
+  }, [request.id, user?.id]);
+  const hasEnoughTanga = balance >= offerCost;
   const blockedReason = submissionCheck.ok ? undefined : submissionCheck.reason;
   const blockedLabel = submissionCheck.ok ? "" : offerBlockLabel(submissionCheck.reason, t);
 
@@ -169,17 +176,7 @@ export function OfferForm({ request, onClose, onSubmitted }: Props) {
     return Object.keys(e).length === 0;
   }
 
-  function handleSubmit() {
-    /* ── 1. Validate request state + offer limits BEFORE any Tanga is touched ── */
-    const recheck = canSubmitOffer(request.id, user?.id ?? "");
-    if (!recheck.ok) {
-      toast({
-        title: t.offerForm.toasts.cantSendTitle,
-        description: offerBlockLabel(recheck.reason, t),
-        variant: "destructive",
-      });
-      return;
-    }
+  async function handleSubmit() {
     if (!hasEnoughTanga) return;
     if (!validate()) return;
     if (user && isUserSuspended(user.id)) {
@@ -198,25 +195,11 @@ export function OfferForm({ request, onClose, onSubmitted }: Props) {
     const palette = ["#7C3AED", "#2563EB", "#059669", "#D97706", "#DC2626", "#0891B2"];
     const color = palette[(user?.id?.charCodeAt(0) ?? 0) % palette.length];
 
-    /* Deduct Tanga FIRST so a failed save doesn't leave behind an
-     * uncharged offer. If saveOffer throws we refund. */
-    if (user) {
-      try {
-        spendTangaBalance(user.id, offerCost);
-      } catch (_) {
-        setSubmitting(false);
-        toast({
-          title: t.offerForm.toasts.insufficientTitle,
-          description: tFormat(t.offerForm.toasts.insufficientDescTpl, { n: offerCost }),
-          variant: "destructive",
-        });
-        return;
-      }
-    }
-
-    let offer;
+    /* Single atomic backend call: validates offer limits/request state,
+       debits the wallet, creates the offer, and opens the chat — all in one
+       DB transaction. No client-side compensating refund needed anymore. */
     try {
-      offer = saveOffer(
+      await saveOffer(
         {
           requestId: request.id,
           price: numPrice,
@@ -229,42 +212,22 @@ export function OfferForm({ request, onClose, onSubmitted }: Props) {
         offerCost,
       );
     } catch (err) {
-      // Refund Tanga since the offer was never persisted.
-      if (user) addTangaBalance(user.id, offerCost);
       setSubmitting(false);
-      const code = err instanceof Error ? err.message : "";
+      const code = err instanceof ApiError ? err.message : "";
       const description =
-        code === "REQUEST_CLOSED" || code === "REQUEST_ALREADY_ACCEPTED"
+        code === "request_closed" || code === "matched"
           ? t.offerForm.toasts.requestClosed
-          : code === "DUPLICATE_OFFER"
+          : code === "already_offered"
             ? t.offerForm.toasts.duplicate
-            : t.offerForm.toasts.photoSize;
+            : code === "insufficient_balance"
+              ? tFormat(t.offerForm.toasts.insufficientDescTpl, { n: offerCost })
+              : t.offerForm.toasts.photoSize;
       toast({ title: t.offerForm.toasts.errorTitle, description, variant: "destructive" });
       return;
     }
 
-    if (user) {
-      recordTangaTransaction({
-        userId: user.id,
-        offerId: offer.id,
-        requestId: request.id,
-        categoryName: request.categoryName ?? "",
-        categoryEmoji: request.emoji,
-        description: request.categoryName ?? "",
-        amount: offerCost,
-        type: "spend",
-      });
-    }
-
     updateProviderRequestStatus(request.id, "responded", user?.id ?? "");
     markSeen(request.id, user?.id);
-    createChatFromOffer(
-      request,
-      offer,
-      user?.id ?? "anon",
-      user ? { name: fullName, initials, color } : undefined,
-      t.providerRequests.offerDetail.offerPrice,
-    );
 
     setTimeout(() => {
       setSubmitting(false);

@@ -57,6 +57,23 @@ router.get("/mine", requireAuth, async (req: AuthRequest, res) => {
   }
 });
 
+// ─── GET /for-my-requests — every offer across the authenticated customer's
+// own requests, in one call (avoids an N+1 fetch client-side) ───────────────
+router.get("/for-my-requests", requireAuth, async (req: AuthRequest, res) => {
+  try {
+    const rows = await db
+      .select({ offer: offersTable })
+      .from(offersTable)
+      .innerJoin(requestsTable, eq(requestsTable.id, offersTable.requestId))
+      .where(eq(requestsTable.customerId, req.user!.id))
+      .orderBy(desc(offersTable.createdAt));
+    res.json({ offers: rows.map((r) => toJson(r.offer)) });
+  } catch (err) {
+    console.error("List offers for my requests error:", err);
+    res.status(500).json({ error: "Xatolik yuz berdi" });
+  }
+});
+
 // ─── GET /by-request/:requestId — every offer on a request ──────────────────
 router.get("/by-request/:requestId", requireAuth, async (req, res) => {
   try {
@@ -146,12 +163,13 @@ router.post("/", requireAuth, async (req: AuthRequest, res) => {
         description: check.request!.categoryName, offerId: offer.id, requestId: offer.requestId,
       });
 
+      const chatId = `${offer.requestId}_${masterId}`;
       const [chat] = await tx
         .insert(chatsTable)
-        .values({ requestId: offer.requestId, masterId })
-        .onConflictDoNothing({ target: [chatsTable.requestId, chatsTable.masterId] })
+        .values({ id: chatId, requestId: offer.requestId, masterId })
+        .onConflictDoNothing({ target: chatsTable.id })
         .returning();
-      const chatRow = chat ?? (await tx.select().from(chatsTable).where(and(eq(chatsTable.requestId, offer.requestId), eq(chatsTable.masterId, masterId))).limit(1))[0];
+      const chatRow = chat ?? (await tx.select().from(chatsTable).where(eq(chatsTable.id, chatId)).limit(1))[0];
       await tx.insert(chatMessagesTable).values({
         chatId: chatRow.id, sender: "master",
         text: `${body.priceLabel ?? body.price}\n\n${body.message!.trim()}`,
@@ -227,6 +245,44 @@ router.patch("/:id/status", requireAuth, async (req: AuthRequest, res) => {
   }
 });
 
+// ─── PATCH /:id/reopen — customer re-opens a rejected offer back to pending ─
+router.patch("/:id/reopen", requireAuth, async (req: AuthRequest, res) => {
+  try {
+    const id: string = String(req.params.id);
+    const [offer] = await db.select().from(offersTable).where(eq(offersTable.id, id)).limit(1);
+    if (!offer) {
+      res.status(400).json({ error: "not_found" });
+      return;
+    }
+    if (offer.status !== "rejected") {
+      res.status(400).json({ error: "not_rejected" });
+      return;
+    }
+    const [request] = await db.select().from(requestsTable).where(eq(requestsTable.id, offer.requestId)).limit(1);
+    if (!request || request.customerId !== req.user!.id) {
+      res.status(403).json({ error: "Ruxsat yo'q" });
+      return;
+    }
+    if (request.status !== "open") {
+      res.status(400).json({ error: "request_closed" });
+      return;
+    }
+    const [alreadyAccepted] = await db
+      .select({ count: sql<number>`count(*)::int` })
+      .from(offersTable)
+      .where(and(eq(offersTable.requestId, offer.requestId), eq(offersTable.status, "accepted")));
+    if ((alreadyAccepted?.count ?? 0) > 0) {
+      res.status(400).json({ error: "already_accepted" });
+      return;
+    }
+    const [row] = await db.update(offersTable).set({ status: "pending" }).where(eq(offersTable.id, id)).returning();
+    res.json({ offer: toJson(row) });
+  } catch (err) {
+    console.error("Reopen offer error:", err);
+    res.status(500).json({ error: "Xatolik yuz berdi" });
+  }
+});
+
 // ─── PATCH /:id/in-progress — provider marks work started ──────────────────
 router.patch("/:id/in-progress", requireAuth, async (req: AuthRequest, res) => {
   try {
@@ -286,6 +342,18 @@ router.patch("/:id/confirm-completion", requireAuth, async (req: AuthRequest, re
       .where(eq(offersTable.id, id))
       .returning();
 
+    if (!bothConfirmed) {
+      const [chat] = await db.select().from(chatsTable).where(and(eq(chatsTable.requestId, offer.requestId), eq(chatsTable.masterId, offer.masterId))).limit(1);
+      if (chat) {
+        await db.insert(chatMessagesTable).values({
+          chatId: chat.id, sender: "system",
+          text: role === "provider"
+            ? "Ijrochi xizmat yakunlanganligini tasdiqladi. Mijoz tasdig'i kutilmoqda."
+            : "Mijoz xizmat yakunlanganligini tasdiqladi. Ijrochi tasdig'i kutilmoqda.",
+        });
+      }
+    }
+
     if (bothConfirmed && request) {
       await db.update(requestsTable).set({ status: "completed" }).where(eq(requestsTable.id, request.id));
       const [chat] = await db.select().from(chatsTable).where(and(eq(chatsTable.requestId, offer.requestId), eq(chatsTable.masterId, offer.masterId))).limit(1);
@@ -302,6 +370,35 @@ router.patch("/:id/confirm-completion", requireAuth, async (req: AuthRequest, re
 });
 
 // ─── Admin ───────────────────────────────────────────────────────────────
+
+// GET /admin/all — every offer, admin only.
+router.get("/admin/all", requireAdminKey, async (_req, res) => {
+  try {
+    const rows = await db.select().from(offersTable).orderBy(desc(offersTable.createdAt));
+    res.json({ offers: rows.map(toJson) });
+  } catch (err) {
+    console.error("Admin list all offers error:", err);
+    res.status(500).json({ error: "Xatolik yuz berdi" });
+  }
+});
+
+// ─── DELETE /admin/:id — admin removes a single offer (no tanga refund; the
+// only refund path is the 50%-of-last-10-rejected batch below) ─────────────
+router.delete("/admin/:id", requireAdminKey, async (req, res) => {
+  try {
+    const id: string = String(req.params.id);
+    const [offer] = await db.select().from(offersTable).where(eq(offersTable.id, id)).limit(1);
+    if (!offer) {
+      res.status(404).json({ error: "Taklif topilmadi" });
+      return;
+    }
+    await db.delete(offersTable).where(eq(offersTable.id, id));
+    res.json({ ok: true });
+  } catch (err) {
+    console.error("Admin delete offer error:", err);
+    res.status(500).json({ error: "Xatolik yuz berdi" });
+  }
+});
 
 // Force-complete (admin path) — mirrors markOfferCompleted.
 router.post("/admin/:id/force-complete", requireAdminKey, async (req, res) => {

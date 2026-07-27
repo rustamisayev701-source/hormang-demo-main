@@ -3,7 +3,7 @@
  * provider. Layered at z-[72] so it appears on top of the public profile
  * modal (z-[61]).
  */
-import { useState } from "react";
+import { useEffect, useState } from "react";
 import { motion, AnimatePresence } from "framer-motion";
 import {
   X,
@@ -43,17 +43,41 @@ function initials(name: string): string {
   return name.split(" ").map((p) => p[0] ?? "").join("").toUpperCase().slice(0, 2) || "X";
 }
 
-function getReviewerMeta(review: Review, fallback: string) {
+function baseReviewerMeta(review: Review, fallback: string) {
   const registry = getCustomerFromRegistry(review.reviewerId);
-  const request = getRequestById(review.requestId);
   const local = getLocalProfile(review.reviewerId);
-  const name = review.reviewerName || registry?.name || request?.customerName || fallback;
+  const name = review.reviewerName || registry?.name || fallback;
   return {
     name,
     initials: review.reviewerInitials || registry?.initials || initials(name),
     color: review.reviewerColor || BLUE,
     photoUrl: local.photoUrl,
   };
+}
+
+function useReviewerMeta(review: Review, fallback: string) {
+  const [meta, setMeta] = useState(() => baseReviewerMeta(review, fallback));
+
+  useEffect(() => {
+    setMeta(baseReviewerMeta(review, fallback));
+    if (review.reviewerName) return;
+    const registry = getCustomerFromRegistry(review.reviewerId);
+    if (registry?.name) return;
+    let cancelled = false;
+    getRequestById(review.requestId).then((request) => {
+      if (cancelled || !request?.customerName) return;
+      const name = request.customerName;
+      setMeta((m) => ({
+        ...m,
+        name,
+        initials: review.reviewerInitials || initials(name),
+      }));
+    });
+    return () => { cancelled = true; };
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [review, fallback]);
+
+  return meta;
 }
 
 function MetricBar({ label, value }: { label: string; value: number }) {
@@ -84,7 +108,7 @@ function ReviewDetailModal({
   const { t, locale } = useI18n();
   const tt = t.providerReviewsSheet;
   const METRIC_LABELS = useMetricLabels();
-  const meta = getReviewerMeta(review, tt.fallbackCustomer);
+  const meta = useReviewerMeta(review, tt.fallbackCustomer);
   const [expandedPhoto, setExpandedPhoto] = useState(false);
 
   return (
@@ -214,7 +238,7 @@ function ReviewRow({ review, onOpen }: { review: Review; onOpen: () => void }) {
   const { t } = useI18n();
   const tt = t.providerReviewsSheet;
   const METRIC_LABELS = useMetricLabels();
-  const meta = getReviewerMeta(review, tt.fallbackCustomer);
+  const meta = useReviewerMeta(review, tt.fallbackCustomer);
   const metrics = review.providerMetrics;
 
   return (

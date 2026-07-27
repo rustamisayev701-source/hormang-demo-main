@@ -3,6 +3,7 @@
  * Layered at z-[72]/z-[73] so it appears above the public profile modal (z-[61]).
  * Customer reviews never have metric sliders.
  */
+import { useEffect, useState } from "react";
 import { motion } from "framer-motion";
 import { X, UserRound } from "lucide-react";
 import { StarRating } from "@/components/star-rating";
@@ -23,21 +24,39 @@ function initials(name: string): string {
   return name.split(" ").map((p) => p[0] ?? "").join("").toUpperCase().slice(0, 2) || "X";
 }
 
-function getReviewerMeta(review: Review, fallbackName: string) {
+function baseReviewerMeta(review: Review, fallbackName: string) {
   const local = getLocalProfile(review.reviewerId);
-  const offer = review.offerId ? getOfferById(review.offerId) : null;
-  const name = review.reviewerName || offer?.masterName || fallbackName;
+  const name = review.reviewerName || fallbackName;
   return {
     name,
-    initials: review.reviewerInitials || offer?.masterInitials || initials(name),
-    color: review.reviewerColor || offer?.masterColor || VIOLET,
+    initials: review.reviewerInitials || initials(name),
+    color: review.reviewerColor || VIOLET,
     photoUrl: local.photoUrl,
   };
 }
 
 function ReviewRow({ review, fallbackName }: { review: Review; fallbackName: string }) {
   const { t } = useI18n();
-  const meta = getReviewerMeta(review, fallbackName);
+  const [meta, setMeta] = useState(() => baseReviewerMeta(review, fallbackName));
+
+  useEffect(() => {
+    setMeta(baseReviewerMeta(review, fallbackName));
+    if (review.reviewerName && review.reviewerInitials && review.reviewerColor) return;
+    if (!review.offerId) return;
+    let cancelled = false;
+    getOfferById(review.offerId).then((offer) => {
+      if (cancelled || !offer) return;
+      const name = review.reviewerName || offer.masterName || fallbackName;
+      setMeta((m) => ({
+        ...m,
+        name,
+        initials: review.reviewerInitials || offer.masterInitials || initials(name),
+        color: review.reviewerColor || offer.masterColor || VIOLET,
+      }));
+    });
+    return () => { cancelled = true; };
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [review, fallbackName]);
 
   return (
     <div className="bg-white rounded-2xl border border-gray-100 p-4">

@@ -378,6 +378,7 @@ function ProviderContent({ onNavigate }: { onNavigate: (path: string) => void })
   const completionDismissKey = user?.id ? `profile_completion_dismissed_${user.id}` : "";
   const [completionDismissed, setCompletionDismissed] = useState(false);
   const [showBadgeSheet, setShowBadgeSheet] = useState(false);
+  const [unseenCount, setUnseenCount] = useState(0);
 
   useEffect(() => {
     if (user?.id) setLocal(getLocalProfile(user.id));
@@ -437,9 +438,19 @@ function ProviderContent({ onNavigate }: { onNavigate: (path: string) => void })
 
   const serviceAreas = local.serviceAreas ?? (local.region ? [local.region] : []);
   const serviceAreaV2 = local.serviceAreaV2;
-  const requests = getMatchingRequests(selectedCategories, serviceAreas, user?.id ?? "", serviceAreaV2);
-  const seen = getSeenIds(user?.id ?? "");
-  const unseenCount = requests.filter((r) => !seen.includes(r.id) && r.status === "open").length;
+  const selectedCategoriesKey = selectedCategories.join(",");
+  const serviceAreasKey = serviceAreas.join(",");
+  useEffect(() => {
+    if (!user?.id) return;
+    let cancelled = false;
+    getMatchingRequests(selectedCategories, serviceAreas, user.id, serviceAreaV2).then((requests) => {
+      if (cancelled) return;
+      const seen = getSeenIds(user.id);
+      setUnseenCount(requests.filter((r) => !seen.includes(r.id) && r.status === "open").length);
+    });
+    return () => { cancelled = true; };
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [user?.id, selectedCategoriesKey, serviceAreasKey, serviceAreaV2]);
 
   const menuItems = [
     {

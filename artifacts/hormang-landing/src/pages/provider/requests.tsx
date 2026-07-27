@@ -19,7 +19,7 @@ import {
   getLocalizedDescription, getRequestsWithZeroOffers,
   type ProviderRequest, type ProviderOffer,
 } from "@/lib/provider-store";
-import { canSubmitOffer, offerBlockLabel, MAX_ACTIVE_OFFERS, MAX_LIFETIME_OFFERS } from "@/lib/requests-store";
+import { canSubmitOffer, offerBlockLabel, MAX_ACTIVE_OFFERS, MAX_LIFETIME_OFFERS, type CanSubmitOfferReason, type Offer } from "@/lib/requests-store";
 import { getAllQuestionsForCategory, collectActiveQuestions, type QuestionOption } from "@/lib/questionnaire-store";
 import { getLocalizedText } from "@/lib/localization";
 import { getRequestLocation } from "@/lib/regions";
@@ -105,7 +105,13 @@ function FullscreenSlider({
   const { user: sliderUser } = useAuth();
 
   const urg = current ? urgencyLabel(current.urgency, t) : null;
-  const sliderCheck = current ? canSubmitOffer(current.id, sliderUser?.id ?? "") : { ok: true, reason: undefined as ReturnType<typeof canSubmitOffer>["reason"] };
+  const [sliderCheck, setSliderCheck] = useState<{ ok: boolean; reason?: CanSubmitOfferReason }>({ ok: true, reason: undefined });
+  useEffect(() => {
+    if (!current) return;
+    let cancelled = false;
+    canSubmitOffer(current.id, sliderUser?.id ?? "").then((c) => { if (!cancelled) setSliderCheck(c); });
+    return () => { cancelled = true; };
+  }, [current?.id, sliderUser?.id]);
   const sliderBlocked = !sliderCheck.ok;
   const sliderBlockedText = sliderBlocked ? offerBlockLabel(sliderCheck.reason, t) : "";
 
@@ -471,6 +477,143 @@ function OfferDetailModal({
   );
 }
 
+/* ─── Available Request Card (resolves canSubmitOffer async) ────────── */
+function RequestListCard({ r, index: i, isUnseen, providerId, onOpenOfferForm, onIgnore }: {
+  r: ProviderRequest;
+  index: number;
+  isUnseen: boolean;
+  providerId: string;
+  onOpenOfferForm: (req: ProviderRequest) => void;
+  onIgnore: (id: string) => void;
+}) {
+  const { t, locale } = useI18n();
+  const urg = urgencyLabel(r.urgency, t);
+  const [submitCheck, setSubmitCheck] = useState<{ ok: boolean; reason?: CanSubmitOfferReason; active: number; total: number }>({ ok: true, active: 0, total: 0 });
+  useEffect(() => {
+    let cancelled = false;
+    canSubmitOffer(r.id, providerId).then((c) => { if (!cancelled) setSubmitCheck(c); });
+    return () => { cancelled = true; };
+  }, [r.id, providerId]);
+  const blocked = !submitCheck.ok;
+  const blockedText = blocked ? offerBlockLabel(submitCheck.reason, t) : "";
+
+  return (
+    <motion.div
+      initial={{ opacity: 0, y: 10 }}
+      animate={{ opacity: 1, y: 0 }}
+      transition={{ delay: i * 0.04 }}
+      className={`bg-white rounded-2xl border card-shadow overflow-hidden ${
+        isUnseen ? "border-violet-100" : "border-gray-100"
+      }`}
+    >
+      <div
+        onClick={() => onOpenOfferForm(r)}
+        className="px-4 pt-3 pb-2 border-b border-gray-50 flex items-center gap-2">
+        <CategoryIcon categoryId={r.categoryId} emoji={r.emoji} size={22} shape="square" className="flex-shrink-0" />
+        <p className="text-xs font-semibold text-gray-500 flex-1">{getCategoryDisplayName(r.categoryId, locale, r.categoryName)}</p>
+        {isUnseen && <span className="w-2 h-2 rounded-full bg-violet-500 flex-shrink-0" />}
+        <span className="text-[10px] text-gray-400">{timeAgo(r.createdAt, t)}</span>
+      </div>
+      <div
+        onClick={() => onOpenOfferForm(r)}
+        className="p-4">
+        <p className="text-sm text-gray-700 mb-2 leading-relaxed">{getLocalizedDescription(r, locale)}</p>
+        <div className="flex items-center gap-3 mb-3 flex-wrap">
+          <span className="font-extrabold text-sm text-violet-700">{getBudgetLabel(r.budgetLabel, t)}</span>
+          <span className={`text-[10px] font-bold px-1.5 py-0.5 rounded-full border ${urg.color}`}>
+            {urg.label}
+          </span>
+          <span className="flex items-center gap-0.5 text-[11px] text-gray-400">
+            <MapPin className="w-3 h-3" />{getRequestLocation(r, locale)}
+          </span>
+          <span className={`text-[11px] font-bold ${submitCheck.active === 0 ? "text-red-500" : "text-emerald-600"}`}>
+            {tFormat(t.providerRequests.card.activeOffersTpl, { n: submitCheck.active, max: MAX_ACTIVE_OFFERS })}
+          </span>
+        </div>
+        {blocked && (
+          <div className="mb-2 flex items-center gap-2 bg-gray-50 border border-gray-200 rounded-xl px-3 py-2">
+            <span className="text-sm flex-shrink-0">🔒</span>
+            <p className="text-[11px] font-bold text-gray-700 truncate">{blockedText}</p>
+          </div>
+        )}
+        <div className="flex gap-2">
+          <button
+            onClick={() => onIgnore(r.id)}
+            className="flex-1 h-9 rounded-xl border-2 border-red-100 bg-red-50 text-red-500 font-bold text-xs flex items-center justify-center active:scale-95 hover:bg-red-100 transition-all"
+          >
+            {t.providerRequests.card.delete}
+          </button>
+          <button
+            onClick={() => !blocked && onOpenOfferForm(r)}
+            disabled={blocked}
+            className="flex-1 h-9 rounded-xl text-white font-bold text-xs flex items-center justify-center gap-1 active:scale-95 shadow-sm disabled:opacity-60 disabled:cursor-not-allowed disabled:active:scale-100"
+            style={{ background: blocked ? "#9CA3AF" : VIOLET }}
+          >
+            <Send className="w-3.5 h-3.5" />
+            {blocked ? t.providerRequests.card.blockedShort : t.providerRequests.card.sendOffer}
+          </button>
+        </div>
+      </div>
+    </motion.div>
+  );
+}
+
+/* ─── Responded Request Row (resolves its offer async) ───────────────── */
+function RespondedRow({ r, index: i, providerId, onOpenDetail }: {
+  r: ProviderRequest;
+  index: number;
+  providerId: string;
+  onOpenDetail: (request: ProviderRequest, offer: Offer) => void;
+}) {
+  const { t, locale } = useI18n();
+  const [offer, setOffer] = useState<Offer | undefined>(undefined);
+  useEffect(() => {
+    let cancelled = false;
+    getOfferByRequestId(r.id, providerId).then((o) => { if (!cancelled) setOffer(o); });
+    return () => { cancelled = true; };
+  }, [r.id, providerId]);
+
+  const st = offer?.status ?? "pending";
+  const badge =
+    st === "accepted"
+      ? { label: t.providerRequests.responded.accepted, cls: "text-emerald-600 bg-emerald-50 border-emerald-200", icon: <CheckCircle2 className="w-3 h-3" /> }
+      : st === "rejected"
+      ? { label: t.providerRequests.responded.rejected, cls: "text-red-500 bg-red-50 border-red-200", icon: <X className="w-3 h-3" /> }
+      : { label: t.providerRequests.responded.pending, cls: "text-amber-600 bg-amber-50 border-amber-200", icon: <Clock className="w-3 h-3" /> };
+  const cardBorder =
+    st === "accepted" ? "border-emerald-100 hover:border-emerald-200" :
+    st === "rejected" ? "border-red-100 hover:border-red-200" :
+    "border-gray-100 hover:border-gray-200";
+
+  return (
+    <motion.div
+      initial={{ opacity: 0, y: 6 }}
+      animate={{ opacity: 1, y: 0 }}
+      transition={{ delay: i * 0.04 }}
+      onClick={() => offer && onOpenDetail(r, offer)}
+      className={`bg-white rounded-2xl border overflow-hidden cursor-pointer active:scale-[.99] transition-all ${cardBorder}`}
+    >
+      <div className="px-4 py-3 flex items-center gap-3">
+        <CategoryIcon categoryId={r.categoryId} emoji={r.emoji} size={36} shape="square" className="flex-shrink-0" />
+        <div className="flex-1 min-w-0">
+          <p className="text-xs font-bold text-gray-800 truncate">{getCategoryDisplayName(r.categoryId, locale, r.categoryName)}</p>
+          <p className="text-[11px] text-gray-400 truncate">{r.customerName} · {getRequestLocation(r, locale)}</p>
+        </div>
+        <div className="flex flex-col items-end gap-1">
+          <span className={`inline-flex items-center gap-1 text-[10px] font-bold border px-2 py-0.5 rounded-full ${badge.cls}`}>
+            {badge.icon}
+            {badge.label}
+          </span>
+          {offer && (
+            <span className="text-[10px] text-violet-600 font-bold">{offer.priceLabel}</span>
+          )}
+        </div>
+        {offer && <Eye className="w-4 h-4 text-gray-300 flex-shrink-0" />}
+      </div>
+    </motion.div>
+  );
+}
+
 export default function ProviderRequestsPage() {
   useStoreRefresh();
   const { t, locale } = useI18n();
@@ -487,7 +630,7 @@ export default function ProviderRequestsPage() {
   const [sliderStart, setSliderStart] = useState(0);
   const [sliderRequests, setSliderRequests] = useState<ProviderRequest[]>([]);
   const [offerRequest, setOfferRequest] = useState<ProviderRequest | null>(null);
-  const [offerDetailRequest, setOfferDetailRequest] = useState<ProviderRequest | null>(null);
+  const [offerDetail, setOfferDetail] = useState<{ request: ProviderRequest; offer: Offer } | null>(null);
 
   const { user } = useAuth();
   const providerId = user?.id ?? "";
@@ -496,8 +639,27 @@ export default function ProviderRequestsPage() {
   const serviceAreaV2 = reqLocalProfile.serviceAreaV2;
   const selectedCategories = providerProfile?.categories ?? [];
   const filterableCategories: string[] = selectedCategories.length > 1 ? selectedCategories : [];
-  const requests = getMatchingRequests(selectedCategories, serviceAreas, providerId, serviceAreaV2);
-  const unseen = getUnseenRequests(selectedCategories, serviceAreas, providerId, serviceAreaV2);
+  const selectedCategoriesKey = selectedCategories.join(",");
+  const serviceAreasKey = serviceAreas.join(",");
+
+  const [requests, setRequests] = useState<ProviderRequest[]>([]);
+  const [unseen, setUnseen] = useState<ProviderRequest[]>([]);
+  const [zeroOfferRequests, setZeroOfferRequests] = useState<ProviderRequest[]>([]);
+  const [refreshTick, setRefreshTick] = useState(0);
+  const load = () => setRefreshTick((n) => n + 1);
+  useEffect(() => {
+    if (!providerId) { setRequests([]); setUnseen([]); setZeroOfferRequests([]); return; }
+    Promise.all([
+      getMatchingRequests(selectedCategories, serviceAreas, providerId, serviceAreaV2),
+      getUnseenRequests(selectedCategories, serviceAreas, providerId, serviceAreaV2),
+      getRequestsWithZeroOffers(selectedCategories, serviceAreas, providerId, serviceAreaV2),
+    ]).then(([reqs, uns, zero]) => {
+      setRequests(reqs);
+      setUnseen(uns);
+      setZeroOfferRequests(zero);
+    }).catch((err) => console.error("Load provider requests failed:", err));
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [selectedCategoriesKey, serviceAreasKey, serviceAreaV2, providerId, refreshTick]);
 
   const prevUnseenCount = useRef<number | null>(null);
   useEffect(() => {
@@ -524,8 +686,6 @@ export default function ProviderRequestsPage() {
   const allOpen = requests.filter((r) => r.status === "open");
   const allResponded = requests.filter((r) => r.status === "responded");
   const allIgnored = requests.filter((r) => r.status === "ignored");
-
-  const zeroOfferRequests = getRequestsWithZeroOffers(selectedCategories, serviceAreas, providerId, serviceAreaV2);
 
   const tabSource =
     tab === "unread"    ? unseen :
@@ -587,15 +747,17 @@ export default function ProviderRequestsPage() {
     setShowSlider(true);
   }
 
-  function handleMarkAllSeen() {
-    markAllSeen(selectedCategories, serviceAreas, providerId, serviceAreaV2);
+  async function handleMarkAllSeen() {
+    await markAllSeen(selectedCategories, serviceAreas, providerId, serviceAreaV2);
     toast({ title: t.providerRequests.toast.allSeen });
+    load();
   }
 
   function openOfferForm(req: ProviderRequest) {
     markSeen(req.id, providerId);
     setShowSlider(false);
     setOfferRequest(req);
+    load();
   }
 
   function closeOfferForm() {
@@ -854,76 +1016,21 @@ export default function ProviderRequestsPage() {
           </div>
         ) : (
           <div className="space-y-3 mb-6">
-            {filtered.map((r, i) => {
-              const urg = urgencyLabel(r.urgency, t);
-              const isUnseen = unseen.some((u) => u.id === r.id);
-              const submitCheck = canSubmitOffer(r.id, providerId);
-              const blocked = !submitCheck.ok;
-              const blockedText = blocked ? offerBlockLabel(submitCheck.reason, t) : "";
-              return (
-                <motion.div
-                  key={r.id}
-                  initial={{ opacity: 0, y: 10 }}
-                  animate={{ opacity: 1, y: 0 }}
-                  transition={{ delay: i * 0.04 }}
-                  className={`bg-white rounded-2xl border card-shadow overflow-hidden ${
-                    isUnseen ? "border-violet-100" : "border-gray-100"
-                  }`}
-                >
-                  <div 
-                    onClick={() => openOfferForm(r)}
-                    className="px-4 pt-3 pb-2 border-b border-gray-50 flex items-center gap-2">
-                    <CategoryIcon categoryId={r.categoryId} emoji={r.emoji} size={22} shape="square" className="flex-shrink-0" />
-                    <p className="text-xs font-semibold text-gray-500 flex-1">{getCategoryDisplayName(r.categoryId, locale, r.categoryName)}</p>
-                    {isUnseen && <span className="w-2 h-2 rounded-full bg-violet-500 flex-shrink-0" />}
-                    <span className="text-[10px] text-gray-400">{timeAgo(r.createdAt, t)}</span>
-                  </div>
-                  <div
-                    onClick={() => openOfferForm(r)}
-                    className="p-4">
-                    <p className="text-sm text-gray-700 mb-2 leading-relaxed">{getLocalizedDescription(r, locale)}</p>
-                    <div className="flex items-center gap-3 mb-3 flex-wrap">
-                      <span className="font-extrabold text-sm text-violet-700">{getBudgetLabel(r.budgetLabel, t)}</span>
-                      <span className={`text-[10px] font-bold px-1.5 py-0.5 rounded-full border ${urg.color}`}>
-                        {urg.label}
-                      </span>
-                      <span className="flex items-center gap-0.5 text-[11px] text-gray-400">
-                        <MapPin className="w-3 h-3" />{getRequestLocation(r, locale)}
-                      </span>
-                      <span className={`text-[11px] font-bold ${submitCheck.active === 0 ? "text-red-500" : "text-emerald-600"}`}>
-                        {tFormat(t.providerRequests.card.activeOffersTpl, { n: submitCheck.active, max: MAX_ACTIVE_OFFERS })}
-                      </span>
-                    </div>
-                    {blocked && (
-                      <div className="mb-2 flex items-center gap-2 bg-gray-50 border border-gray-200 rounded-xl px-3 py-2">
-                        <span className="text-sm flex-shrink-0">🔒</span>
-                        <p className="text-[11px] font-bold text-gray-700 truncate">{blockedText}</p>
-                      </div>
-                    )}
-                    <div className="flex gap-2">
-                      <button
-                        onClick={() => {
-                          updateProviderRequestStatus(r.id, "ignored", providerId);
-                          markSeen(r.id, providerId);
-                        }}
-                        className="flex-1 h-9 rounded-xl border-2 border-red-100 bg-red-50 text-red-500 font-bold text-xs flex items-center justify-center active:scale-95 hover:bg-red-100 transition-all"
-                      >
-                        {t.providerRequests.card.delete}
-                      </button>
-                      <button
-                        onClick={() => !blocked && openOfferForm(r)}
-                        disabled={blocked}
-                        className="flex-1 h-9 rounded-xl text-white font-bold text-xs flex items-center justify-center gap-1 active:scale-95 shadow-sm disabled:opacity-60 disabled:cursor-not-allowed disabled:active:scale-100"
-                        style={{ background: blocked ? "#9CA3AF" : VIOLET }}
-                      >
-                        <Send className="w-3.5 h-3.5" />
-                        {blocked ? t.providerRequests.card.blockedShort : t.providerRequests.card.sendOffer}
-                      </button>
-                    </div>
-                  </div>
-                </motion.div>
-              );
-            })}
+            {filtered.map((r, i) => (
+              <RequestListCard
+                key={r.id}
+                r={r}
+                index={i}
+                isUnseen={unseen.some((u) => u.id === r.id)}
+                providerId={providerId}
+                onOpenOfferForm={openOfferForm}
+                onIgnore={(id) => {
+                  updateProviderRequestStatus(id, "ignored", providerId);
+                  markSeen(id, providerId);
+                  load();
+                }}
+              />
+            ))}
           </div>
         )}
 
@@ -933,48 +1040,15 @@ export default function ProviderRequestsPage() {
               {tFormat(t.providerRequests.responded.titleTpl, { n: allResponded.length })}
             </p>
             <div className="space-y-2">
-              {allResponded.map((r, i) => {
-                const offer = getOfferByRequestId(r.id, providerId);
-                const st = offer?.status ?? "pending";
-                const badge =
-                  st === "accepted"
-                    ? { label: t.providerRequests.responded.accepted, cls: "text-emerald-600 bg-emerald-50 border-emerald-200", icon: <CheckCircle2 className="w-3 h-3" /> }
-                    : st === "rejected"
-                    ? { label: t.providerRequests.responded.rejected, cls: "text-red-500 bg-red-50 border-red-200", icon: <X className="w-3 h-3" /> }
-                    : { label: t.providerRequests.responded.pending, cls: "text-amber-600 bg-amber-50 border-amber-200", icon: <Clock className="w-3 h-3" /> };
-                const cardBorder =
-                  st === "accepted" ? "border-emerald-100 hover:border-emerald-200" :
-                  st === "rejected" ? "border-red-100 hover:border-red-200" :
-                  "border-gray-100 hover:border-gray-200";
-                return (
-                  <motion.div
-                    key={r.id}
-                    initial={{ opacity: 0, y: 6 }}
-                    animate={{ opacity: 1, y: 0 }}
-                    transition={{ delay: i * 0.04 }}
-                    onClick={() => offer && setOfferDetailRequest(r)}
-                    className={`bg-white rounded-2xl border overflow-hidden cursor-pointer active:scale-[.99] transition-all ${cardBorder}`}
-                  >
-                    <div className="px-4 py-3 flex items-center gap-3">
-                      <CategoryIcon categoryId={r.categoryId} emoji={r.emoji} size={36} shape="square" className="flex-shrink-0" />
-                      <div className="flex-1 min-w-0">
-                        <p className="text-xs font-bold text-gray-800 truncate">{getCategoryDisplayName(r.categoryId, locale, r.categoryName)}</p>
-                        <p className="text-[11px] text-gray-400 truncate">{r.customerName} · {getRequestLocation(r, locale)}</p>
-                      </div>
-                      <div className="flex flex-col items-end gap-1">
-                        <span className={`inline-flex items-center gap-1 text-[10px] font-bold border px-2 py-0.5 rounded-full ${badge.cls}`}>
-                          {badge.icon}
-                          {badge.label}
-                        </span>
-                        {offer && (
-                          <span className="text-[10px] text-violet-600 font-bold">{offer.priceLabel}</span>
-                        )}
-                      </div>
-                      {offer && <Eye className="w-4 h-4 text-gray-300 flex-shrink-0" />}
-                    </div>
-                  </motion.div>
-                );
-              })}
+              {allResponded.map((r, i) => (
+                <RespondedRow
+                  key={r.id}
+                  r={r}
+                  index={i}
+                  providerId={providerId}
+                  onOpenDetail={(request, offer) => setOfferDetail({ request, offer })}
+                />
+              ))}
             </div>
           </div>
         )}
@@ -1023,6 +1097,7 @@ export default function ProviderRequestsPage() {
             onIgnore={(id) => {
               updateProviderRequestStatus(id, "ignored", providerId);
               markSeen(id, providerId);
+              load();
             }}
           />
         )}
@@ -1039,12 +1114,12 @@ export default function ProviderRequestsPage() {
       </AnimatePresence>
 
       <AnimatePresence>
-        {offerDetailRequest && getOfferByRequestId(offerDetailRequest.id, providerId) && (
+        {offerDetail && (
           <OfferDetailModal
-            key={offerDetailRequest.id}
-            request={offerDetailRequest}
-            offer={getOfferByRequestId(offerDetailRequest.id, providerId)!}
-            onClose={() => setOfferDetailRequest(null)}
+            key={offerDetail.request.id}
+            request={offerDetail.request}
+            offer={offerDetail.offer}
+            onClose={() => setOfferDetail(null)}
           />
         )}
       </AnimatePresence>

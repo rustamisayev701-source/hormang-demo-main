@@ -2,6 +2,7 @@ import { Router, type IRouter } from "express";
 import { eq, and, or, asc, inArray, sql } from "drizzle-orm";
 import { db, chatsTable, chatMessagesTable, requestsTable, type ChatRow, type ChatMessageRow } from "@workspace/db";
 import { requireAuth, type AuthRequest } from "../middlewares/auth.js";
+import { requireAdminKey } from "../middlewares/admin.js";
 
 const router: IRouter = Router();
 
@@ -38,6 +39,29 @@ async function resolveRole(chat: { requestId: string; masterId: string }, userId
   return null;
 }
 
+// ─── GET /admin/all — every chat, with its messages, for admin moderation ──
+router.get("/admin/all", requireAdminKey, async (_req, res) => {
+  try {
+    const rows = await db.select().from(chatsTable);
+    const allMessages = await db.select().from(chatMessagesTable).orderBy(asc(chatMessagesTable.createdAt));
+    const messagesByChat = new Map<string, ChatMessageRow[]>();
+    for (const m of allMessages) {
+      const list = messagesByChat.get(m.chatId) ?? [];
+      list.push(m);
+      messagesByChat.set(m.chatId, list);
+    }
+    res.json({
+      chats: rows.map((c) => ({
+        ...chatJson(c),
+        messages: (messagesByChat.get(c.id) ?? []).map(messageJson),
+      })),
+    });
+  } catch (err) {
+    console.error("Admin list chats error:", err);
+    res.status(500).json({ error: "Xatolik yuz berdi" });
+  }
+});
+
 // ─── GET /mine — every chat the authenticated user can see, as either side ─
 router.get("/mine", requireAuth, async (req: AuthRequest, res) => {
   try {
@@ -67,7 +91,7 @@ router.get("/by-pair/:requestId/:masterId", requireAuth, async (req: AuthRequest
         res.status(403).json({ error: "Ruxsat yo'q" });
         return;
       }
-      [chat] = await db.insert(chatsTable).values({ requestId, masterId }).returning();
+      [chat] = await db.insert(chatsTable).values({ id: `${requestId}_${masterId}`, requestId, masterId }).returning();
     } else if (!(await resolveRole(chat, req.user!.id))) {
       res.status(403).json({ error: "Ruxsat yo'q" });
       return;

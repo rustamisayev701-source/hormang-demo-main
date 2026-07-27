@@ -2,8 +2,7 @@
  * /chat-offers — Combined Offers + Chat History page
  * Shows all received offers (grouped by request) and recent chats.
  */
-import { useState } from "react";
-import { useStoreRefresh } from "@/hooks/use-store-refresh";
+import { useState, useEffect, useCallback } from "react";
 import { useLocation, useSearch } from "wouter";
 import { motion, AnimatePresence } from "framer-motion";
 import {
@@ -14,9 +13,9 @@ import { ImageStrip } from "@/components/image-grid";
 import { Button } from "@/components/ui/button";
 import { BottomNav } from "@/components/bottom-nav";
 import {
-  getOffersByCustomer, getChatsByCustomer, getRequestById,
-  updateOfferStatus, getOfferForChat,
-  type Offer, type Chat,
+  getOffersByCustomer, getChatsByCustomer, getRequestsByCustomer,
+  updateOfferStatus,
+  type Offer, type Chat, type CustomerRequest,
 } from "@/lib/requests-store";
 import { useAuth } from "@/contexts/auth-context";
 import { OfferDetailModal } from "@/components/offer-detail-modal";
@@ -43,10 +42,12 @@ function formatDate(iso: string, months?: string[]): string {
 }
 
 /* ─── Offer Card ─────────────────────────────────────────────────── */
-function OfferCard({ offer, index, anyAccepted }: {
+function OfferCard({ offer, req, index, anyAccepted, onChanged }: {
   offer: Offer;
+  req: CustomerRequest | undefined;
   index: number;
   anyAccepted: boolean;
+  onChanged: () => void;
 }) {
   const { t, locale } = useI18n();
   const tt = t.chatOffersPage;
@@ -54,7 +55,6 @@ function OfferCard({ offer, index, anyAccepted }: {
   const [showConfirm, setShowConfirm] = useState(false);
   const [, setLocation] = useLocation();
 
-  const req = getRequestById(offer.requestId);
   const isAccepted  = offer.status === "accepted";
   const isInProgress = offer.status === "in_progress";
   const isRejected  = offer.status === "rejected";
@@ -66,22 +66,16 @@ function OfferCard({ offer, index, anyAccepted }: {
     setShowConfirm(true);
   }
 
-  function confirmAccept() {
-    updateOfferStatus(offer.id, "accepted", {
-      accepted: t.chatPage.systemMsgOfferAccepted,
-      rejected: t.chatPage.systemMsgOfferRejected,
-      sibling:  t.chatPage.systemMsgOfferSiblingClosed,
-    });
+  async function confirmAccept() {
+    await updateOfferStatus(offer.id, "accepted");
     setShowConfirm(false);
+    onChanged();
   }
 
-  function reject(e: React.MouseEvent) {
+  async function reject(e: React.MouseEvent) {
     e.stopPropagation();
-    updateOfferStatus(offer.id, "rejected", {
-      accepted: t.chatPage.systemMsgOfferAccepted,
-      rejected: t.chatPage.systemMsgOfferRejected,
-      sibling:  t.chatPage.systemMsgOfferSiblingClosed,
-    });
+    await updateOfferStatus(offer.id, "rejected");
+    onChanged();
   }
 
   // Can accept: offer is pending, and no other offer on this request is already accepted
@@ -264,13 +258,12 @@ function OfferCard({ offer, index, anyAccepted }: {
 }
 
 /* ─── Chat Row ───────────────────────────────────────────────────── */
-function ChatRow({ chat, index }: { chat: Chat; index: number }) {
+function ChatRow({ chat, offer, req, index }: { chat: Chat; offer: Offer | undefined; req: CustomerRequest | undefined; index: number }) {
   const { t, locale } = useI18n();
   const tt = t.chatOffersPage;
   const [, setLocation] = useLocation();
   const lastMsg = chat.messages[chat.messages.length - 1];
   const providerLocal = getLocalProfile(chat.masterId);
-  const offer = getOfferForChat(chat.requestId, chat.masterId);
   const st = offer?.status ?? "pending";
   const unread = chat.customerUnread ?? 0;
 
@@ -334,7 +327,7 @@ function ChatRow({ chat, index }: { chat: Chat; index: number }) {
             </span>
           </div>
         </div>
-        <p className="text-xs text-gray-500 font-medium truncate mb-1">{getCategoryDisplayName(getRequestById(chat.requestId)?.categoryId ?? "", locale, chat.categoryName)}</p>
+        <p className="text-xs text-gray-500 font-medium truncate mb-1">{getCategoryDisplayName(req?.categoryId ?? "", locale, chat.categoryName)}</p>
         {offer && (
           <span className={`inline-flex items-center gap-1 text-[10px] font-bold border px-1.5 py-0.5 rounded-full ${badge.cls}`}>
             {badge.icon}
@@ -373,7 +366,6 @@ function ChatRow({ chat, index }: { chat: Chat; index: number }) {
 
 /* ─── Main Page ──────────────────────────────────────────────────── */
 export default function ChatOffersPage() {
-  useStoreRefresh();
   const { t, locale } = useI18n();
   const tt = t.chatOffersPage;
   const [, setLocation] = useLocation();
@@ -392,14 +384,34 @@ export default function ChatOffersPage() {
   }
 
   const customerId = user?.id ?? "";
-  const allOffers = getOffersByCustomer(customerId);
+  const [allOffers, setAllOffers] = useState<Offer[]>([]);
+  const [chats, setChats] = useState<Chat[]>([]);
+  const [requestById, setRequestById] = useState<Map<string, CustomerRequest>>(new Map());
+
+  const load = useCallback(async () => {
+    if (!customerId) return;
+    try {
+      const [offersRes, chatsRes, requestsRes] = await Promise.all([
+        getOffersByCustomer(customerId), getChatsByCustomer(customerId), getRequestsByCustomer(customerId),
+      ]);
+      setAllOffers(offersRes);
+      setChats(chatsRes);
+      setRequestById(new Map(requestsRes.map((r) => [r.id, r])));
+    } catch (err) {
+      console.error("Load offers/chats failed:", err);
+    }
+  }, [customerId]);
+
+  useEffect(() => { load(); }, [load]);
+
+  const offerByPair = new Map(allOffers.map((o) => [`${o.requestId}_${o.masterId}`, o]));
+
   const filtered = filterRequestId ? allOffers.filter((o) => o.requestId === filterRequestId) : allOffers;
   const offers = [...filtered].sort((a, b) => {
     if (a.status === "pending" && b.status !== "pending") return -1;
     if (b.status === "pending" && a.status !== "pending") return 1;
     return new Date(b.createdAt).getTime() - new Date(a.createdAt).getTime();
   });
-  const chats = getChatsByCustomer(customerId);
 
   // Requests that already have one accepted offer — used to disable Accept on other cards
   const activeRequestIds = new Set(
@@ -408,7 +420,7 @@ export default function ChatOffersPage() {
       .map((o) => o.requestId)
   );
 
-  const filteredReq = filterRequestId ? getRequestById(filterRequestId) : undefined;
+  const filteredReq = filterRequestId ? requestById.get(filterRequestId) : undefined;
   const pendingCount = offers.filter((o) => o.status === "pending").length;
 
   return (
@@ -507,7 +519,9 @@ export default function ChatOffersPage() {
                     <OfferCard
                       key={offer.id}
                       offer={offer}
+                      req={requestById.get(offer.requestId)}
                       index={i}
+                      onChanged={load}
                       anyAccepted={
                         offer.status !== "accepted" &&
                         offer.status !== "in_progress" &&
@@ -540,7 +554,7 @@ export default function ChatOffersPage() {
               ) : (
                 <div className="space-y-2">
                   {chats.map((chat, i) => (
-                    <ChatRow key={chat.id} chat={chat} index={i} />
+                    <ChatRow key={chat.id} chat={chat} offer={offerByPair.get(`${chat.requestId}_${chat.masterId}`)} req={requestById.get(chat.requestId)} index={i} />
                   ))}
                 </div>
               )}

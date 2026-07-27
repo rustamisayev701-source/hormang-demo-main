@@ -1,4 +1,4 @@
-import { getRequests, getOffers } from "./requests-store";
+import { fetchRequestPopularity } from "./requests-client";
 import { getAllCategories } from "./categories";
 
 export interface PopularCategory {
@@ -12,37 +12,21 @@ export interface PopularCategory {
 
 /**
  * Compute real popularity scores for all active categories from live
- * platform data (requests, offers, completed orders).
+ * platform-wide data (requests, offers, completed orders), fetched as a
+ * per-category aggregate — no individual request/offer rows ever reach
+ * the client.
  *
  * Formula:
  *   score = requestCount × 1.0 + offerCount × 0.5 + completedCount × 0.8
  *
  * Returns categories sorted descending by popularityScore, with rank assigned.
- * Can be used on the homepage, admin analytics, or any trend widget.
  */
-export function getPopularCategories(): PopularCategory[] {
-  const requests = getRequests();
-  const offers   = getOffers();
-  const cats     = getAllCategories().filter((c) => c.active);
-
-  const scoreMap = new Map<string, { requestCount: number; offerCount: number; completedCount: number }>();
-
-  for (const req of requests) {
-    if (!req.categoryId) continue;
-    const s = scoreMap.get(req.categoryId) ?? { requestCount: 0, offerCount: 0, completedCount: 0 };
-    s.requestCount++;
-    if (req.status === "completed") s.completedCount++;
-    scoreMap.set(req.categoryId, s);
-  }
-
-  const reqById = new Map(requests.map((r) => [r.id, r]));
-  for (const offer of offers) {
-    const req = reqById.get(offer.requestId);
-    if (!req?.categoryId) continue;
-    const s = scoreMap.get(req.categoryId) ?? { requestCount: 0, offerCount: 0, completedCount: 0 };
-    s.offerCount++;
-    scoreMap.set(req.categoryId, s);
-  }
+export async function getPopularCategories(): Promise<PopularCategory[]> {
+  const [{ categories: agg }, cats] = await Promise.all([
+    fetchRequestPopularity(),
+    Promise.resolve(getAllCategories().filter((c) => c.active)),
+  ]);
+  const scoreMap = new Map(agg.map((a) => [a.categoryId, a]));
 
   const scored = cats
     .map((cat) => {

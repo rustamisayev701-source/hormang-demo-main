@@ -1,11 +1,16 @@
-import { pgTable, text, timestamp, jsonb, boolean, integer, pgEnum, uniqueIndex } from "drizzle-orm/pg-core";
+import { pgTable, text, timestamp, jsonb, boolean, integer, pgEnum } from "drizzle-orm/pg-core";
 import { usersTable } from "./users";
 import { requestsTable } from "./requests";
 
 export const chatSenderEnum = pgEnum("chat_sender", ["customer", "master", "system"]);
 
 export const chatsTable = pgTable("chats", {
-  id: text("id").primaryKey().$defaultFn(() => crypto.randomUUID()),
+  /** Deterministic `${requestId}_${masterId}`, set explicitly at insert time —
+   * not a random default. The frontend builds chat URLs directly from this
+   * pattern in many places without a lookup round-trip, so the id itself
+   * must stay predictable (this also makes it a de-facto unique constraint
+   * on the pair, so no separate index is needed). */
+  id: text("id").primaryKey(),
   requestId: text("request_id").notNull().references(() => requestsTable.id, { onDelete: "cascade" }),
   masterId: text("master_id").notNull().references(() => usersTable.id, { onDelete: "cascade" }),
   providerUnread: integer("provider_unread").notNull().default(0),
@@ -13,7 +18,7 @@ export const chatsTable = pgTable("chats", {
   customerClearedAt: timestamp("customer_cleared_at"),
   providerClearedAt: timestamp("provider_cleared_at"),
   createdAt: timestamp("created_at").notNull().defaultNow(),
-}, (t) => [uniqueIndex("chats_request_master_idx").on(t.requestId, t.masterId)]);
+});
 
 export const chatMessagesTable = pgTable("chat_messages", {
   id: text("id").primaryKey().$defaultFn(() => crypto.randomUUID()),

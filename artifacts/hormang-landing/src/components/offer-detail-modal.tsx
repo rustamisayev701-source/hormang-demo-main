@@ -3,7 +3,7 @@
  * Shows the original request Q&A + the provider's offer details.
  * Tapping "Ijrochi profilini ko'rish" opens the unified PublicProfileModal.
  */
-import { useState } from "react";
+import { useState, useEffect, useCallback } from "react";
 import { TangaCoin } from "@/components/tanga-coin";
 import { motion, AnimatePresence } from "framer-motion";
 import {
@@ -14,8 +14,8 @@ import { Button } from "@/components/ui/button";
 import { useLocation } from "wouter";
 import {
   getRequestById, getOrCreateChat, updateOfferStatus,
-  getOffers,
-  type Offer,
+  getOffersByRequestId,
+  type Offer, type CustomerRequest,
 } from "@/lib/requests-store";
 import { useStoreRefresh } from "@/hooks/use-store-refresh";
 import { getTransactionByOfferId } from "@/lib/tanga-history-store";
@@ -123,11 +123,17 @@ export function OfferDetailModal({ offer, onClose, readOnly = false }: OfferDeta
   const tt = t.offerDetailModal;
 
   /* ── Reactive live data ───────────────────────────────────────────
-     Subscribe to store changes so the modal re-renders whenever
-     updateOfferStatus() is called (either here or in the list card).
-     Re-read from localStorage each render to get the current truth. */
-  useStoreRefresh();
-  const allOffers = getOffers();
+     Refetch this request's offers so the modal reflects the current truth
+     even if updateOfferStatus() was called elsewhere (e.g. the list card). */
+  const [allOffers, setAllOffers] = useState<Offer[]>([offer]);
+  const [req, setReq] = useState<CustomerRequest | undefined>(undefined);
+  const load = useCallback(() => {
+    Promise.all([getOffersByRequestId(offer.requestId), getRequestById(offer.requestId)])
+      .then(([offers, request]) => { setAllOffers(offers); setReq(request); })
+      .catch((err) => console.error("Load offer detail failed:", err));
+  }, [offer.requestId]);
+  useEffect(() => { load(); }, [load]);
+
   const liveOffer = allOffers.find((o) => o.id === offer.id) ?? offer;
 
   /* Has ANY other offer on this same request already been accepted? */
@@ -149,7 +155,6 @@ export function OfferDetailModal({ offer, onClose, readOnly = false }: OfferDeta
   /* Can still accept: offer is pending and no sibling offer is accepted */
   const canAccept = !isAccepted && !isInProgress && !isRejected && !isCompleted && !anyAccepted;
 
-  const req = getRequestById(offer.requestId);
   const providerLocal = getLocalProfile(offer.masterId);
 
   /* Build Q&A pairs from request (skip image answers)
@@ -198,36 +203,21 @@ export function OfferDetailModal({ offer, onClose, readOnly = false }: OfferDeta
     ? budgetAnswer.toLocaleString("uz-Latn-UZ") + " " + tt.sumSuffix
     : null;
 
-  function openChat() {
-    const chat = getOrCreateChat(
-      offer.requestId,
-      offer.masterId,
-      offer.masterName,
-      offer.masterInitials,
-      offer.masterColor,
-      offer.avgResponseTime,
-      req?.categoryName ?? ""
-    );
+  async function openChat() {
+    const chat = await getOrCreateChat(offer.requestId, offer.masterId);
     onClose();
     setLocation(`/chat/${chat.id}`);
   }
 
-  function confirmAccept() {
-    updateOfferStatus(offer.id, "accepted", {
-      accepted: t.chatPage.systemMsgOfferAccepted,
-      rejected: t.chatPage.systemMsgOfferRejected,
-      sibling:  t.chatPage.systemMsgOfferSiblingClosed,
-    });
+  async function confirmAccept() {
+    await updateOfferStatus(offer.id, "accepted");
     setShowConfirm(false);
     onClose();
   }
 
-  function reject() {
-    updateOfferStatus(offer.id, "rejected", {
-      accepted: t.chatPage.systemMsgOfferAccepted,
-      rejected: t.chatPage.systemMsgOfferRejected,
-      sibling:  t.chatPage.systemMsgOfferSiblingClosed,
-    });
+  async function reject() {
+    await updateOfferStatus(offer.id, "rejected");
+    load();
   }
 
   return (
@@ -500,8 +490,8 @@ export function OfferDetailModal({ offer, onClose, readOnly = false }: OfferDeta
                     <div className="flex items-center justify-between">
                       <p className="text-[10px] text-amber-500 font-semibold">{tt.txCategory}</p>
                       <p className="text-[11px] font-bold text-amber-700 inline-flex items-center gap-1">
-                        <CategoryIcon categoryId={getRequestById(tangaTx.requestId)?.categoryId ?? null} emoji={tangaTx.categoryEmoji} size={14} shape="square" />
-                        {getCategoryDisplayName(getRequestById(tangaTx.requestId)?.categoryId ?? "", locale, tangaTx.categoryName)}
+                        <CategoryIcon categoryId={req?.categoryId ?? null} emoji={tangaTx.categoryEmoji} size={14} shape="square" />
+                        {getCategoryDisplayName(req?.categoryId ?? "", locale, tangaTx.categoryName)}
                       </p>
                     </div>
                     {/* Date + time */}

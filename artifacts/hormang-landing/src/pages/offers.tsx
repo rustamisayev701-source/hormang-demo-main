@@ -2,7 +2,7 @@
  * /offers — All received offers, optionally filtered by ?requestId=
  * Masters send offers; customer can accept/reject or open chat.
  */
-import { useState } from "react";
+import { useCallback, useEffect, useState } from "react";
 import { useStoreRefresh } from "@/hooks/use-store-refresh";
 import { useLocation, useSearch } from "wouter";
 import { motion, AnimatePresence } from "framer-motion";
@@ -14,7 +14,7 @@ import { Button } from "@/components/ui/button";
 import { BottomNav } from "@/components/bottom-nav";
 import {
   getOffersByCustomer, getRequestById, updateOfferStatus, reopenOffer,
-  type Offer,
+  type Offer, type CustomerRequest,
 } from "@/lib/requests-store";
 import { useToast } from "@/hooks/use-toast";
 import { useAuth } from "@/contexts/auth-context";
@@ -28,13 +28,12 @@ import { getCategoryDisplayName } from "@/lib/categories";
 import { CategoryIcon } from "@/components/category-icon";
 
 /* ─── Offer Card ─────────────────────────────────────────────────── */
-function OfferCard({ offer, index, anyAccepted }: { offer: Offer; index: number; anyAccepted: boolean }) {
+function OfferCard({ offer, req, index, anyAccepted, onChanged }: { offer: Offer; req: CustomerRequest | undefined; index: number; anyAccepted: boolean; onChanged: () => void }) {
   const [showDetail, setShowDetail] = useState(false);
   const { toast } = useToast();
   const { t, locale } = useI18n();
   const tt = t.offersPage;
 
-  const req = getRequestById(offer.requestId);
   const isAccepted = offer.status === "accepted";
   const isRejected = offer.status === "rejected";
   const providerLocal = getLocalProfile(offer.masterId);
@@ -42,22 +41,16 @@ function OfferCard({ offer, index, anyAccepted }: { offer: Offer; index: number;
   // Can accept only if no other offer on this request is already accepted
   const canAccept = !isAccepted && !isRejected && !anyAccepted;
 
-  function accept(e: React.MouseEvent) {
+  async function accept(e: React.MouseEvent) {
     e.stopPropagation();
-    updateOfferStatus(offer.id, "accepted", {
-      accepted: t.chatPage.systemMsgOfferAccepted,
-      rejected: t.chatPage.systemMsgOfferRejected,
-      sibling:  t.chatPage.systemMsgOfferSiblingClosed,
-    });
+    await updateOfferStatus(offer.id, "accepted");
+    onChanged();
   }
 
-  function reject(e: React.MouseEvent) {
+  async function reject(e: React.MouseEvent) {
     e.stopPropagation();
-    updateOfferStatus(offer.id, "rejected", {
-      accepted: t.chatPage.systemMsgOfferAccepted,
-      rejected: t.chatPage.systemMsgOfferRejected,
-      sibling:  t.chatPage.systemMsgOfferSiblingClosed,
-    });
+    await updateOfferStatus(offer.id, "rejected");
+    onChanged();
   }
 
   return (
@@ -184,9 +177,9 @@ function OfferCard({ offer, index, anyAccepted }: { offer: Offer; index: number;
 
           {isRejected && (
             <button
-              onClick={(e) => {
+              onClick={async (e) => {
                 e.stopPropagation();
-                const res = reopenOffer(offer.id);
+                const res = await reopenOffer(offer.id);
                 if (!res.ok) {
                   const msg =
                     res.reason === "request_closed" ? tt.errorRequestClosed
@@ -194,6 +187,8 @@ function OfferCard({ offer, index, anyAccepted }: { offer: Offer; index: number;
                     : res.reason === "no_request" ? tt.errorNoRequest
                     : tt.errorGeneric;
                   toast({ title: tt.restoreFailedTitle, description: msg, variant: "destructive" });
+                } else {
+                  onChanged();
                 }
               }}
               className="text-xs text-gray-400 underline"
@@ -224,15 +219,31 @@ export default function OffersPage() {
   const params = new URLSearchParams(rawSearch);
   const filterRequestId = params.get("requestId") ?? undefined;
 
-  const all = getOffersByCustomer(user?.id ?? "");
-  const filtered = filterRequestId ? all.filter((o) => o.requestId === filterRequestId) : all;
+  const [allOffers, setAllOffers] = useState<Offer[]>([]);
+  const [requestById, setRequestById] = useState<Map<string, CustomerRequest>>(new Map());
+
+  const load = useCallback(() => {
+    if (!user?.id) { setAllOffers([]); setRequestById(new Map()); return; }
+    getOffersByCustomer(user.id).then(async (offers) => {
+      setAllOffers(offers);
+      const ids = [...new Set(offers.map((o) => o.requestId))];
+      const reqs = await Promise.all(ids.map((id) => getRequestById(id)));
+      const map = new Map<string, CustomerRequest>();
+      reqs.forEach((r, i) => { if (r) map.set(ids[i], r); });
+      setRequestById(map);
+    }).catch((err) => console.error("Load offers failed:", err));
+  }, [user?.id]);
+
+  useEffect(() => { load(); }, [load]);
+
+  const filtered = filterRequestId ? allOffers.filter((o) => o.requestId === filterRequestId) : allOffers;
   const offers = [...filtered].sort((a, b) => {
     if (a.status === "pending" && b.status !== "pending") return -1;
     if (b.status === "pending" && a.status !== "pending") return 1;
     return new Date(b.createdAt).getTime() - new Date(a.createdAt).getTime();
   });
 
-  const filteredReq = filterRequestId ? getRequestById(filterRequestId) : undefined;
+  const filteredReq = filterRequestId ? requestById.get(filterRequestId) : undefined;
 
   return (
     <div className="min-h-screen bg-gray-50 pb-24">
@@ -293,7 +304,7 @@ export default function OffersPage() {
                 const anyAccepted = offers.some(
                   (o) => o.requestId === offer.requestId && o.id !== offer.id && o.status === "accepted"
                 );
-                return <OfferCard key={offer.id} offer={offer} index={i} anyAccepted={anyAccepted} />;
+                return <OfferCard key={offer.id} offer={offer} req={requestById.get(offer.requestId)} index={i} anyAccepted={anyAccepted} onChanged={load} />;
               })}
             </AnimatePresence>
           </div>

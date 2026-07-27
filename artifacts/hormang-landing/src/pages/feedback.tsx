@@ -561,8 +561,7 @@ export default function FeedbackPage() {
   const [showForm, setShowForm]   = useState(false);
   const [selected, setSelected]  = useState<Feedback | null>(null);
   const [history, setHistory]    = useState<Feedback[]>([]);
-
-  const myRequests = user?.id ? getRequestsByCustomer(user.id) : [];
+  const [myRequests, setMyRequests] = useState<{ id: string; categoryName: string; createdAt: string }[]>([]);
 
   const refreshHistory = useCallback(() => {
     if (!user?.id) return;
@@ -570,6 +569,11 @@ export default function FeedbackPage() {
   }, [user?.id]);
 
   useEffect(() => { refreshHistory(); }, [refreshHistory]);
+
+  useEffect(() => {
+    if (!user?.id) { setMyRequests([]); return; }
+    getRequestsByCustomer(user.id).then(setMyRequests).catch((err) => console.error("Load my requests failed:", err));
+  }, [user?.id]);
 
   return (
     <div className="min-h-screen bg-gray-50 flex flex-col pb-24">

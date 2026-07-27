@@ -43,19 +43,41 @@ function initials(name: string): string {
     .slice(0, 2) || "X";
 }
 
-function getReviewerMeta(review: Review, fallback: string) {
+function baseReviewerMeta(review: Review, fallback: string) {
   const registry = getCustomerFromRegistry(review.reviewerId);
-  const request = getRequestById(review.requestId);
   const local = getLocalProfile(review.reviewerId);
-  const name = review.reviewerName || registry?.name || request?.customerName || fallback;
+  const name = review.reviewerName || registry?.name || fallback;
   return {
     name,
     initials: review.reviewerInitials || registry?.initials || initials(name),
     color: review.reviewerColor || BLUE,
     photoUrl: local.photoUrl,
-    region: request?.region,
-    district: request?.district,
+    region: undefined as string | undefined,
+    district: undefined as string | undefined,
   };
+}
+
+function useReviewerMeta(review: Review, fallback: string) {
+  const [meta, setMeta] = useState(() => baseReviewerMeta(review, fallback));
+
+  useEffect(() => {
+    setMeta(baseReviewerMeta(review, fallback));
+    const registry = getCustomerFromRegistry(review.reviewerId);
+    let cancelled = false;
+    getRequestById(review.requestId).then((request) => {
+      if (cancelled || !request) return;
+      setMeta((m) => ({
+        ...m,
+        name: review.reviewerName || registry?.name || request.customerName || fallback,
+        region: request.region,
+        district: request.district,
+      }));
+    });
+    return () => { cancelled = true; };
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [review, fallback]);
+
+  return meta;
 }
 
 
@@ -131,7 +153,7 @@ function ReviewPreviewModal({
 }) {
   const { t, locale } = useI18n();
   const tt = t.providerReviewsPage;
-  const meta = getReviewerMeta(review, tt.fallbackCustomer);
+  const meta = useReviewerMeta(review, tt.fallbackCustomer);
   const [expandedPhoto, setExpandedPhoto] = useState(false);
 
   return (
@@ -259,7 +281,7 @@ function ReviewCard({
   const { t, locale } = useI18n();
   const tt = t.providerReviewsPage;
   const META_LABELS = useMetricLabels();
-  const meta = getReviewerMeta(review, tt.fallbackCustomer);
+  const meta = useReviewerMeta(review, tt.fallbackCustomer);
   const metrics = review.providerMetrics;
 
   return (
@@ -370,7 +392,24 @@ export default function ProviderReviewsPage() {
   const metricAverages = getProviderReviewAverages(providerId);
   const [selectedReview, setSelectedReview] = useState<Review | null>(null);
   const [profileReview, setProfileReview] = useState<Review | null>(null);
-  const profileMeta = profileReview ? getReviewerMeta(profileReview, tt.fallbackCustomer) : null;
+  const [profileMeta, setProfileMeta] = useState<ReturnType<typeof baseReviewerMeta> | null>(null);
+  useEffect(() => {
+    if (!profileReview) { setProfileMeta(null); return; }
+    setProfileMeta(baseReviewerMeta(profileReview, tt.fallbackCustomer));
+    const registry = getCustomerFromRegistry(profileReview.reviewerId);
+    let cancelled = false;
+    getRequestById(profileReview.requestId).then((request) => {
+      if (cancelled || !request) return;
+      setProfileMeta((m) => (m ? {
+        ...m,
+        name: profileReview.reviewerName || registry?.name || request.customerName || tt.fallbackCustomer,
+        region: request.region,
+        district: request.district,
+      } : m));
+    });
+    return () => { cancelled = true; };
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [profileReview, tt.fallbackCustomer]);
 
   const targetRequestId = useMemo(
     () => new URLSearchParams(window.location.search).get("requestId"),

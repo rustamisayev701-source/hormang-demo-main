@@ -2,7 +2,7 @@
  * /provider/tanga-history — Provider Tanga spending history
  * Shows all offers sent + Tanga cost for each, with balance summary.
  */
-import { useState } from "react";
+import { useEffect, useState } from "react";
 import { TangaCoin } from "@/components/tanga-coin";
 import { useLocation } from "wouter";
 import { motion, AnimatePresence } from "framer-motion";
@@ -11,7 +11,8 @@ import { useAuth } from "@/contexts/auth-context";
 import { useStoreRefresh } from "@/hooks/use-store-refresh";
 import { getTangaTransactions, type TangaTransaction } from "@/lib/tanga-history-store";
 import { getTangaBalance } from "@/lib/tanga-store";
-import { getOffers, getRequestById, type Offer } from "@/lib/requests-store";
+import { getRequestById, type Offer } from "@/lib/requests-store";
+import { getOffers } from "@/lib/provider-store";
 import { getCategoryDisplayName } from "@/lib/categories";
 import { TangaChip } from "@/pages/plans";
 import { OfferDetailModal } from "@/components/offer-detail-modal";
@@ -55,6 +56,12 @@ function TxRow({
   const tt = t.tangaHistoryPage;
   const signed = signedAmount(tx);
   const isIn   = signed >= 0;
+  const [categoryId, setCategoryId] = useState("");
+  useEffect(() => {
+    let cancelled = false;
+    getRequestById(tx.requestId).then((req) => { if (!cancelled) setCategoryId(req?.categoryId ?? ""); });
+    return () => { cancelled = true; };
+  }, [tx.requestId]);
   const tone = isIn
     ? { card: "bg-emerald-50 border-emerald-100", icon: "bg-emerald-100", amount: "text-emerald-600", sign: "+" }
     : { card: "bg-white border-gray-100",         icon: "bg-amber-50",    amount: "text-amber-600",   sign: "−" };
@@ -78,7 +85,7 @@ function TxRow({
               : tx.type === "refund"            ? tt.txTypeRefund
               : tx.type === "admin_adjustment"  ? tt.txTypeAdminAdjustment
               : tx.type === "purchase"          ? `${tt.txTypePurchase}${tx.categoryName ? ` · ${tx.categoryName}` : ""}`
-              : getCategoryDisplayName(getRequestById(tx.requestId)?.categoryId ?? "", locale, tx.categoryName)}
+              : getCategoryDisplayName(categoryId, locale, tx.categoryName)}
           </p>
           <p className="text-[11px] text-gray-400 mt-0.5">
             {formatDate(tx.createdAt, { months: t.shared.months })}
@@ -122,7 +129,11 @@ export default function TangaHistoryPage() {
 
   const transactions = user ? getTangaTransactions(user.id) : [];
   const balance = user ? getTangaBalance(user.id) : 0;
-  const allOffers = getOffers();
+  const [allOffers, setAllOffers] = useState<Offer[]>([]);
+  useEffect(() => {
+    if (!user?.id) { setAllOffers([]); return; }
+    getOffers(user.id).then(setAllOffers).catch((err) => console.error("Load offers failed:", err));
+  }, [user?.id]);
 
   // Only "spend" type counts as offer-sending cost
   const spendTxs    = transactions.filter((t) => t.type === "spend" || (!t.type && t.amount > 0));

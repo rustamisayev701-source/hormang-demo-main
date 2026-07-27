@@ -1,4 +1,4 @@
-import { useState } from "react";
+import { useCallback, useEffect, useState } from "react";
 import { useStoreRefresh } from "@/hooks/use-store-refresh";
 import { useLocation } from "wouter";
 import { motion, AnimatePresence } from "framer-motion";
@@ -14,7 +14,7 @@ import {
   getRequestsByCustomer, getOffersByRequestId, getOrCreateChat,
   updateRequestStatus, deleteRequestCascade, getRequestCounts, MAX_ACTIVE_OFFERS,
   canDeleteRequest, hasEverReceivedOffer,
-  type CustomerRequest,
+  type CustomerRequest, type Offer,
 } from "@/lib/requests-store";
 import { useAuth } from "@/contexts/auth-context";
 import { useI18n } from "@/contexts/i18n-context";
@@ -90,8 +90,23 @@ function RequestCard({
   const [, setLocation] = useLocation();
   const { t, locale } = useI18n();
   const [previewOpen, setPreviewOpen] = useState(false);
-  const offers = getOffersByRequestId(req.id);
-  const counts = getRequestCounts(req.id);
+  const [offers, setOffers] = useState<Offer[]>([]);
+  const [counts, setCounts] = useState({ active: 0, total: 0 });
+  const [hasOffers, setHasOffers] = useState(false);
+  useEffect(() => {
+    let cancelled = false;
+    Promise.all([
+      getOffersByRequestId(req.id),
+      getRequestCounts(req.id),
+      hasEverReceivedOffer(req.id),
+    ]).then(([o, c, h]) => {
+      if (cancelled) return;
+      setOffers(o);
+      setCounts(c);
+      setHasOffers(h);
+    }).catch((err) => console.error("Load request card data failed:", err));
+    return () => { cancelled = true; };
+  }, [req.id]);
   const isMatched = req.status === "matched" || !!req.acceptedOfferId;
   const urgency = req.answers["urgency"] as string | undefined;
   const budget = req.answers["budget"] as number | undefined;
@@ -102,17 +117,13 @@ function RequestCard({
   const isActive = mode === "active";
 
   // Determine what the X button does based on offer history
-  const hasOffers = hasEverReceivedOffer(req.id);
   const closeIcon = hasOffers ? <XCircle className="w-4 h-4" /> : <Trash2 className="w-4 h-4" />;
   const closeTitle = hasOffers ? t.myRequests.deactivateTitle : t.myRequests.deleteTitle;
 
-  function openChat() {
+  async function openChat() {
     if (offers.length === 0) return;
     const o = offers[0];
-    const chat = getOrCreateChat(
-      req.id, o.masterId, o.masterName, o.masterInitials, o.masterColor,
-      o.avgResponseTime, req.categoryName
-    );
+    const chat = await getOrCreateChat(req.id, o.masterId);
     setLocation(`/chat/${chat.id}`);
   }
 
@@ -269,40 +280,48 @@ export default function MyRequestsPage() {
 
   const [pendingAction, setPendingAction] = useState<PendingAction>(null);
 
-  const requests = user ? getRequestsByCustomer(user.id) : [];
+  const [requests, setRequests] = useState<CustomerRequest[]>([]);
+  const load = useCallback(() => {
+    if (!user?.id) { setRequests([]); return; }
+    getRequestsByCustomer(user.id).then(setRequests).catch((err) => console.error("Load my requests failed:", err));
+  }, [user?.id]);
+  useEffect(() => { load(); }, [load]);
 
-  function handleClose(id: string) {
-    if (canDeleteRequest(id)) {
+  async function handleClose(id: string) {
+    const canDelete = await canDeleteRequest(id);
+    if (canDelete) {
       setPendingAction({ id, type: "delete" });
     } else {
       setPendingAction({ id, type: "deactivate" });
     }
   }
 
-  function handleConfirmAction() {
+  async function handleConfirmAction() {
     if (!pendingAction) return;
     try {
       if (pendingAction.type === "delete") {
-        deleteRequestCascade(pendingAction.id);
+        await deleteRequestCascade(pendingAction.id);
       } else {
-        updateRequestStatus(pendingAction.id, "inactive");
+        await updateRequestStatus(pendingAction.id, "inactive");
       }
     } catch (err) {
       // Backend guard: if somehow delete was called with offers present,
       // fall back to deactivation instead of crashing.
       if (pendingAction.type === "delete") {
-        updateRequestStatus(pendingAction.id, "inactive");
+        await updateRequestStatus(pendingAction.id, "inactive");
       }
     }
     setPendingAction(null);
+    load();
   }
 
   function handleCancelAction() {
     setPendingAction(null);
   }
 
-  function handleReopen(id: string) {
-    updateRequestStatus(id, "open");
+  async function handleReopen(id: string) {
+    await updateRequestStatus(id, "open");
+    load();
   }
 
   const active   = requests.filter((r) => r.status === "open");

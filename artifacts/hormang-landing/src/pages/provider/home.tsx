@@ -33,7 +33,7 @@ import {
   getRequestOfferCount, getRequestsWithZeroOffers, getLocalizedDescription,
   type ProviderRequest, type UpcomingService,
 } from "@/lib/provider-store";
-import { confirmCompletion, getOfferById } from "@/lib/requests-store";
+import { confirmCompletion, getOfferById, type Offer } from "@/lib/requests-store";
 import { getRequestLocation } from "@/lib/regions";
 import { addReview, hasReviewedRequest } from "@/lib/completion-store";
 import { ReviewModal, type ReviewSubmitData } from "@/components/review-modal";
@@ -346,6 +346,63 @@ function ProfileCompletion() {
   );
 }
 
+/* ─── Upcoming Service Row (resolves its request's categoryId async) ── */
+function UpcomingServiceRow({ service: s, index: i, onSelect, onComplete }: {
+  service: UpcomingService;
+  index: number;
+  onSelect: () => void;
+  onComplete: (e: React.MouseEvent) => void;
+}) {
+  const { t, locale } = useI18n();
+  const [categoryId, setCategoryId] = useState<string>("");
+  useEffect(() => {
+    if (!s.requestId) { setCategoryId(""); return; }
+    let cancelled = false;
+    getRequestById(s.requestId).then((req) => { if (!cancelled) setCategoryId(req?.categoryId ?? ""); });
+    return () => { cancelled = true; };
+  }, [s.requestId]);
+
+  return (
+    <motion.button
+      initial={{ opacity: 0, x: -10 }}
+      animate={{ opacity: 1, x: 0 }}
+      transition={{ delay: i * 0.07 }}
+      onClick={onSelect}
+      className="w-full bg-white rounded-2xl border border-gray-100 card-shadow p-4 flex items-start gap-3 hover:shadow-sm hover:border-violet-100 transition-all text-left active:scale-[.99]"
+    >
+      <CategoryIcon
+        categoryId={s.requestId ? categoryId || null : null}
+        emoji={s.categoryEmoji}
+        size={44}
+        shape="square"
+        className="flex-shrink-0"
+      />
+      <div className="flex-1 min-w-0">
+        <p className="font-bold text-sm text-gray-900 truncate">
+          {s.requestId ? getCategoryDisplayName(categoryId, locale, s.title) : s.title}
+        </p>
+        <p className="text-xs text-gray-500 mb-1">{s.customerName}</p>
+        <div className="flex items-center gap-3 flex-wrap">
+          <span className="flex items-center gap-1 text-[11px] text-violet-600 font-semibold">
+            <CalendarDays className="w-3 h-3" />
+            {formatDate(s.date, t.shared.months)} · {s.time}
+          </span>
+          <span className="flex items-center gap-1 text-[11px] text-gray-400">
+            <MapPin className="w-3 h-3" />{s.location}
+          </span>
+        </div>
+      </div>
+      <button
+        onClick={onComplete}
+        className="w-8 h-8 rounded-xl bg-emerald-50 hover:bg-emerald-100 border border-emerald-100 flex items-center justify-center flex-shrink-0 transition-colors"
+        title={t.providerHome.upcoming.doneBtnTitle}
+      >
+        <Check className="w-4 h-4 text-emerald-600" />
+      </button>
+    </motion.button>
+  );
+}
+
 /* ─── Upcoming Services ──────────────────────────────────────────── */
 function UpcomingServices() {
   useStoreRefresh();
@@ -362,13 +419,9 @@ function UpcomingServices() {
     setConfirmService(s);
   }
 
-  function handleDone(s: UpcomingService) {
+  async function handleDone(s: UpcomingService) {
     if (s.offerId) {
-      const result = confirmCompletion(s.offerId, "provider", {
-        providerConfirmed: t.chatPage.systemMsgProviderConfirmed,
-        customerConfirmed: t.chatPage.systemMsgCustomerConfirmed,
-        completed:         t.chatPage.systemMsgCompleted,
-      });
+      const result = await confirmCompletion(s.offerId, "provider");
       if (result === "completed") {
         const alreadyReviewed = s.requestId ? hasReviewedRequest(s.requestId, masterId) : false;
         if (!alreadyReviewed) {
@@ -380,10 +433,10 @@ function UpcomingServices() {
     markServiceDone(s.id, masterId);
   }
 
-  function handleReviewSubmit(data: ReviewSubmitData) {
+  async function handleReviewSubmit(data: ReviewSubmitData) {
     if (!reviewService) return;
     if (reviewService.customerId && reviewService.requestId) {
-      const offer = reviewService.offerId ? getOfferById(reviewService.offerId) : null;
+      const offer = reviewService.offerId ? await getOfferById(reviewService.offerId) : null;
       addReview({
         requestId: reviewService.requestId,
         offerId: reviewService.offerId,
@@ -407,7 +460,13 @@ function UpcomingServices() {
     setReviewService(null);
   }
 
-  const selectedOffer = selectedService?.offerId ? getOfferById(selectedService.offerId) : null;
+  const [selectedOffer, setSelectedOffer] = useState<Offer | null>(null);
+  useEffect(() => {
+    if (!selectedService?.offerId) { setSelectedOffer(null); return; }
+    let cancelled = false;
+    getOfferById(selectedService.offerId).then((o) => { if (!cancelled) setSelectedOffer(o ?? null); });
+    return () => { cancelled = true; };
+  }, [selectedService?.offerId]);
 
   return (
     <div className="mb-4">
@@ -427,46 +486,13 @@ function UpcomingServices() {
       ) : (
         <div className="space-y-2">
           {services.map((s, i) => (
-            <motion.button
+            <UpcomingServiceRow
               key={s.id}
-              initial={{ opacity: 0, x: -10 }}
-              animate={{ opacity: 1, x: 0 }}
-              transition={{ delay: i * 0.07 }}
-              onClick={() => setSelectedService(s)}
-              className="w-full bg-white rounded-2xl border border-gray-100 card-shadow p-4 flex items-start gap-3 hover:shadow-sm hover:border-violet-100 transition-all text-left active:scale-[.99]"
-            >
-              <CategoryIcon
-                categoryId={s.requestId ? getRequestById(s.requestId)?.categoryId ?? null : null}
-                emoji={s.categoryEmoji}
-                size={44}
-                shape="square"
-                className="flex-shrink-0"
-              />
-              <div className="flex-1 min-w-0">
-                <p className="font-bold text-sm text-gray-900 truncate">
-                  {s.requestId
-                    ? getCategoryDisplayName(getRequestById(s.requestId)?.categoryId ?? "", locale, s.title)
-                    : s.title}
-                </p>
-                <p className="text-xs text-gray-500 mb-1">{s.customerName}</p>
-                <div className="flex items-center gap-3 flex-wrap">
-                  <span className="flex items-center gap-1 text-[11px] text-violet-600 font-semibold">
-                    <CalendarDays className="w-3 h-3" />
-                    {formatDate(s.date, t.shared.months)} · {s.time}
-                  </span>
-                  <span className="flex items-center gap-1 text-[11px] text-gray-400">
-                    <MapPin className="w-3 h-3" />{s.location}
-                  </span>
-                </div>
-              </div>
-              <button
-                onClick={(e) => requestComplete(s, e)}
-                className="w-8 h-8 rounded-xl bg-emerald-50 hover:bg-emerald-100 border border-emerald-100 flex items-center justify-center flex-shrink-0 transition-colors"
-                title={t.providerHome.upcoming.doneBtnTitle}
-              >
-                <Check className="w-4 h-4 text-emerald-600" />
-              </button>
-            </motion.button>
+              service={s}
+              index={i}
+              onSelect={() => setSelectedService(s)}
+              onComplete={(e) => requestComplete(s, e)}
+            />
           ))}
         </div>
       )}
@@ -536,6 +562,12 @@ function RequestSlideCard({
 }) {
   const { t, locale } = useI18n();
   const urg = urgencyLabel(request.urgency, t);
+  const [offerCount, setOfferCount] = useState(0);
+  useEffect(() => {
+    let cancelled = false;
+    getRequestOfferCount(request.id).then((n) => { if (!cancelled) setOfferCount(n); });
+    return () => { cancelled = true; };
+  }, [request.id]);
 
   return (
     <motion.div
@@ -573,14 +605,9 @@ function RequestSlideCard({
           </div>
           <div className="bg-gray-50 rounded-xl p-3">
             <p className="text-[10px] font-bold text-gray-400 uppercase tracking-wide mb-1">{t.providerHome.card.offers}</p>
-            {(() => {
-              const cnt = getRequestOfferCount(request.id);
-              return (
-                <p className={`text-sm font-extrabold ${cnt === 0 ? "text-red-500" : "text-emerald-600"}`}>
-                  {tFormat(t.providerHome.countTpl, { n: cnt })}
-                </p>
-              );
-            })()}
+            <p className={`text-sm font-extrabold ${offerCount === 0 ? "text-red-500" : "text-emerald-600"}`}>
+              {tFormat(t.providerHome.countTpl, { n: offerCount })}
+            </p>
           </div>
         </div>
 
@@ -613,6 +640,102 @@ function RequestSlideCard({
             {t.providerHome.card.sendOffer}
           </button>
         </div>
+      </div>
+    </motion.div>
+  );
+}
+
+/* ─── Request List Modal — Card ──────────────────────────────────── */
+function RequestModalCard({ r, index: i, onRespond, onIgnore }: {
+  r: ProviderRequest;
+  index: number;
+  onRespond: (id: string) => void;
+  onIgnore: (id: string) => void;
+}) {
+  const { t, locale } = useI18n();
+  const urg = urgencyLabel(r.urgency, t);
+  const isResponded = r.status === "responded";
+  const [offerCnt, setOfferCnt] = useState(0);
+  useEffect(() => {
+    let cancelled = false;
+    getRequestOfferCount(r.id).then((n) => { if (!cancelled) setOfferCnt(n); });
+    return () => { cancelled = true; };
+  }, [r.id]);
+
+  return (
+    <motion.div
+      initial={{ opacity: 0, y: 10 }}
+      animate={{ opacity: 1, y: 0 }}
+      transition={{ delay: i * 0.04 }}
+      className={`bg-white rounded-2xl border shadow-sm overflow-hidden ${isResponded ? "border-emerald-100" : "border-gray-100"}`}
+    >
+      {/* Card header */}
+      <div className="flex items-center gap-3 px-4 pt-4 pb-3 border-b border-gray-50">
+        <CategoryIcon categoryId={r.categoryId} emoji={r.emoji} size={36} shape="square" className="flex-shrink-0" />
+        <div className="flex-1 min-w-0">
+          <p className="font-bold text-sm text-gray-900">{getCategoryDisplayName(r.categoryId, locale, r.categoryName)}</p>
+          <p className="text-xs text-gray-400">{r.customerName} · {timeAgo(r.createdAt, t)}</p>
+        </div>
+        {isResponded ? (
+          <span className="text-[10px] font-bold px-2 py-0.5 rounded-full border border-emerald-200 bg-emerald-50 text-emerald-700 flex items-center gap-1">
+            <Check className="w-2.5 h-2.5" />
+            {t.providerHome.card.offerSent}
+          </span>
+        ) : (
+          <span className={`text-[10px] font-bold px-2 py-0.5 rounded-full border ${urg.color}`}>
+            {urg.label}
+          </span>
+        )}
+      </div>
+
+      {/* Card body */}
+      <div className="px-4 py-3">
+        <p className="text-sm text-gray-600 leading-relaxed mb-3 line-clamp-2">
+          {getLocalizedDescription(r, locale)}
+        </p>
+
+        {/* Info chips */}
+        <div className="grid grid-cols-3 gap-2 mb-3">
+          <div className="bg-gray-50 rounded-xl p-2 text-center">
+            <p className="text-[9px] font-bold text-gray-400 uppercase mb-0.5">{t.providerHome.card.budget}</p>
+            <p className="text-xs font-extrabold text-violet-700">{getBudgetLabel(r.budgetLabel, t)}</p>
+          </div>
+          <div className="bg-gray-50 rounded-xl p-2 text-center">
+            <p className="text-[9px] font-bold text-gray-400 uppercase mb-0.5">{t.providerHome.card.location}</p>
+            <p className="text-xs font-bold text-gray-700 truncate">{getRequestLocation(r, locale)}</p>
+          </div>
+          <div className="bg-gray-50 rounded-xl p-2 text-center">
+            <p className="text-[9px] font-bold text-gray-400 uppercase mb-0.5">{t.providerHome.card.offers}</p>
+            <p className={`text-xs font-extrabold ${offerCnt === 0 ? "text-red-500" : "text-emerald-600"}`}>
+              {tFormat(t.providerHome.countTpl, { n: offerCnt })}
+            </p>
+          </div>
+        </div>
+
+        {/* Actions */}
+        {isResponded ? (
+          <div className="h-9 rounded-xl border-2 border-emerald-100 bg-emerald-50 text-emerald-700 font-bold text-xs flex items-center justify-center gap-1.5">
+            <CheckCircle2 className="w-3.5 h-3.5" />
+            {t.providerHome.card.offerSentWaiting}
+          </div>
+        ) : (
+          <div className="flex gap-2">
+            <button
+              onClick={() => onIgnore(r.id)}
+              className="flex-1 h-9 rounded-xl border-2 border-red-100 bg-red-50 text-red-600 font-bold text-xs flex items-center justify-center gap-1 transition-all active:scale-95 hover:bg-red-100"
+            >
+              {t.providerHome.card.delete}
+            </button>
+            <button
+              onClick={() => onRespond(r.id)}
+              className="flex-1 h-9 rounded-xl text-white font-bold text-xs flex items-center justify-center gap-1.5 transition-all active:scale-95 shadow-sm"
+              style={{ background: VIOLET }}
+            >
+              <Send className="w-3.5 h-3.5" />
+              {t.providerHome.card.sendOffer}
+            </button>
+          </div>
+        )}
       </div>
     </motion.div>
   );
@@ -687,89 +810,15 @@ function RequestsModal({
                 </p>
               </div>
             ) : (
-              requests.map((r, i) => {
-                const urg = urgencyLabel(r.urgency, t);
-                const offerCnt = getRequestOfferCount(r.id);
-                const isResponded = r.status === "responded";
-                return (
-                  <motion.div
-                    key={r.id}
-                    initial={{ opacity: 0, y: 10 }}
-                    animate={{ opacity: 1, y: 0 }}
-                    transition={{ delay: i * 0.04 }}
-                    className={`bg-white rounded-2xl border shadow-sm overflow-hidden ${isResponded ? "border-emerald-100" : "border-gray-100"}`}
-                  >
-                    {/* Card header */}
-                    <div className="flex items-center gap-3 px-4 pt-4 pb-3 border-b border-gray-50">
-                      <CategoryIcon categoryId={r.categoryId} emoji={r.emoji} size={36} shape="square" className="flex-shrink-0" />
-                      <div className="flex-1 min-w-0">
-                        <p className="font-bold text-sm text-gray-900">{getCategoryDisplayName(r.categoryId, locale, r.categoryName)}</p>
-                        <p className="text-xs text-gray-400">{r.customerName} · {timeAgo(r.createdAt, t)}</p>
-                      </div>
-                      {isResponded ? (
-                        <span className="text-[10px] font-bold px-2 py-0.5 rounded-full border border-emerald-200 bg-emerald-50 text-emerald-700 flex items-center gap-1">
-                          <Check className="w-2.5 h-2.5" />
-                          {t.providerHome.card.offerSent}
-                        </span>
-                      ) : (
-                        <span className={`text-[10px] font-bold px-2 py-0.5 rounded-full border ${urg.color}`}>
-                          {urg.label}
-                        </span>
-                      )}
-                    </div>
-
-                    {/* Card body */}
-                    <div className="px-4 py-3">
-                      <p className="text-sm text-gray-600 leading-relaxed mb-3 line-clamp-2">
-                        {getLocalizedDescription(r, locale)}
-                      </p>
-
-                      {/* Info chips */}
-                      <div className="grid grid-cols-3 gap-2 mb-3">
-                        <div className="bg-gray-50 rounded-xl p-2 text-center">
-                          <p className="text-[9px] font-bold text-gray-400 uppercase mb-0.5">{t.providerHome.card.budget}</p>
-                          <p className="text-xs font-extrabold text-violet-700">{getBudgetLabel(r.budgetLabel, t)}</p>
-                        </div>
-                        <div className="bg-gray-50 rounded-xl p-2 text-center">
-                          <p className="text-[9px] font-bold text-gray-400 uppercase mb-0.5">{t.providerHome.card.location}</p>
-                          <p className="text-xs font-bold text-gray-700 truncate">{getRequestLocation(r, locale)}</p>
-                        </div>
-                        <div className="bg-gray-50 rounded-xl p-2 text-center">
-                          <p className="text-[9px] font-bold text-gray-400 uppercase mb-0.5">{t.providerHome.card.offers}</p>
-                          <p className={`text-xs font-extrabold ${offerCnt === 0 ? "text-red-500" : "text-emerald-600"}`}>
-                            {tFormat(t.providerHome.countTpl, { n: offerCnt })}
-                          </p>
-                        </div>
-                      </div>
-
-                      {/* Actions */}
-                      {isResponded ? (
-                        <div className="h-9 rounded-xl border-2 border-emerald-100 bg-emerald-50 text-emerald-700 font-bold text-xs flex items-center justify-center gap-1.5">
-                          <CheckCircle2 className="w-3.5 h-3.5" />
-                          {t.providerHome.card.offerSentWaiting}
-                        </div>
-                      ) : (
-                        <div className="flex gap-2">
-                          <button
-                            onClick={() => onIgnore(r.id)}
-                            className="flex-1 h-9 rounded-xl border-2 border-red-100 bg-red-50 text-red-600 font-bold text-xs flex items-center justify-center gap-1 transition-all active:scale-95 hover:bg-red-100"
-                          >
-                            {t.providerHome.card.delete}
-                          </button>
-                          <button
-                            onClick={() => onRespond(r.id)}
-                            className="flex-1 h-9 rounded-xl text-white font-bold text-xs flex items-center justify-center gap-1.5 transition-all active:scale-95 shadow-sm"
-                            style={{ background: VIOLET }}
-                          >
-                            <Send className="w-3.5 h-3.5" />
-                            {t.providerHome.card.sendOffer}
-                          </button>
-                        </div>
-                      )}
-                    </div>
-                  </motion.div>
-                );
-              })
+              requests.map((r, i) => (
+                <RequestModalCard
+                  key={r.id}
+                  r={r}
+                  index={i}
+                  onRespond={onRespond}
+                  onIgnore={onIgnore}
+                />
+              ))
             )}
           </div>
         </motion.div>
@@ -795,12 +844,29 @@ function AvailableRequests() {
   const serviceAreas = localProfile.serviceAreas ?? [];
   const serviceAreaV2 = localProfile.serviceAreaV2;
   const providerId = authUser?.id ?? "";
-  const requests = getMatchingRequests(selectedCategories, serviceAreas, providerId, serviceAreaV2);
+  const selectedCategoriesKey = selectedCategories.join(",");
+  const serviceAreasKey = serviceAreas.join(",");
+
+  const [requests, setRequests] = useState<ProviderRequest[]>([]);
+  const [zeroOffers, setZeroOffers] = useState<ProviderRequest[]>([]);
+  const [refreshTick, setRefreshTick] = useState(0);
+  const load = () => setRefreshTick((n) => n + 1);
+  useEffect(() => {
+    if (!providerId) { setRequests([]); setZeroOffers([]); return; }
+    Promise.all([
+      getMatchingRequests(selectedCategories, serviceAreas, providerId, serviceAreaV2),
+      getRequestsWithZeroOffers(selectedCategories, serviceAreas, providerId, serviceAreaV2),
+    ]).then(([reqs, zero]) => {
+      setRequests(reqs);
+      setZeroOffers(zero);
+    }).catch((err) => console.error("Load available requests failed:", err));
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [selectedCategoriesKey, serviceAreasKey, serviceAreaV2, providerId, refreshTick]);
+
   const seen = getSeenIds(providerId);
 
   const visibleRequests = requests.filter((r) => r.status !== "ignored");
   const newUnseen       = requests.filter((r) => !seen.includes(r.id) && r.status === "open");
-  const zeroOffers      = getRequestsWithZeroOffers(selectedCategories, serviceAreas, providerId, serviceAreaV2);
 
   const newCount      = newUnseen.length;
   const totalOpen     = visibleRequests.length;
@@ -823,6 +889,7 @@ function AvailableRequests() {
     updateProviderRequestStatus(id, "ignored", providerId);
     markSeen(id, providerId);
     setSlideIndex(slideIndex >= slideReqs.length - 1 ? nextIndex : slideIndex);
+    load();
   }
 
   function handleRespondFromModal(id: string) {
@@ -837,6 +904,7 @@ function AvailableRequests() {
   function handleIgnoreFromModal(id: string) {
     updateProviderRequestStatus(id, "ignored", providerId);
     markSeen(id, providerId);
+    load();
   }
 
   const modalRequests =
@@ -960,7 +1028,7 @@ function AvailableRequests() {
           <OfferForm
             request={offerRequest}
             onClose={() => setOfferRequest(null)}
-            onSubmitted={() => setOfferRequest(null)}
+            onSubmitted={() => { setOfferRequest(null); load(); }}
           />
         )}
       </AnimatePresence>
@@ -1169,9 +1237,17 @@ export default function ProviderHomePage() {
   const headerLocalProfile = user?.id ? getLocalProfile(user.id) : {};
   const headerServiceAreas = headerLocalProfile.serviceAreas ?? [];
   const headerServiceAreaV2 = headerLocalProfile.serviceAreaV2;
-  const unseenCount = getMatchingRequests(selectedCategories, headerServiceAreas, user?.id ?? "", headerServiceAreaV2).filter(
-    (r) => !getSeenIds(user?.id ?? "").includes(r.id) && r.status === "open"
-  ).length;
+  const selectedCategoriesKey = selectedCategories.join(",");
+  const headerServiceAreasKey = headerServiceAreas.join(",");
+  const [unseenCount, setUnseenCount] = useState(0);
+  useEffect(() => {
+    if (!user?.id) { setUnseenCount(0); return; }
+    getMatchingRequests(selectedCategories, headerServiceAreas, user.id, headerServiceAreaV2).then((reqs) => {
+      const seen = getSeenIds(user.id);
+      setUnseenCount(reqs.filter((r) => !seen.includes(r.id) && r.status === "open").length);
+    }).catch((err) => console.error("Load unseen count failed:", err));
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [user?.id, selectedCategoriesKey, headerServiceAreasKey, headerServiceAreaV2]);
 
   return (
     <div className="min-h-screen bg-gray-50 pb-24">

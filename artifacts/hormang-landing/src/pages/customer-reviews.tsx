@@ -1,4 +1,4 @@
-import { useState } from "react";
+import { useEffect, useState } from "react";
 import { useLocation } from "wouter";
 import { AnimatePresence, motion } from "framer-motion";
 import { ArrowLeft, UserRound } from "lucide-react";
@@ -30,16 +30,40 @@ function initials(name: string): string {
     .slice(0, 2) || "X";
 }
 
-function getReviewerMeta(review: Review, fallback: string) {
+function baseReviewerMeta(review: Review, fallback: string) {
   const local = getLocalProfile(review.reviewerId);
-  const offer = review.offerId ? getOfferById(review.offerId) : null;
-  const name = review.reviewerName || offer?.masterName || fallback;
+  const name = review.reviewerName || fallback;
   return {
     name,
-    initials: review.reviewerInitials || offer?.masterInitials || initials(name),
-    color: review.reviewerColor || offer?.masterColor || VIOLET,
+    initials: review.reviewerInitials || initials(name),
+    color: review.reviewerColor || VIOLET,
     photoUrl: local.photoUrl,
   };
+}
+
+function useReviewerMeta(review: Review, fallback: string) {
+  const [meta, setMeta] = useState(() => baseReviewerMeta(review, fallback));
+
+  useEffect(() => {
+    setMeta(baseReviewerMeta(review, fallback));
+    if (review.reviewerName && review.reviewerInitials && review.reviewerColor) return;
+    if (!review.offerId) return;
+    let cancelled = false;
+    getOfferById(review.offerId).then((offer) => {
+      if (cancelled || !offer) return;
+      const name = review.reviewerName || offer.masterName || fallback;
+      setMeta((m) => ({
+        ...m,
+        name,
+        initials: review.reviewerInitials || offer.masterInitials || initials(name),
+        color: review.reviewerColor || offer.masterColor || VIOLET,
+      }));
+    });
+    return () => { cancelled = true; };
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [review, fallback]);
+
+  return meta;
 }
 
 /* ── Review card ──────────────────────────────────────────────────────── */
@@ -51,7 +75,7 @@ function ReviewCard({
   onProfile: () => void;
 }) {
   const { t, locale } = useI18n();
-  const meta = getReviewerMeta(review, t.customerReviewsPage.fallbackProvider);
+  const meta = useReviewerMeta(review, t.customerReviewsPage.fallbackProvider);
 
   return (
     <motion.div
@@ -110,7 +134,25 @@ export default function CustomerReviewsPage() {
   const avg = getAverageRatingForUser(customerId, "customer");
 
   const [profileReview, setProfileReview] = useState<Review | null>(null);
-  const profileMeta = profileReview ? getReviewerMeta(profileReview, tt.fallbackProvider) : null;
+  const [profileMeta, setProfileMeta] = useState<ReturnType<typeof baseReviewerMeta> | null>(null);
+  useEffect(() => {
+    if (!profileReview) { setProfileMeta(null); return; }
+    setProfileMeta(baseReviewerMeta(profileReview, tt.fallbackProvider));
+    if (!profileReview.offerId) return;
+    let cancelled = false;
+    getOfferById(profileReview.offerId).then((offer) => {
+      if (cancelled || !offer) return;
+      const name = profileReview.reviewerName || offer.masterName || tt.fallbackProvider;
+      setProfileMeta((m) => (m ? {
+        ...m,
+        name,
+        initials: profileReview.reviewerInitials || offer.masterInitials || initials(name),
+        color: profileReview.reviewerColor || offer.masterColor || VIOLET,
+      } : m));
+    });
+    return () => { cancelled = true; };
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [profileReview, tt.fallbackProvider]);
 
   return (
     <div className="min-h-screen bg-gray-50 pb-20">

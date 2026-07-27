@@ -1,10 +1,10 @@
 /**
  * /chat/:chatId — One-on-one chat with a master.
- * Messages persist in localStorage (unified hormang_chats store).
- * useStoreRefresh() ensures the page re-renders when the provider sends a message.
+ * Messages persist in the real backend (see requests-client.ts); this page
+ * polls for updates every few seconds since there's no websocket push yet.
  * Tapping the master's avatar opens their public profile preview modal.
  */
-import { useState, useEffect, useRef } from "react";
+import { useState, useEffect, useRef, useCallback } from "react";
 import { useRoute, useLocation } from "wouter";
 import { motion, AnimatePresence } from "framer-motion";
 import { ChevronLeft, Send, Circle, CheckCircle2, X, Clock, Loader2, Flag, ImageIcon, Star, Check, CheckCheck, Trash2, EyeOff, Copy } from "lucide-react";
@@ -17,15 +17,14 @@ import { ChatHeaderActionsMenu } from "@/components/chat-header-actions-menu";
 import { ReportModal } from "@/components/report-modal";
 import { OfferDetailModal } from "@/components/offer-detail-modal";
 import { RequestPreviewModal } from "@/components/request-preview-modal";
-import { useStoreRefresh } from "@/hooks/use-store-refresh";
 import { getLocalProfile } from "@/lib/local-profile";
 import { useAuth } from "@/contexts/auth-context";
 import { formatDate } from "@/lib/date-utils";
 import {
-  getChatById, sendMessage, getOfferForChat, confirmCompletion,
+  getOrCreateChat, sendMessage, getOfferForChat, confirmCompletion,
   markCustomerChatRead, deleteMessageForEveryone, deleteMessageForMe,
-  clearChatForCustomer, getChatClearedAt, getRequestById,
-  type Chat, type ChatMessage, type Offer,
+  clearChatForCustomer, getRequestById,
+  type Chat, type ChatMessage, type Offer, type CustomerRequest,
 } from "@/lib/requests-store";
 import { isBlockedBy } from "@/lib/report-store";
 import { getAvgResponseMinutes, formatAvgResponseTime } from "@/lib/response-time-store";
@@ -276,7 +275,7 @@ export default function ChatPage() {
   const { t } = useI18n();
   const tt = t.chatPage;
 
-  useStoreRefresh();
+  const [requestId, masterId] = chatId.split("_");
 
   const [input, setInput] = useState("");
   const [attachPreview, setAttachPreview] = useState<string | null>(null);
@@ -292,12 +291,38 @@ export default function ChatPage() {
   const inputRef = useRef<HTMLInputElement>(null);
   const attachInputRef = useRef<HTMLInputElement>(null);
 
-  const chat: Chat | undefined = chatId ? getChatById(chatId) : undefined;
-  const offer: Offer | undefined = chat
-    ? getOfferForChat(chat.requestId, chat.masterId)
-    : undefined;
+  const [chat, setChat] = useState<Chat | undefined>(undefined);
+  const [offer, setOffer] = useState<Offer | undefined>(undefined);
+  const [request, setRequest] = useState<CustomerRequest | undefined>(undefined);
+  const [loaded, setLoaded] = useState(false);
+
+  const loadChat = useCallback(async () => {
+    if (!requestId || !masterId) { setLoaded(true); return; }
+    try {
+      const [c, o, r] = await Promise.all([
+        getOrCreateChat(requestId, masterId),
+        getOfferForChat(requestId, masterId),
+        getRequestById(requestId),
+      ]);
+      setChat(c);
+      setOffer(o);
+      setRequest(r);
+    } catch (err) {
+      console.error("Load chat failed:", err);
+    } finally {
+      setLoaded(true);
+    }
+  }, [requestId, masterId]);
+
+  /* Poll for new messages/status while the thread is open — there's no
+     websocket push, so this is the "live" refresh mechanism. */
+  useEffect(() => {
+    loadChat();
+    const interval = setInterval(loadChat, 4000);
+    return () => clearInterval(interval);
+  }, [loadChat]);
+
   const masterLocal = chat?.masterId ? getLocalProfile(chat.masterId) : null;
-  const request = chat ? getRequestById(chat.requestId) : undefined;
   const isBlocked = !!(user && chat && (
     isBlockedBy(user.id, chat.masterId) || isBlockedBy(chat.masterId, user.id)
   ));
@@ -307,13 +332,10 @@ export default function ChatPage() {
   }, [chat?.messages.length]);
 
   /* Mark this chat as read for the customer whenever it's open AND new
-   * messages from the provider arrive while the user is still viewing it.
-   * Runs on mount, on chatId change, and on every new incoming message.
-   * The store function is idempotent (no-op when nothing changed), so we
-   * call it unconditionally to also backfill readAt on legacy messages. */
+   * messages from the provider arrive while the user is still viewing it. */
   useEffect(() => {
-    if (chatId) markCustomerChatRead(chatId);
-  }, [chatId, chat?.customerUnread, chat?.messages.length]);
+    if (chat?.id) markCustomerChatRead(chat.id);
+  }, [chat?.id, chat?.customerUnread, chat?.messages.length]);
 
   /* Auto-prompt review when the OTHER side marks the offer completed.
    * Only triggers once per visit; user can re-open via the badge button. */
@@ -329,7 +351,7 @@ export default function ChatPage() {
     }
   }, [offer?.status]);
 
-  if (!match || !chat) {
+  if (!match || (loaded && !chat)) {
     return (
       <div className="min-h-screen bg-gray-50 flex items-center justify-center">
         <div className="text-center">
@@ -344,8 +366,10 @@ export default function ChatPage() {
       </div>
     );
   }
+  if (!chat) return null;
 
-  function handleSend() {
+  async function handleSend() {
+    if (!chat) return;
     if (!input.trim() && !attachPreview) return;
     if (user && isUserSuspended(user.id)) {
       toast({ title: SUSPENDED_MESSAGE, variant: "destructive" });
@@ -359,7 +383,8 @@ export default function ChatPage() {
     const attachment = attachPreview ? { type: "image" as const, url: attachPreview } : undefined;
     setInput("");
     setAttachPreview(null);
-    sendMessage(chatId, "customer", text, attachment, user?.id);
+    await sendMessage(chat.id, "customer", text, attachment, user?.id);
+    loadChat();
   }
 
   async function handleImageSelect(e: React.ChangeEvent<HTMLInputElement>) {
@@ -377,20 +402,17 @@ export default function ChatPage() {
     }
   }
 
-  function handleComplete() {
+  async function handleComplete() {
     if (!offer || !chat) return;
     if (user && isUserSuspended(user.id)) {
       toast({ title: SUSPENDED_MESSAGE, variant: "destructive" });
       return;
     }
-    const result = confirmCompletion(offer.id, "customer", {
-      providerConfirmed: tt.systemMsgProviderConfirmed,
-      customerConfirmed: tt.systemMsgCustomerConfirmed,
-      completed:         tt.systemMsgCompleted,
-    });
+    const result = await confirmCompletion(offer.id, "customer");
     if (result === "completed" && !hasReviewedRequest(chat.requestId, user?.id ?? "")) {
       setShowReview(true);
     }
+    loadChat();
   }
 
   function handleReviewSubmit(data: ReviewSubmitData) {
@@ -412,14 +434,13 @@ export default function ChatPage() {
       reviewerInitials: chat.customerInitials,
       reviewerColor: chat.customerColor,
       reviewedName: chat.masterName,
-      serviceCategory: (chat as any).categoryName ?? undefined,
+      serviceCategory: chat.categoryName ?? undefined,
     });
     setShowReview(false);
     setReviewDismissed(true);
   }
 
-  const customerClearedAt = getChatClearedAt(chatId, "customer");
-  const visibleMessages = chat.messages.filter((m) => new Date(m.timestamp).getTime() > customerClearedAt);
+  const visibleMessages = chat.messages.filter((m) => new Date(m.timestamp).getTime() > chat.customerClearedAt);
 
   const grouped: Array<{ day: string; messages: ChatMessage[] }> = [];
   for (const msg of visibleMessages) {
@@ -558,8 +579,8 @@ export default function ChatPage() {
                     currentUserId={user?.id ?? ""}
                     onLongPress={msg.sender !== "system" ? () => setSelectedMsgId(msg.id) : undefined}
                     selected={selectedMsgId === msg.id}
-                    onDeleteForEveryone={() => { deleteMessageForEveryone(chatId, msg.id); setSelectedMsgId(null); }}
-                    onDeleteForMe={() => { deleteMessageForMe(chatId, msg.id, user?.id ?? ""); setSelectedMsgId(null); }}
+                    onDeleteForEveryone={() => { deleteMessageForEveryone(chat.id, msg.id).then(loadChat); setSelectedMsgId(null); }}
+                    onDeleteForMe={() => { deleteMessageForMe(chat.id, msg.id).then(loadChat); setSelectedMsgId(null); }}
                     onCopy={() => { navigator.clipboard.writeText(msg.text); setSelectedMsgId(null); }}
                   />
                 ))}
@@ -676,7 +697,7 @@ export default function ChatPage() {
             title={tt.clearChatTitle}
             message={tt.clearChatMsg}
             confirmText={tt.clearChatYes}
-            onConfirm={() => { clearChatForCustomer(chatId); setShowClearConfirm(false); setSelectedMsgId(null); }}
+            onConfirm={() => { clearChatForCustomer(chat.id).then(loadChat); setShowClearConfirm(false); setSelectedMsgId(null); }}
             onClose={() => setShowClearConfirm(false)}
           />
         )}

@@ -14,7 +14,7 @@ import { useI18n } from "@/contexts/i18n-context";
 import { getCategoryDisplayName, getCategoryEmoji } from "@/lib/categories";
 import { CategoryIcon } from "@/components/category-icon";
 import { getRegionLabel } from "@/lib/regions";
-import { getPopularCategories } from "@/lib/popularity";
+import { getPopularCategories, type PopularCategory } from "@/lib/popularity";
 import { tFormat } from "@/lib/i18n";
 import {
   getLocalProfile, hasProviderAccess,
@@ -22,8 +22,9 @@ import {
 } from "@/lib/local-profile";
 import {
   getRequestsByCustomer, getOffersByCustomer, getChatsByCustomer,
-  getRequestById, getRequestCooldown,
+  type CustomerRequest, type Offer, type Chat, type CooldownState,
 } from "@/lib/requests-store";
+import { fetchRequestCooldown } from "@/lib/requests-client";
 import { getCompletedCount } from "@/lib/completion-store";
 import { RollingCategories } from "@/components/ui/RollingCategories";
 import { getLocalizedText } from "@/lib/localization";
@@ -217,19 +218,47 @@ export default function CustomerHomePage() {
   const { t, locale } = useI18n();
   const [, setLocation] = useLocation();
   const [local, setLocal] = useState<LocalProfile>({});
-  const [cooldown, setCooldown] = useState(() => getRequestCooldown(user?.id ?? ""));
+  const [cooldown, setCooldown] = useState<CooldownState>({ blocked: false, remainingMs: 0, until: null, durationMs: 0, recentCount: 0, extended: false });
   useEffect(() => {
-    const tick = () => setCooldown(getRequestCooldown(user?.id ?? ""));
-    tick();
-    const id = window.setInterval(tick, 1000);
-    return () => window.clearInterval(id);
+    let cancelled = false;
+    fetchRequestCooldown().then((c) => { if (!cancelled) setCooldown(c); }).catch(() => {});
+    return () => { cancelled = true; };
   }, [user?.id]);
+  useEffect(() => {
+    if (!cooldown.blocked) return;
+    const id = window.setInterval(() => {
+      setCooldown((c) => ({ ...c, remainingMs: Math.max(0, c.remainingMs - 1000) }));
+    }, 1000);
+    return () => window.clearInterval(id);
+  }, [cooldown.blocked]);
   const storeVersion = useStoreRefresh();
 
-  const popularCategories = useMemo(() => getPopularCategories(), [storeVersion]);
+  const [popularCategories, setPopularCategories] = useState<PopularCategory[]>([]);
+  useEffect(() => {
+    getPopularCategories().then(setPopularCategories).catch((err) => console.error("Load popular categories failed:", err));
+  }, [storeVersion]);
 
   useEffect(() => {
     if (user?.id) setLocal(getLocalProfile(user.id));
+  }, [user?.id, storeVersion]);
+
+  const [allRequests, setAllRequests] = useState<CustomerRequest[]>([]);
+  const [allOffers, setAllOffers] = useState<Offer[]>([]);
+  const [allChats, setAllChats] = useState<Chat[]>([]);
+  useEffect(() => {
+    if (!user?.id) { setAllRequests([]); setAllOffers([]); setAllChats([]); return; }
+    let cancelled = false;
+    Promise.all([
+      getRequestsByCustomer(user.id),
+      getOffersByCustomer(user.id),
+      getChatsByCustomer(user.id),
+    ]).then(([requests, offers, chats]) => {
+      if (cancelled) return;
+      setAllRequests(requests);
+      setAllOffers(offers);
+      setAllChats(chats);
+    }).catch((err) => console.error("Load customer home data failed:", err));
+    return () => { cancelled = true; };
   }, [user?.id, storeVersion]);
 
   function fmtDate(iso: string, withYear = false): string {
@@ -238,10 +267,6 @@ export default function CustomerHomePage() {
       ? `${d.getDate()}-${t.shared.months[d.getMonth()]}, ${d.getFullYear()}`
       : `${d.getDate()}-${t.shared.months[d.getMonth()]}`;
   }
-
-  const allRequests = user?.id ? getRequestsByCustomer(user.id) : [];
-  const allOffers   = user?.id ? getOffersByCustomer(user.id)   : [];
-  const allChats    = user?.id ? getChatsByCustomer(user.id)    : [];
 
   const activeRequests    = allRequests.filter(r => r.status !== "completed" && r.status !== "cancelled");
   const completedRequests = allRequests.filter(r => r.status === "completed");
@@ -606,7 +631,7 @@ export default function CustomerHomePage() {
                           <p className="text-xs text-gray-400 truncate mt-0.5">
                             {lastMsg
                               ? lastMsg.attachment ? t.shared.fileAttachment : lastMsg.text
-                              : getCategoryDisplayName(getRequestById(chat.requestId)?.categoryId ?? "", locale, chat.categoryName)}
+                              : getCategoryDisplayName(chat.categoryId, locale, chat.categoryName)}
                           </p>
                         </div>
                         {hasNewMsg && (

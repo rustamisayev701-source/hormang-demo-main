@@ -1,4 +1,4 @@
-import { useState } from "react";
+import { useEffect, useState } from "react";
 import { useLocation } from "wouter";
 import { motion, AnimatePresence } from "framer-motion";
 import {
@@ -13,6 +13,7 @@ import {
   getOffersByRequestId,
   getOrCreateChat,
   type CustomerRequest,
+  type Offer,
 } from "@/lib/requests-store";
 import { useAuth } from "@/contexts/auth-context";
 import { formatDate } from "@/lib/date-utils";
@@ -49,7 +50,12 @@ function CompletedRequestCard({ req, index }: { req: CustomerRequest; index: num
   const { t, locale } = useI18n();
   const [, setLocation] = useLocation();
   const [previewOpen, setPreviewOpen] = useState(false);
-  const offers = getOffersByRequestId(req.id);
+  const [offers, setOffers] = useState<Offer[]>([]);
+  useEffect(() => {
+    let cancelled = false;
+    getOffersByRequestId(req.id).then((o) => { if (!cancelled) setOffers(o); });
+    return () => { cancelled = true; };
+  }, [req.id]);
   const completedOffer = offers.find((o) => o.status === "completed")
     ?? offers.find((o) => o.status === "in_progress" || o.status === "accepted")
     ?? offers[0];
@@ -59,17 +65,9 @@ function CompletedRequestCard({ req, index }: { req: CustomerRequest; index: num
   const urgencyLbl = urgency ? urgencyLabel(urgency, t) : null;
   const urgencyCls = urgency ? URGENCY_CLS[urgency] : null;
 
-  function openChat() {
+  async function openChat() {
     if (!completedOffer) return;
-    const chat = getOrCreateChat(
-      req.id,
-      completedOffer.masterId,
-      completedOffer.masterName,
-      completedOffer.masterInitials,
-      completedOffer.masterColor,
-      completedOffer.avgResponseTime,
-      req.categoryName
-    );
+    const chat = await getOrCreateChat(req.id, completedOffer.masterId);
     setLocation(`/chat/${chat.id}`);
   }
 
@@ -157,7 +155,13 @@ export default function RequestHistoryPage() {
   const { t } = useI18n();
   const [, setLocation] = useLocation();
   const { user } = useAuth();
-  const requests = user ? getRequestsByCustomer(user.id) : [];
+  const [requests, setRequests] = useState<CustomerRequest[]>([]);
+  useEffect(() => {
+    if (!user?.id) { setRequests([]); return; }
+    let cancelled = false;
+    getRequestsByCustomer(user.id).then((r) => { if (!cancelled) setRequests(r); });
+    return () => { cancelled = true; };
+  }, [user?.id]);
   const completed = requests
     .filter((r) => r.status === "completed")
     .sort((a, b) => new Date(b.createdAt).getTime() - new Date(a.createdAt).getTime());
