@@ -20,6 +20,8 @@ export const paymentOrdersTable = pgTable("payment_orders", {
   providerTransactionId: text("provider_transaction_id").unique(),
   performedAt: timestamp("performed_at"),
   cancelledAt: timestamp("cancelled_at"),
+  /** Payme's CancelTransaction reason code, echoed back verbatim by CheckTransaction/GetStatement. */
+  cancelReason: integer("cancel_reason"),
   createdAt: timestamp("created_at").notNull().defaultNow(),
   updatedAt: timestamp("updated_at").notNull().defaultNow(),
 });

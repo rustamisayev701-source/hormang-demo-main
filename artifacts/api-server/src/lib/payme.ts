@@ -224,7 +224,7 @@ async function cancelTransaction(params: { id: string; reason: number }) {
   if (order.status === "pending") {
     const [updated] = await db
       .update(paymentOrdersTable)
-      .set({ status: "cancelled", cancelledAt, updatedAt: new Date() })
+      .set({ status: "cancelled", cancelledAt, cancelReason: params.reason, updatedAt: new Date() })
       .where(eq(paymentOrdersTable.id, order.id))
       .returning();
     return { transaction: updated.id, cancel_time: cancelledAt.getTime(), state: -1 };
@@ -268,7 +268,7 @@ async function cancelTransaction(params: { id: string; reason: number }) {
 
     const [row] = await tx
       .update(paymentOrdersTable)
-      .set({ status: "cancelled", cancelledAt, updatedAt: new Date() })
+      .set({ status: "cancelled", cancelledAt, cancelReason: params.reason, updatedAt: new Date() })
       .where(eq(paymentOrdersTable.id, order.id))
       .returning();
     return row;
@@ -287,7 +287,7 @@ async function checkTransaction(params: { id: string }) {
     cancel_time: order.cancelledAt?.getTime() ?? 0,
     transaction: order.id,
     state: stateOf(order),
-    reason: null,
+    reason: order.cancelReason ?? null,
   };
 }
 
@@ -309,7 +309,7 @@ async function getStatement(params: { from: number; to: number }) {
       cancel_time: o.cancelledAt?.getTime() ?? 0,
       transaction: o.id,
       state: stateOf(o),
-      reason: null,
+      reason: o.cancelReason ?? null,
     }));
 
   return { transactions };
