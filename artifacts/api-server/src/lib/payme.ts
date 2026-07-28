@@ -102,6 +102,13 @@ async function checkPerformTransaction(params: { amount: number; account?: { ord
   if (order.status !== "pending") {
     throw new PaymeError(PaymeErrorCode.OrderNotPending, "Buyurtma allaqachon qayta ishlangan");
   }
+  if (order.providerTransactionId) {
+    // A transaction already exists against this order (CreateTransaction ran
+    // for it, but it hasn't been performed/cancelled yet) — CheckPerformTransaction
+    // takes no transaction id, so it can't tell "this is the same one re-checking"
+    // from "a different one," and must refuse either way.
+    throw new PaymeError(PaymeErrorCode.OrderNotPending, "Buyurtma boshqa tranzaksiya tomonidan band qilingan");
+  }
   if (order.amountSom * 100 !== params.amount) {
     throw new PaymeError(PaymeErrorCode.InvalidAmount, "Noto'g'ri summa");
   }
