@@ -4008,7 +4008,7 @@ function MonoOverview({ txs, providers, tiers }: { txs: TangaTx[]; providers: Pr
 
       <div>
         <p className="text-[10px] font-bold text-gray-400 uppercase tracking-widest mb-3">🪙 Token ko'rsatkichlari</p>
-        <div className="grid grid-cols-3 gap-3">
+        <div className="grid grid-cols-1 sm:grid-cols-3 gap-3">
           {[
             { label: "Sotilgan Tanga",   value: `${totalSold} 🪙`,  color: "text-emerald-600" },
             { label: "Sarflangan Tanga", value: `${totalSpent} 🪙`, color: "text-red-600"     },
@@ -4024,7 +4024,7 @@ function MonoOverview({ txs, providers, tiers }: { txs: TangaTx[]; providers: Pr
 
       <div>
         <p className="text-[10px] font-bold text-gray-400 uppercase tracking-widest mb-3">🏪 Bozor ko'rsatkichlari</p>
-        <div className="grid grid-cols-3 gap-3">
+        <div className="grid grid-cols-1 sm:grid-cols-3 gap-3">
           {[
             { label: "O'rtacha Tanga/ijrochi",  value: `${avgTangaPerProv} 🪙`, color: "text-amber-600"  },
             { label: "O'rtacha taklif/so'rov",  value: avgOffersPerReq,          color: "text-blue-600"   },
@@ -4312,7 +4312,7 @@ function MonoPlans({ tiers, txs, reload }: { tiers: PricingTier[]; txs: TangaTx[
   return (
     <div className="space-y-5">
       {/* ── Stats bar ────────────────────────────────────────────── */}
-      <div className="grid grid-cols-3 gap-3">
+      <div className="grid grid-cols-1 sm:grid-cols-3 gap-3">
         {[
           { label: "Jami daromad",    value: fmtMoney(totalRevenue),  color: "text-emerald-700" },
           { label: "Sotuvlar soni",   value: `${totalPurchases} ta`,  color: "text-gray-900"    },
@@ -7036,7 +7036,7 @@ export default function AdminDashboard() {
   const sectionProps = { refreshKey };
 
   return (
-    <div className="min-h-screen bg-gray-50 flex">
+    <div className="min-h-screen bg-gray-50 flex [color-scheme:light]">
       <div className="flex-shrink-0 h-screen sticky top-0">
         <Sidebar active={section} onChange={setSection} collapsed={collapsed}
           onToggle={() => setCollapsed(!collapsed)} onLogout={logout} />
