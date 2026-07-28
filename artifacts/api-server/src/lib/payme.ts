@@ -133,7 +133,9 @@ async function createTransaction(params: {
   }
 
   if (order.providerTransactionId && order.providerTransactionId !== params.id) {
-    throw new PaymeError(PaymeErrorCode.UnableToPerform, "Buyurtma uchun boshqa tranzaksiya mavjud");
+    // Payme's spec requires an error in the -31050..-31099 range here;
+    // -31008 (UnableToPerform) is outside it, so reuse OrderNotPending.
+    throw new PaymeError(PaymeErrorCode.OrderNotPending, "Buyurtma uchun boshqa tranzaksiya mavjud");
   }
 
   if (order.status !== "pending") {
