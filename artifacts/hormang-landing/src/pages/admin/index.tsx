@@ -369,7 +369,7 @@ function StatusBadge({ status }: { status: string }) {
 }
 
 /* ─── Shared style constants ─────────────────────────────────────── */
-const inputCls = "px-3 py-2 rounded-xl border border-gray-200 text-sm bg-white focus:outline-none focus:border-red-400 focus:ring-1 focus:ring-red-400/20 transition-all";
+const inputCls = "px-3 py-2 rounded-xl border border-gray-200 text-sm text-gray-900 bg-white focus:outline-none focus:border-red-400 focus:ring-1 focus:ring-red-400/20 transition-all";
 const RED_HEX  = "#DC2626";
 const ORANGE_HEX = "#F97316";
 const PIE_COLORS = ["#DC2626","#F97316","#10B981","#F59E0B","#EF4444","#06B6D4","#8B5CF6","#F43F5E","#84CC16"];
@@ -4934,11 +4934,11 @@ function MonoBalances({ providers, reload }: { providers: ProviderSummary[]; rel
                     <td className="px-3 py-3">
                       {adjustId === p.userId ? (
                         <div className="flex items-center gap-1.5">
-                          <select value={adjustType} onChange={(e) => setAdjustType(e.target.value as "add" | "remove")} className="text-[10px] px-2 py-1 rounded-lg border border-gray-200 bg-white focus:outline-none">
+                          <select value={adjustType} onChange={(e) => setAdjustType(e.target.value as "add" | "remove")} className="text-[10px] px-2 py-1 rounded-lg border border-gray-200 text-gray-900 bg-white focus:outline-none">
                             <option value="add">Qo'shish</option>
                             <option value="remove">Ayirish</option>
                           </select>
-                          <input type="number" min={1} value={adjustAmt || ""} onChange={(e) => setAdjustAmt(Number(e.target.value))} placeholder="🪙" className="w-14 text-xs px-2 py-1 rounded-lg border border-gray-200 bg-white focus:outline-none focus:border-red-400" />
+                          <input type="number" min={1} value={adjustAmt || ""} onChange={(e) => setAdjustAmt(Number(e.target.value))} placeholder="🪙" className="w-14 text-xs px-2 py-1 rounded-lg border border-gray-200 text-gray-900 bg-white focus:outline-none focus:border-red-400" />
                           <button onClick={() => applyAdjust(p.userId, p.name)} className="px-2 py-1 rounded-lg bg-emerald-500 text-white text-[10px] font-bold hover:bg-emerald-600">✓</button>
                           <button onClick={() => { setAdjustId(null); setAdjustAmt(0); }} className="px-2 py-1 rounded-lg bg-gray-100 text-gray-600 text-[10px] font-bold hover:bg-gray-200">✕</button>
                         </div>
