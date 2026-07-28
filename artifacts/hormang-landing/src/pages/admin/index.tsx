@@ -3002,19 +3002,12 @@ function UsersSection({ refreshKey, onGoToFeedback, openUserId, onOpenUserIdCons
         existing.name         = existing.name && existing.name !== "Ijrochi" && existing.name !== "Mijoz"
           ? existing.name
           : (entry.name ?? existing.name);
-      } else {
-        userMap.set(userId, {
-          userId,
-          name:         entry.name ?? "Mijoz",
-          initials:     entry.initials ?? "X",
-          color:        "#2563EB",
-          role:         "customer",
-          requestCount: custRequests.length,
-          location,
-          phone:        phoneRegistry[userId],
-          status:       "active",
-        });
       }
+      // Note: deliberately does NOT fabricate a new user purely from this
+      // browser's local registry cache — the backend user list (already
+      // seeded above) is the sole source of truth for who actually exists.
+      // A stale local-only entry here previously resurrected deleted users
+      // as phantom rows in the admin panel.
     }
 
     // Also enrich customers (from auth store) with their request counts
