@@ -51,11 +51,11 @@ export function buildPaymeCheckoutUrl(order: Pick<PaymentOrder, "id" | "amountSo
 
 function verifyAuth(authHeader: string | undefined): boolean {
   if (!isPaymeConfigured()) return false;
-  const { key } = getPaymeConfig();
+  const { key, testKey } = getPaymeConfig();
   if (!authHeader?.startsWith("Basic ")) return false;
   const decoded = Buffer.from(authHeader.slice(6), "base64").toString("utf-8");
   const [, providedKey] = decoded.split(":");
-  return providedKey === key;
+  return providedKey === key || (!!testKey && providedKey === testKey);
 }
 
 async function findOrderByAccount(orderId: string): Promise<

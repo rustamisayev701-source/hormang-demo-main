@@ -44,6 +44,9 @@ export function getEskizConfig(): EskizConfig {
 export interface PaymeConfig {
   merchantId: string;
   key: string;
+  /** Payme's sandbox (test.paycom.uz) authenticates against this key while hitting the
+   *  same merchant endpoint URL as real checkout — both must be accepted side by side. */
+  testKey?: string;
   testEnv: boolean;
 }
 
@@ -57,7 +60,7 @@ export function getPaymeConfig(): PaymeConfig {
   if (!merchantId || !key) {
     throw new Error("Payme is not configured: set PAYME_MERCHANT_ID and PAYME_KEY.");
   }
-  return { merchantId, key, testEnv: process.env.PAYME_ENV !== "prod" };
+  return { merchantId, key, testKey: process.env.PAYME_TEST_KEY, testEnv: process.env.PAYME_ENV !== "prod" };
 }
 
 /**
