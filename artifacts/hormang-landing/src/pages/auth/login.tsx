@@ -88,7 +88,7 @@ export default function LoginPage() {
 
   async function handleVerifyOtp() {
     setError("");
-    if (otp.length < 6) {
+    if (otp.length < 4) {
       setError(t.auth.shared.invalidOtp);
       return;
     }
@@ -398,7 +398,7 @@ export default function LoginPage() {
 
               <Button
                 onClick={handleVerifyOtp}
-                disabled={loading || otp.length < 6}
+                disabled={loading || otp.length < 4}
                 className="w-full h-11 font-bold text-sm gap-2"
               >
                 {loading ? <Loader2 className="w-4 h-4 animate-spin" /> : <LogIn className="w-4 h-4" />}

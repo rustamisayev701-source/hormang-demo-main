@@ -246,7 +246,7 @@ export default function RegisterPage() {
   async function handleVerifyAndRegister() {
     if (!infoData) return;
     setServerError("");
-    if (otp.length < 6) {
+    if (otp.length < 4) {
       setServerError(t.auth.shared.invalidOtp);
       return;
     }
@@ -416,7 +416,7 @@ export default function RegisterPage() {
                   autoFocus
                 />
               </div>
-              <Button onClick={handleVerifyAndRegister} disabled={loading || otp.length < 6} className="w-full h-11 font-bold gap-2">
+              <Button onClick={handleVerifyAndRegister} disabled={loading || otp.length < 4} className="w-full h-11 font-bold gap-2">
                 {loading ? <Loader2 className="w-4 h-4 animate-spin" /> : <CheckCircle2 className="w-4 h-4" />}
                 {loading ? (role === "buyer" ? t.auth.register.registeringBuyer : t.common.checking) : t.auth.register.submitOtp}
               </Button>
