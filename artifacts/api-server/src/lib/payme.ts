@@ -101,7 +101,8 @@ function stateOf(order: PaymentOrder): 1 | 2 | -1 | -2 {
  */
 const RECEIPT_CODE = "10716001001000000";
 const RECEIPT_PACKAGE_CODE = "1495343";
-const RECEIPT_VAT_PERCENT = 12;
+// No turnover yet → not a registered VAT payer (below Uzbekistan's VAT threshold).
+const RECEIPT_VAT_PERCENT = 0;
 
 function buildReceiptDetail(title: string, amountTiyin: number) {
   return {
