@@ -26,6 +26,8 @@ export const ru: Dict = {
     demoSmsTitle: "Демо-режим — симуляция SMS",
     codeSent: "Код подтверждения отправлен",
     codeSentEmailTpl: "Код отправлен на email {{email}}",
+    checkSpamHint: "Не видите письмо? Проверьте папку «Спам»",
+    noInboxAccessSendSms: "Нет доступа к почте? Отправить код по SMS",
     newCodeSent: "Новый код отправлен",
     yes: "Да",
     no: "Нет",

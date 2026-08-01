@@ -26,6 +26,8 @@ export const en: Dict = {
     demoSmsTitle: "Demo mode — SMS simulation",
     codeSent: "Verification code sent",
     codeSentEmailTpl: "Code sent to email {{email}}",
+    checkSpamHint: "Don't see the email? Check your Spam folder",
+    noInboxAccessSendSms: "No access to your email? Send the code by SMS",
     newCodeSent: "New code sent",
     yes: "Yes",
     no: "No",

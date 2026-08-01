@@ -102,7 +102,7 @@ async function getProviderProfile(userId: string) {
 // ─── POST /sms/send ─────────────────────────────────────────────────────────
 router.post("/sms/send", async (req, res) => {
   try {
-    const { phone, purpose } = req.body as { phone?: string; purpose?: string };
+    const { phone, purpose, forceSms } = req.body as { phone?: string; purpose?: string; forceSms?: boolean };
 
     if (!phone || !purpose) {
       res.status(400).json({ error: "Telefon raqami va maqsad talab qilinadi" });
@@ -146,8 +146,9 @@ router.post("/sms/send", async (req, res) => {
     }
 
     // SMS delivery has been unreliable for some carriers — if this account already
-    // has a verified email on file, prefer that channel for login codes instead.
-    if (purpose === "login" && isResendConfigured()) {
+    // has a verified email on file, prefer that channel for login codes instead,
+    // unless the client explicitly asks to fall back to SMS (e.g. no inbox access).
+    if (purpose === "login" && !forceSms && isResendConfigured()) {
       const [loginUser] = await db
         .select({ email: usersTable.email, emailVerified: usersTable.emailVerified })
         .from(usersTable)

@@ -24,6 +24,8 @@ export const uz = {
     demoSmsTitle: "Demo rejim — SMS simulyatsiya",
     codeSent: "Tasdiqlash kodi yuborildi",
     codeSentEmailTpl: "Kod {{email}} email manziliga yuborildi",
+    checkSpamHint: "Xat ko'rinmayaptimi? «Spam» papkasini tekshiring",
+    noInboxAccessSendSms: "Pochtangizga kira olmayapsizmi? Kodni SMS orqali yuboring",
     newCodeSent: "Yangi kod yuborildi",
     yes: "Ha",
     no: "Yo'q",

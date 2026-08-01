@@ -353,6 +353,8 @@ export async function sendSmsCode(
     | "delete-account"
     | "enable-2fa"
     | "login-2fa",
+  /** Skip the email-delivery preference for "login" (e.g. user has no inbox access). */
+  forceSms?: boolean,
 ): Promise<{ ok: boolean; devCode?: string; channel?: "sms" | "email"; maskedDestination?: string }> {
   const normalized = normalizePhone(phone);
 
@@ -363,7 +365,7 @@ export async function sendSmsCode(
       // lookup key either way, only the delivery channel can change.
       return await apiFetch<{ ok: boolean; devCode?: string; channel?: "sms" | "email"; maskedDestination?: string }>(
         "/auth/sms/send",
-        { method: "POST", auth: false, body: { phone: normalized, purpose } },
+        { method: "POST", auth: false, body: { phone: normalized, purpose, forceSms } },
       );
     } catch (err) {
       throwBackendError(err);

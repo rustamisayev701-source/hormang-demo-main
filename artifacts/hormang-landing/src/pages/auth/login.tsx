@@ -171,6 +171,24 @@ export default function LoginPage() {
     }
   }
 
+  async function handleForceSms() {
+    setError("");
+    setOtp("");
+    setLoading(true);
+    try {
+      const res = await sendSmsCode(getFullPhone(), "login", true);
+      setDevCode(res.devCode ?? null);
+      setOtpEmailDest(null);
+      startResendTimer();
+      toast({ title: t.common.codeSent });
+    } catch (err: unknown) {
+      const msg = getAuthError(err instanceof Error ? err.message : "", t);
+      setError(msg);
+    } finally {
+      setLoading(false);
+    }
+  }
+
   return (
     <div className="min-h-screen bg-background flex flex-col items-center justify-center p-4">
       <motion.div
@@ -423,6 +441,17 @@ export default function LoginPage() {
                   {resendTimer > 0 ? `${resendTimer}s` : t.common.resend}
                 </button>
               </div>
+
+              {otpEmailDest && (
+                <button
+                  type="button"
+                  onClick={handleForceSms}
+                  disabled={loading}
+                  className="w-full text-center text-xs text-muted-foreground hover:text-foreground underline transition-colors"
+                >
+                  {t.common.noInboxAccessSendSms}
+                </button>
+              )}
             </motion.div>
           )}
         </AnimatePresence>

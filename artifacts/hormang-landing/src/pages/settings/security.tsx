@@ -335,6 +335,7 @@ function RegisterEmailFlow({ onDone }: { onDone: () => Promise<void> }) {
   return (
     <div className="space-y-3">
       <p className="text-xs text-muted-foreground">{tFormat(t.security.flows.registerEmail.verifySubtitleTpl, { email })}</p>
+      <p className="text-xs text-muted-foreground/70">{t.common.checkSpamHint}</p>
       <DevCodeBanner code={devCode} />
       <ErrorBanner msg={error} />
       <OtpInput value={otp} onChange={setOtp} onEnter={verify} />
