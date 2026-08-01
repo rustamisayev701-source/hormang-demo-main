@@ -1146,6 +1146,10 @@ export const uz = {
     errTierNotFound: "Reja topilmadi.",
     successToastTitleTpl: "{{n}} Tanga qo'shildi! 🎉",
     successToastDescTpl: "Joriy balans: {{n}} Tanga",
+    choosePaymentMethod: "To'lov usulini tanlang",
+    payWithPayme: "Payme orqali to'lash",
+    payWithClick: "Click orqali to'lash",
+    comingSoon: "Tez orada",
   },
   portfolioModal: {
     createTitle: "Portfolio loyihasini yaratish",

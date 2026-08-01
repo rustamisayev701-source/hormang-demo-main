@@ -1147,6 +1147,10 @@ export const en: Dict = {
     errTierNotFound: "Plan not found.",
     successToastTitleTpl: "{{n}} Tanga added! 🎉",
     successToastDescTpl: "Current balance: {{n}} Tanga",
+    choosePaymentMethod: "Choose a payment method",
+    payWithPayme: "Pay with Payme",
+    payWithClick: "Pay with Click",
+    comingSoon: "Coming soon",
   },
   portfolioModal: {
     createTitle: "Create portfolio project",

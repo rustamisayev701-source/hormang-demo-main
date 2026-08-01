@@ -1,7 +1,7 @@
 import { useState, useEffect } from "react";
 import { useLocation } from "wouter";
 import { motion, AnimatePresence } from "framer-motion";
-import { Sparkles, Check, Zap } from "lucide-react";
+import { Sparkles, Check, Zap, X } from "lucide-react";
 import { useStoreRefresh } from "@/hooks/use-store-refresh";
 import { BottomNav } from "@/components/bottom-nav";
 import { useAuth } from "@/contexts/auth-context";
@@ -131,6 +131,61 @@ function PlanCard({
   );
 }
 
+/* ─── Payment Method Sheet ───────────────────────────────────────── */
+function PaymentMethodSheet({
+  onClose, onChoosePayme,
+}: {
+  onClose: () => void;
+  onChoosePayme: () => void;
+}) {
+  const { t } = useI18n();
+  const tt = t.plansPage;
+  return (
+    <motion.div
+      initial={{ opacity: 0 }}
+      animate={{ opacity: 1 }}
+      exit={{ opacity: 0 }}
+      className="fixed inset-0 z-50 bg-black/40 flex items-end sm:items-center justify-center"
+      onClick={onClose}
+    >
+      <motion.div
+        initial={{ y: 40, opacity: 0 }}
+        animate={{ y: 0, opacity: 1 }}
+        exit={{ y: 40, opacity: 0 }}
+        onClick={(e) => e.stopPropagation()}
+        className="bg-white rounded-t-2xl sm:rounded-2xl w-full sm:max-w-sm p-5 pb-[calc(env(safe-area-inset-bottom)+20px)] sm:pb-5"
+      >
+        <div className="flex items-center justify-between mb-4">
+          <p className="font-extrabold text-sm text-gray-900">{tt.choosePaymentMethod}</p>
+          <button onClick={onClose} className="p-1.5 rounded-lg bg-gray-100 text-gray-500 hover:bg-gray-200 transition-colors">
+            <X className="w-4 h-4" />
+          </button>
+        </div>
+
+        <div className="space-y-2.5">
+          <button
+            onClick={onChoosePayme}
+            className="w-full flex items-center gap-3 p-3.5 rounded-2xl border-2 border-gray-100 hover:border-cyan-300 hover:bg-cyan-50/50 transition-all active:scale-[.98]"
+          >
+            <div className="w-11 h-11 rounded-xl flex items-center justify-center flex-shrink-0" style={{ background: "#00CCCC" }}>
+              <span className="text-white font-black text-[13px] tracking-tight">Payme</span>
+            </div>
+            <span className="font-bold text-sm text-gray-900">{tt.payWithPayme}</span>
+          </button>
+
+          <div className="w-full flex items-center gap-3 p-3.5 rounded-2xl border-2 border-gray-100 opacity-50">
+            <div className="w-11 h-11 rounded-xl flex items-center justify-center flex-shrink-0" style={{ background: "#0074E4" }}>
+              <span className="text-white font-black text-[13px] tracking-tight">Click</span>
+            </div>
+            <span className="font-bold text-sm text-gray-900">{tt.payWithClick}</span>
+            <span className="ml-auto text-[10px] font-bold text-gray-400 bg-gray-100 px-2 py-1 rounded-full flex-shrink-0">{tt.comingSoon}</span>
+          </div>
+        </div>
+      </motion.div>
+    </motion.div>
+  );
+}
+
 /* ─── Main Page ──────────────────────────────────────────────────── */
 export default function PlansPage() {
   useStoreRefresh();
@@ -147,6 +202,7 @@ export default function PlansPage() {
   const [tiersLoading, setTiersLoading] = useState(true);
   const [buying, setBuying] = useState<string | null>(null);
   const [bought, setBought] = useState<string | null>(null);
+  const [pickerTier, setPickerTier] = useState<WalletTier | null>(null);
 
   useEffect(() => {
     let cancelled = false;
@@ -249,7 +305,7 @@ export default function PlansPage() {
                     tier={tier}
                     buying={buying === tier.id}
                     bought={bought === tier.id}
-                    onBuy={() => handleBuy(tier)}
+                    onBuy={() => setPickerTier(tier)}
                   />
                 </motion.div>
               ))}
@@ -262,6 +318,19 @@ export default function PlansPage() {
           <ReferralCard title={tt.referralTitle} />
         </div>
       </div>
+
+      <AnimatePresence>
+        {pickerTier && (
+          <PaymentMethodSheet
+            onClose={() => setPickerTier(null)}
+            onChoosePayme={() => {
+              const tier = pickerTier;
+              setPickerTier(null);
+              handleBuy(tier);
+            }}
+          />
+        )}
+      </AnimatePresence>
 
       <BottomNav />
     </div>

@@ -1149,6 +1149,10 @@ export const ru: Dict = {
     errTierNotFound: "Тариф не найден.",
     successToastTitleTpl: "Добавлено {{n}} Tanga! 🎉",
     successToastDescTpl: "Текущий баланс: {{n}} Tanga",
+    choosePaymentMethod: "Выберите способ оплаты",
+    payWithPayme: "Оплатить через Payme",
+    payWithClick: "Оплатить через Click",
+    comingSoon: "Скоро",
   },
   portfolioModal: {
     createTitle: "Создать проект портфолио",
