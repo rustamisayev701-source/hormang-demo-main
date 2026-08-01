@@ -25,6 +25,7 @@ export const ru: Dict = {
     changeEmailShort: "Изменить email",
     demoSmsTitle: "Демо-режим — симуляция SMS",
     codeSent: "Код подтверждения отправлен",
+    codeSentEmailTpl: "Код отправлен на email {{email}}",
     newCodeSent: "Новый код отправлен",
     yes: "Да",
     no: "Нет",

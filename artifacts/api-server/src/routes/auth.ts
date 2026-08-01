@@ -11,28 +11,49 @@ import {
 } from "../lib/auth.js";
 import type { AuthRequest } from "../middlewares/auth.js";
 import { requireAuth } from "../middlewares/auth.js";
-import { isEskizConfigured, env } from "../lib/env.js";
+import { isEskizConfigured, isResendConfigured, env } from "../lib/env.js";
 import { sendOtpSms } from "../lib/eskiz.js";
+import { sendOtpEmail } from "../lib/resend.js";
 import crypto from "crypto";
 
 const router = Router();
 
 // ─── OTP Store ────────────────────────────────────────────────────────────────
-interface OtpEntry { code: string; expiresAt: number; purpose: string }
+type OtpChannel = "sms" | "email";
+interface OtpEntry { code: string; expiresAt: number; purpose: string; channel: OtpChannel }
 const otpStore = new Map<string, OtpEntry>();
 
 function normalizePhone(phone: string): string {
   return phone.replace(/\s+/g, "").trim();
 }
 
-function storeOtp(phone: string, purpose: string): string {
+function normalizeEmail(email: string): string {
+  return email.trim().toLowerCase();
+}
+
+function isValidEmail(email: string): boolean {
+  return /^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email);
+}
+
+function maskEmail(email: string): string {
+  const [user, domain] = email.split("@");
+  if (!domain) return email;
+  const visible = user.slice(0, Math.min(2, user.length));
+  return `${visible}${"*".repeat(Math.max(user.length - visible.length, 1))}@${domain}`;
+}
+
+function otpKey(channel: OtpChannel, destination: string): string {
+  return `${channel}:${channel === "sms" ? normalizePhone(destination) : normalizeEmail(destination)}`;
+}
+
+function storeOtp(channel: OtpChannel, destination: string, purpose: string): string {
   const code = Math.floor(100000 + Math.random() * 900000).toString();
-  otpStore.set(normalizePhone(phone), { code, expiresAt: Date.now() + 5 * 60 * 1000, purpose });
+  otpStore.set(otpKey(channel, destination), { code, expiresAt: Date.now() + 5 * 60 * 1000, purpose, channel });
   return code;
 }
 
-function verifyOtp(phone: string, code: string, purpose: string): boolean {
-  const key = normalizePhone(phone);
+function verifyOtp(channel: OtpChannel, destination: string, code: string, purpose: string): boolean {
+  const key = otpKey(channel, destination);
   const entry = otpStore.get(key);
   if (!entry) return false;
   if (Date.now() > entry.expiresAt) { otpStore.delete(key); return false; }
@@ -119,7 +140,34 @@ router.post("/sms/send", async (req, res) => {
       }
     }
 
-    const code = storeOtp(normalized, purpose);
+    // SMS delivery has been unreliable for some carriers — if this account already
+    // has a verified email on file, prefer that channel for login codes instead.
+    if (purpose === "login" && isResendConfigured()) {
+      const [loginUser] = await db
+        .select({ email: usersTable.email, emailVerified: usersTable.emailVerified })
+        .from(usersTable)
+        .where(eq(usersTable.phone, normalized))
+        .limit(1);
+
+      if (loginUser?.emailVerified && loginUser.email) {
+        const code = storeOtp("email", loginUser.email, purpose);
+        try {
+          await sendOtpEmail(loginUser.email, code);
+          res.json({
+            ok: true,
+            channel: "email",
+            maskedDestination: maskEmail(loginUser.email),
+            ...(env.isProduction ? {} : { devCode: code }),
+          });
+          return;
+        } catch (emailErr) {
+          console.error("Resend email send error, falling back to SMS:", emailErr);
+          // Fall through to SMS below.
+        }
+      }
+    }
+
+    const code = storeOtp("sms", normalized, purpose);
 
     if (isEskizConfigured()) {
       try {
@@ -139,7 +187,7 @@ router.post("/sms/send", async (req, res) => {
 
     // devCode is only ever returned outside production, so a real code can never
     // leak in the API response once Eskiz is live.
-    res.json({ ok: true, ...(env.isProduction ? {} : { devCode: code }) });
+    res.json({ ok: true, channel: "sms", ...(env.isProduction ? {} : { devCode: code }) });
   } catch (err) {
     console.error("SMS send error:", err);
     res.status(500).json({ error: "Xatolik yuz berdi" });
@@ -168,7 +216,7 @@ router.post("/register", async (req, res) => {
 
     const normalized = normalizePhone(phone);
 
-    if (!verifyOtp(normalized, otp, "register")) {
+    if (!verifyOtp("sms", normalized, otp, "register")) {
       res.status(400).json({ error: "Tasdiqlash kodi noto'g'ri yoki muddati o'tgan" });
       return;
     }
@@ -263,12 +311,6 @@ router.post("/login", async (req, res) => {
       return;
     }
 
-    if (!verifyOtp(normalized, otp, "login")) {
-      recordFailedAttempt(normalized);
-      res.status(401).json({ error: "Tasdiqlash kodi noto'g'ri yoki muddati o'tgan" });
-      return;
-    }
-
     const [user] = await db
       .select()
       .from(usersTable)
@@ -278,6 +320,19 @@ router.post("/login", async (req, res) => {
     if (!user) {
       recordFailedAttempt(normalized);
       res.status(401).json({ error: "Foydalanuvchi topilmadi" });
+      return;
+    }
+
+    // The code may have gone out over email instead of SMS (see /sms/send) —
+    // check whichever channel this account's login code would have used.
+    const usedEmailChannel = user.emailVerified && !!user.email;
+    const otpOk = usedEmailChannel
+      ? verifyOtp("email", user.email!, otp, "login")
+      : verifyOtp("sms", normalized, otp, "login");
+
+    if (!otpOk) {
+      recordFailedAttempt(normalized);
+      res.status(401).json({ error: "Tasdiqlash kodi noto'g'ri yoki muddati o'tgan" });
       return;
     }
 
@@ -336,7 +391,7 @@ router.post("/migrate-account", async (req, res) => {
 
     const normalized = normalizePhone(phone);
 
-    if (!verifyOtp(normalized, otp, "migrate")) {
+    if (!verifyOtp("sms", normalized, otp, "migrate")) {
       res.status(400).json({ error: "Tasdiqlash kodi noto'g'ri yoki muddati o'tgan" });
       return;
     }
@@ -448,7 +503,7 @@ router.put("/add-phone", requireAuth, async (req: AuthRequest, res) => {
 
     const normalized = normalizePhone(phone);
 
-    if (!verifyOtp(normalized, otp, "add-phone")) {
+    if (!verifyOtp("sms", normalized, otp, "add-phone")) {
       res.status(400).json({ error: "Tasdiqlash kodi noto'g'ri yoki muddati o'tgan" });
       return;
     }
@@ -474,6 +529,97 @@ router.put("/add-phone", requireAuth, async (req: AuthRequest, res) => {
     res.json({ user: safeUser });
   } catch (err) {
     console.error("Add phone error:", err);
+    res.status(500).json({ error: "Xatolik yuz berdi" });
+  }
+});
+
+// ─── POST /email/send (send OTP to attach/verify an email on the logged-in account) ─
+router.post("/email/send", requireAuth, async (req: AuthRequest, res) => {
+  try {
+    const { email } = req.body as { email?: string };
+
+    if (!email) {
+      res.status(400).json({ error: "Email talab qilinadi" });
+      return;
+    }
+
+    const normalized = normalizeEmail(email);
+    if (!isValidEmail(normalized)) {
+      res.status(400).json({ error: "Noto'g'ri email manzili" });
+      return;
+    }
+
+    const [conflict] = await db
+      .select({ id: usersTable.id })
+      .from(usersTable)
+      .where(eq(usersTable.email, normalized))
+      .limit(1);
+
+    if (conflict && conflict.id !== req.user!.id) {
+      res.status(409).json({ error: "Bu email allaqachon ro'yxatdan o'tgan" });
+      return;
+    }
+
+    if (!isResendConfigured()) {
+      console.error("Resend is not configured — cannot send email OTP.");
+      res.status(502).json({ error: "Email xizmati sozlanmagan" });
+      return;
+    }
+
+    const code = storeOtp("email", normalized, "register-email");
+    try {
+      await sendOtpEmail(normalized, code);
+    } catch (emailErr) {
+      console.error("Resend email send error:", emailErr);
+      res.status(502).json({ error: "Email yuborishda xatolik yuz berdi. Qayta urinib ko'ring." });
+      return;
+    }
+
+    res.json({ ok: true, ...(env.isProduction ? {} : { devCode: code }) });
+  } catch (err) {
+    console.error("Email send error:", err);
+    res.status(500).json({ error: "Xatolik yuz berdi" });
+  }
+});
+
+// ─── PUT /email/verify (confirm the OTP and attach the email to the account) ─
+router.put("/email/verify", requireAuth, async (req: AuthRequest, res) => {
+  try {
+    const { email, otp } = req.body as { email?: string; otp?: string };
+
+    if (!email || !otp) {
+      res.status(400).json({ error: "Email va tasdiqlash kodi talab qilinadi" });
+      return;
+    }
+
+    const normalized = normalizeEmail(email);
+
+    if (!verifyOtp("email", normalized, otp, "register-email")) {
+      res.status(400).json({ error: "Tasdiqlash kodi noto'g'ri yoki muddati o'tgan" });
+      return;
+    }
+
+    const [conflict] = await db
+      .select({ id: usersTable.id })
+      .from(usersTable)
+      .where(eq(usersTable.email, normalized))
+      .limit(1);
+
+    if (conflict && conflict.id !== req.user!.id) {
+      res.status(409).json({ error: "Bu email allaqachon ro'yxatdan o'tgan" });
+      return;
+    }
+
+    const [user] = await db
+      .update(usersTable)
+      .set({ email: normalized, emailVerified: true, updatedAt: new Date() })
+      .where(eq(usersTable.id, req.user!.id))
+      .returning();
+
+    const safeUser = { ...user, passwordHash: undefined };
+    res.json({ user: safeUser });
+  } catch (err) {
+    console.error("Email verify error:", err);
     res.status(500).json({ error: "Xatolik yuz berdi" });
   }
 });

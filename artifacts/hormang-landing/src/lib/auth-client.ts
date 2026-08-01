@@ -353,16 +353,18 @@ export async function sendSmsCode(
     | "delete-account"
     | "enable-2fa"
     | "login-2fa",
-): Promise<{ ok: boolean; devCode?: string }> {
+): Promise<{ ok: boolean; devCode?: string; channel?: "sms" | "email"; maskedDestination?: string }> {
   const normalized = normalizePhone(phone);
 
   if (purpose === "register" || purpose === "login") {
     try {
-      return await apiFetch<{ ok: boolean; devCode?: string }>("/auth/sms/send", {
-        method: "POST",
-        auth: false,
-        body: { phone: normalized, purpose },
-      });
+      // For "login", the backend may deliver the code to a verified email
+      // instead of SMS (see /auth/sms/send) — the phone stays the account
+      // lookup key either way, only the delivery channel can change.
+      return await apiFetch<{ ok: boolean; devCode?: string; channel?: "sms" | "email"; maskedDestination?: string }>(
+        "/auth/sms/send",
+        { method: "POST", auth: false, body: { phone: normalized, purpose } },
+      );
     } catch (err) {
       throwBackendError(err);
     }
@@ -723,42 +725,34 @@ export async function verifyMyPassword(password: string): Promise<boolean> {
   return verifyPasswordHash(password, stored);
 }
 
-/* ─── Email registration (logged-in user adds email + password) ────────── */
+/* ─── Email registration (logged-in user adds a verified email) ─────────
+ * Hits the real backend (/auth/email/send, /auth/email/verify) — this is
+ * what actually delivers a real email via Resend, unlike the rest of the
+ * 2FA/account-deletion flows further down this file, which are still local
+ * mocks. No password is collected here: attaching an email exists solely
+ * to give login OTP delivery a fallback channel besides SMS.
+ */
 
-export async function startEmailRegistration(body: {
-  email: string;
-  password: string;
-  confirmPassword: string;
-}): Promise<{ devCode?: string }> {
+export async function startEmailRegistration(body: { email: string }): Promise<{ devCode?: string }> {
   const token = getToken();
   if (!token) throw new Error("AUTH_REQUIRED");
   const user = findById(token);
   if (!user) throw new Error("USER_NOT_FOUND");
-
-  if (user.emailVerified) {
-    throw new Error("EMAIL_ALREADY_ATTACHED");
-  }
-  if (readPasswordHashes()[user.id]) {
-    throw new Error("PASSWORD_ALREADY_SET");
-  }
+  if (user.emailVerified) throw new Error("EMAIL_ALREADY_ATTACHED");
 
   const email = normalizeEmail(body.email);
   if (!isValidEmail(email)) throw new Error("INVALID_EMAIL");
-  if (!isStrongPassword(body.password)) throw new Error("PASSWORD_TOO_SHORT");
-  if (body.password !== body.confirmPassword) throw new Error("PASSWORDS_DONT_MATCH");
 
-  const owner = findByEmail(email);
-  if (owner && owner.id !== user.id) throw new Error("EMAIL_ALREADY_REGISTERED");
-
-  const pwHash = await hashPassword(body.password);
-  const updated: SafeUser = {
-    ...user,
-    pendingEmail: email,
-  };
-  upsertUser(updated);
-  writePasswordHash(`${user.id}__pending_email`, pwHash);
-
-  return sendEmailCode(email, "register-email");
+  try {
+    const res = await apiFetch<{ ok: boolean; devCode?: string }>("/auth/email/send", {
+      method: "POST",
+      body: { email },
+    });
+    upsertUser({ ...user, pendingEmail: email });
+    return { devCode: res.devCode };
+  } catch (err) {
+    throwBackendError(err);
+  }
 }
 
 export async function cancelPendingEmail(): Promise<void> {
@@ -788,22 +782,22 @@ export async function verifyEmailRegistration(otp: string): Promise<{ user: Safe
   const user = findById(token);
   if (!user || !user.pendingEmail) throw new Error("EMAIL_VERIFICATION_NOT_FOUND");
 
-  const ok = verifyOtpEntry("email", user.pendingEmail, otp, "register-email");
-  if (!ok) throw new Error("OTP_INVALID");
-
-  const pendingPwd = readPasswordHashes()[`${user.id}__pending_email`];
-  if (!pendingPwd) throw new Error("PASSWORD_NOT_FOUND");
-  writePasswordHash(user.id, pendingPwd);
-  deletePasswordHash(`${user.id}__pending_email`);
-
-  const updated: SafeUser = {
-    ...user,
-    email: user.pendingEmail,
-    emailVerified: true,
-    pendingEmail: null,
-  };
-  upsertUser(updated);
-  return { user: updated };
+  try {
+    const res = await apiFetch<{ user: BackendUser & { emailVerified?: boolean } }>("/auth/email/verify", {
+      method: "PUT",
+      body: { email: user.pendingEmail, otp },
+    });
+    const updated: SafeUser = {
+      ...mergeBackendUser(res.user),
+      email: res.user.email ?? user.pendingEmail,
+      emailVerified: true,
+      pendingEmail: null,
+    };
+    upsertUser(updated);
+    return { user: updated };
+  } catch (err) {
+    throwBackendError(err);
+  }
 }
 
 /* ─── Change email (password-gated, OTP confirmed) ─────────────────────── */

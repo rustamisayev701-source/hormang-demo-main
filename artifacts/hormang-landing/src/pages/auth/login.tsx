@@ -44,6 +44,9 @@ export default function LoginPage() {
   const [resendTimer, setResendTimer] = useState(0);
   const [challenge, setChallenge] = useState<LoginChallenge | null>(null);
   const [twoFACode, setTwoFACode] = useState("");
+  // When a phone-login code was actually routed to a verified email instead of
+  // SMS (see /auth/sms/send), this tracks that so the UI can say so.
+  const [otpEmailDest, setOtpEmailDest] = useState<string | null>(null);
 
   function getFullPhone() {
     return "+998" + phone.replace(/\D/g, "");
@@ -70,9 +73,11 @@ export default function LoginPage() {
     try {
       const res = await sendSmsCode(getFullPhone(), "login");
       setDevCode(res.devCode ?? null);
+      const sentToEmail = res.channel === "email" ? (res.maskedDestination ?? null) : null;
+      setOtpEmailDest(sentToEmail);
       setStep("otp");
       startResendTimer();
-      toast({ title: t.common.codeSent });
+      toast({ title: sentToEmail ? tFormat(t.common.codeSentEmailTpl, { email: sentToEmail }) : t.common.codeSent });
     } catch (err: unknown) {
       const msg = getAuthError(err instanceof Error ? err.message : "", t);
       setError(msg);
@@ -148,10 +153,14 @@ export default function LoginPage() {
     setOtp("");
     setLoading(true);
     try {
-      const res = mode === "phone"
-        ? await sendSmsCode(getFullPhone(), "login")
-        : await sendEmailCode(emailValue, "login-email");
-      setDevCode(res.devCode ?? null);
+      if (mode === "phone") {
+        const res = await sendSmsCode(getFullPhone(), "login");
+        setDevCode(res.devCode ?? null);
+        setOtpEmailDest(res.channel === "email" ? (res.maskedDestination ?? null) : null);
+      } else {
+        const res = await sendEmailCode(emailValue, "login-email");
+        setDevCode(res.devCode ?? null);
+      }
       startResendTimer();
       toast({ title: t.common.newCodeSent });
     } catch (err: unknown) {
@@ -183,6 +192,7 @@ export default function LoginPage() {
             {step === "phone" ? t.auth.login.enterPhone
               : step === "email" ? t.auth.login.enterEmailLogin
               : step === "twofa" ? t.auth.twoFA.codeLabel
+              : mode === "phone" && otpEmailDest ? tFormat(t.common.codeSentEmailTpl, { email: otpEmailDest })
               : mode === "phone" ? tFormat(t.auth.shared.sentToTpl, { phone })
               : tFormat(t.auth.login.sentToEmailTpl, { email: emailValue })}
           </p>
@@ -192,7 +202,7 @@ export default function LoginPage() {
           <div className="flex bg-muted rounded-xl p-1 mb-4">
             <button
               type="button"
-              onClick={() => { setMode("phone"); setStep("phone"); setError(""); }}
+              onClick={() => { setMode("phone"); setStep("phone"); setError(""); setOtpEmailDest(null); }}
               className={`flex-1 h-9 rounded-lg text-xs font-bold flex items-center justify-center gap-1.5 transition-all ${mode === "phone" ? "bg-background shadow-sm text-foreground" : "text-muted-foreground"}`}
             >
               <Phone className="w-3.5 h-3.5" /> {t.auth.shared.phoneLabel}

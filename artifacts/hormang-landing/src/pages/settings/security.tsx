@@ -23,7 +23,6 @@ import {
   cancelDeleteAccount,
   cancelPendingEmail,
   cancelPendingPhone,
-  isStrongPassword,
 } from "@/lib/auth-client";
 
 type FlowKey =
@@ -286,8 +285,6 @@ function RegisterEmailFlow({ onDone }: { onDone: () => Promise<void> }) {
   const { toast } = useToast();
   const [step, setStep] = useState<"form" | "verify">("form");
   const [email, setEmail] = useState("");
-  const [password, setPassword] = useState("");
-  const [confirmPassword, setConfirmPassword] = useState("");
   const [otp, setOtp] = useState("");
   const [devCode, setDevCode] = useState<string | null>(null);
   const [loading, setLoading] = useState(false);
@@ -295,11 +292,9 @@ function RegisterEmailFlow({ onDone }: { onDone: () => Promise<void> }) {
 
   async function send() {
     setError("");
-    if (!isStrongPassword(password)) { setError(t.security.flows.registerEmail.passwordHint); return; }
-    if (password !== confirmPassword) { setError(t.common.errorGeneric); return; }
     setLoading(true);
     try {
-      const res = await startEmailRegistration({ email, password, confirmPassword });
+      const res = await startEmailRegistration({ email });
       setDevCode(res.devCode ?? null);
       setStep("verify");
     } catch (e) {
@@ -320,7 +315,7 @@ function RegisterEmailFlow({ onDone }: { onDone: () => Promise<void> }) {
   async function resend() {
     setError("");
     try {
-      const res = await startEmailRegistration({ email, password, confirmPassword });
+      const res = await startEmailRegistration({ email });
       setDevCode(res.devCode ?? null);
       toast({ title: t.common.newCodeSent });
     } catch (e) { setError(getAuthError(e instanceof Error ? e.message : "", t)); }
@@ -332,12 +327,6 @@ function RegisterEmailFlow({ onDone }: { onDone: () => Promise<void> }) {
         <ErrorBanner msg={error} />
         <Field label={t.security.flows.registerEmail.emailLabel}>
           <input type="email" value={email} onChange={(e) => setEmail(e.target.value)} placeholder="you@example.com" autoFocus data-autofocus="" className="w-full h-11 px-3 rounded-xl border border-border bg-background text-sm focus:outline-none focus:ring-2 focus:ring-primary/40 focus:border-primary" />
-        </Field>
-        <Field label={t.security.flows.registerEmail.passwordLabel} hint={t.security.flows.registerEmail.passwordHint}>
-          <PasswordInput value={password} onChange={setPassword} />
-        </Field>
-        <Field label={t.security.flows.registerEmail.confirmPasswordLabel}>
-          <PasswordInput value={confirmPassword} onChange={setConfirmPassword} />
         </Field>
         <PrimaryButton loading={loading} onClick={send}>{t.security.flows.registerEmail.sendCode}</PrimaryButton>
       </div>

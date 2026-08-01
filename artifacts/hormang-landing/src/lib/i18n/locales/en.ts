@@ -25,6 +25,7 @@ export const en: Dict = {
     changeEmailShort: "Change email",
     demoSmsTitle: "Demo mode — SMS simulation",
     codeSent: "Verification code sent",
+    codeSentEmailTpl: "Code sent to email {{email}}",
     newCodeSent: "New code sent",
     yes: "Yes",
     no: "No",

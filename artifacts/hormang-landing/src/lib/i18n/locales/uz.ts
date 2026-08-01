@@ -23,6 +23,7 @@ export const uz = {
     changeEmailShort: "Emailni o'zgartirish",
     demoSmsTitle: "Demo rejim — SMS simulyatsiya",
     codeSent: "Tasdiqlash kodi yuborildi",
+    codeSentEmailTpl: "Kod {{email}} email manziliga yuborildi",
     newCodeSent: "Yangi kod yuborildi",
     yes: "Ha",
     no: "Yo'q",

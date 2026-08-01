@@ -41,6 +41,25 @@ export function getEskizConfig(): EskizConfig {
   return { email, password, from: process.env.ESKIZ_FROM ?? "4546" };
 }
 
+export interface ResendConfig {
+  apiKey: string;
+  from: string;
+}
+
+export function isResendConfigured(): boolean {
+  return Boolean(process.env.RESEND_API_KEY);
+}
+
+export function getResendConfig(): ResendConfig {
+  const apiKey = process.env.RESEND_API_KEY;
+  if (!apiKey) {
+    throw new Error("Resend is not configured: set RESEND_API_KEY.");
+  }
+  // "onboarding@resend.dev" only delivers to the Resend account owner's own
+  // address until a real domain is verified in the Resend dashboard.
+  return { apiKey, from: process.env.RESEND_FROM_EMAIL ?? "Hormang <onboarding@resend.dev>" };
+}
+
 export interface PaymeConfig {
   merchantId: string;
   key: string;
