@@ -733,11 +733,21 @@ export async function verifyMyPassword(password: string): Promise<boolean> {
  * to give login OTP delivery a fallback channel besides SMS.
  */
 
+/** findById only reads this browser's local cache, which can be empty even for a
+ *  genuinely logged-in session (cleared storage, a session that never synced, …).
+ *  Falls back to a real /auth/me fetch — which repopulates the cache — instead
+ *  of incorrectly reporting the account as missing. */
+async function resolveCurrentUser(token: string): Promise<SafeUser> {
+  const cached = findById(token);
+  if (cached) return cached;
+  const { user } = await getMe();
+  return user;
+}
+
 export async function startEmailRegistration(body: { email: string }): Promise<{ devCode?: string }> {
   const token = getToken();
   if (!token) throw new Error("AUTH_REQUIRED");
-  const user = findById(token);
-  if (!user) throw new Error("USER_NOT_FOUND");
+  const user = await resolveCurrentUser(token);
   if (user.emailVerified) throw new Error("EMAIL_ALREADY_ATTACHED");
 
   const email = normalizeEmail(body.email);
@@ -779,8 +789,8 @@ export async function cancelPendingPhone(): Promise<void> {
 export async function verifyEmailRegistration(otp: string): Promise<{ user: SafeUser }> {
   const token = getToken();
   if (!token) throw new Error("AUTH_REQUIRED");
-  const user = findById(token);
-  if (!user || !user.pendingEmail) throw new Error("EMAIL_VERIFICATION_NOT_FOUND");
+  const user = await resolveCurrentUser(token);
+  if (!user.pendingEmail) throw new Error("EMAIL_VERIFICATION_NOT_FOUND");
 
   try {
     const res = await apiFetch<{ user: BackendUser & { emailVerified?: boolean } }>("/auth/email/verify", {
