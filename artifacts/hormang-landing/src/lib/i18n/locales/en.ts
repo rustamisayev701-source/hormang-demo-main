@@ -233,10 +233,10 @@ export const en: Dict = {
       otpPlaceholder: "000000",
       sendCode: "Send verification code",
       sendCodeShort: "Send code",
-      smsHint: "A 6-digit verification code will be sent via SMS",
+      smsHint: "A 4-digit verification code will be sent via SMS",
       invalidPhone: "Enter a valid phone number",
       invalidPhoneLong: "Enter a valid phone number (at least 9 digits)",
-      invalidOtp: "Enter the 6-digit code",
+      invalidOtp: "Enter the verification code",
       sentToTpl: "Code sent to +998 {{phone}}",
     },
     twoFA: {

@@ -231,10 +231,10 @@ export const uz = {
       otpPlaceholder: "000000",
       sendCode: "Tasdiqlash kodi yuborish",
       sendCodeShort: "Kodni yuborish",
-      smsHint: "SMS orqali 6 xonali tasdiqlash kodi yuboriladi",
+      smsHint: "SMS orqali 4 xonali tasdiqlash kodi yuboriladi",
       invalidPhone: "To'g'ri telefon raqami kiriting",
       invalidPhoneLong: "To'g'ri telefon raqami kiriting (kamida 9 raqam)",
-      invalidOtp: "6 xonali kodni kiriting",
+      invalidOtp: "Tasdiqlash kodini kiriting",
       sentToTpl: "+998 {{phone}} ga kod yuborildi",
     },
     twoFA: {
