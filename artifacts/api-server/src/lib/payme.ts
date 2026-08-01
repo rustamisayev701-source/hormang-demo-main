@@ -93,6 +93,32 @@ function stateOf(order: PaymentOrder): 1 | 2 | -1 | -2 {
   return 1;
 }
 
+/**
+ * Fiscal receipt line item for Payme's CheckPerformTransaction "detail" response field.
+ * code/packageCode are Uzbekistan's official ИКПУ / unit-of-measure classifiers
+ * (tasnif.soliq.uz) for Hormang's intermediary-service category.
+ * TODO: confirm vatPercent against Hormang's actual VAT-payer registration status.
+ */
+const RECEIPT_CODE = "10716001001000000";
+const RECEIPT_PACKAGE_CODE = "1495343";
+const RECEIPT_VAT_PERCENT = 12;
+
+function buildReceiptDetail(title: string, amountTiyin: number) {
+  return {
+    receipt_type: 0,
+    items: [
+      {
+        title,
+        price: amountTiyin,
+        count: 1,
+        code: RECEIPT_CODE,
+        package_code: RECEIPT_PACKAGE_CODE,
+        vat_percent: RECEIPT_VAT_PERCENT,
+      },
+    ],
+  };
+}
+
 async function checkPerformTransaction(params: { amount: number; account?: { order_id?: string } }) {
   const orderId = params.account?.order_id;
   if (!orderId) throw new PaymeError(PaymeErrorCode.OrderNotFound, "order_id talab qilinadi");
@@ -112,7 +138,15 @@ async function checkPerformTransaction(params: { amount: number; account?: { ord
   if (order.amountSom * 100 !== params.amount) {
     throw new PaymeError(PaymeErrorCode.InvalidAmount, "Noto'g'ri summa");
   }
-  return { allow: true };
+
+  const [tier] = await db
+    .select()
+    .from(pricingTiersTable)
+    .where(eq(pricingTiersTable.id, order.tierId))
+    .limit(1);
+  if (!tier) throw new PaymeError(PaymeErrorCode.OrderNotFound, "Tarif topilmadi");
+
+  return { allow: true, detail: buildReceiptDetail(tier.nameUz, params.amount) };
 }
 
 async function createTransaction(params: {
