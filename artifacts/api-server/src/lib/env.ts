@@ -82,6 +82,46 @@ export function getPaymeConfig(): PaymeConfig {
   return { merchantId, key, testKey: process.env.PAYME_TEST_KEY, testEnv: process.env.PAYME_ENV !== "prod" };
 }
 
+export interface ClickWebhookConfig {
+  serviceId: string;
+  secretKey: string;
+}
+
+/** Only what's needed to verify Prepare/Complete signatures — merchant_id and
+ *  merchant_user_id (checkout-link-only fields) aren't required for this. */
+export function isClickWebhookConfigured(): boolean {
+  return Boolean(process.env.CLICK_SERVICE_ID && process.env.CLICK_SECRET_KEY);
+}
+
+export function getClickWebhookConfig(): ClickWebhookConfig {
+  const serviceId = process.env.CLICK_SERVICE_ID;
+  const secretKey = process.env.CLICK_SECRET_KEY;
+  if (!serviceId || !secretKey) {
+    throw new Error("Click is not configured: set CLICK_SERVICE_ID and CLICK_SECRET_KEY.");
+  }
+  return { serviceId, secretKey };
+}
+
+export interface ClickCheckoutConfig {
+  merchantId: string;
+  merchantUserId: string;
+  serviceId: string;
+}
+
+export function isClickCheckoutConfigured(): boolean {
+  return Boolean(process.env.CLICK_MERCHANT_ID && process.env.CLICK_MERCHANT_USER_ID && process.env.CLICK_SERVICE_ID);
+}
+
+export function getClickCheckoutConfig(): ClickCheckoutConfig {
+  const merchantId = process.env.CLICK_MERCHANT_ID;
+  const merchantUserId = process.env.CLICK_MERCHANT_USER_ID;
+  const serviceId = process.env.CLICK_SERVICE_ID;
+  if (!merchantId || !merchantUserId || !serviceId) {
+    throw new Error("Click checkout is not configured: set CLICK_MERCHANT_ID, CLICK_MERCHANT_USER_ID, CLICK_SERVICE_ID.");
+  }
+  return { merchantId, merchantUserId, serviceId };
+}
+
 /**
  * Shared secret protecting admin write endpoints. Mirrors today's single
  * shared admin password (there's no per-admin account system) — falls back
