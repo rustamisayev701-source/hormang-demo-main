@@ -1,18 +1,50 @@
 import { Router, type IRouter } from "express";
-import { eq, desc } from "drizzle-orm";
+import { and, eq, desc } from "drizzle-orm";
 import {
   db,
   walletsTable,
   pricingTiersTable,
   tangaTransactionsTable,
   paymentOrdersTable,
+  type PricingTier,
 } from "@workspace/db";
 import type { AuthRequest } from "../middlewares/auth.js";
 import { requireAuth } from "../middlewares/auth.js";
 import { buildPaymeCheckoutUrl } from "../lib/payme.js";
-import { isPaymeConfigured } from "../lib/env.js";
+import { buildClickCheckoutUrl } from "../lib/click.js";
+import { isPaymeConfigured, isClickCheckoutConfigured } from "../lib/env.js";
 
 const router: IRouter = Router();
+
+/**
+ * Mirrors the sale-eligibility the admin panel already displays (salePrice
+ * set and below priceSom), plus the date/limit fields the admin card shows
+ * as auxiliary info but never actually used to gate the charged amount —
+ * so a purchase after validUntil/saleLimit was previously still charged the
+ * (lower) salePrice by relying on the client-sent tierId alone.
+ */
+async function getEffectivePrice(tier: PricingTier, userId: string): Promise<number> {
+  if (tier.salePrice == null || tier.salePrice >= tier.priceSom) return tier.priceSom;
+
+  const now = new Date();
+  if (tier.startsAt && new Date(tier.startsAt) > now) return tier.priceSom;
+  if (tier.validUntil && new Date(tier.validUntil) <= now) return tier.priceSom;
+  if (tier.saleLimit != null && tier.salePurchaseCount >= tier.saleLimit) return tier.priceSom;
+
+  if (tier.perUserLimit != null) {
+    const paidOrders = await db
+      .select({ id: paymentOrdersTable.id })
+      .from(paymentOrdersTable)
+      .where(and(
+        eq(paymentOrdersTable.userId, userId),
+        eq(paymentOrdersTable.tierId, tier.id),
+        eq(paymentOrdersTable.status, "paid"),
+      ));
+    if (paidOrders.length >= tier.perUserLimit) return tier.priceSom;
+  }
+
+  return tier.salePrice;
+}
 
 // ─── GET / — balance + purchasable tiers ───────────────────────────────────
 router.get("/", requireAuth, async (req: AuthRequest, res) => {
@@ -61,11 +93,15 @@ router.post("/orders", requireAuth, async (req: AuthRequest, res) => {
       res.status(400).json({ error: "tierId va provider talab qilinadi" });
       return;
     }
-    if (provider !== "payme") {
+    if (provider !== "payme" && provider !== "click") {
       res.status(400).json({ error: "Bu to'lov usuli hali mavjud emas" });
       return;
     }
-    if (!isPaymeConfigured()) {
+    if (provider === "payme" && !isPaymeConfigured()) {
+      res.status(503).json({ error: "To'lov tizimi hali sozlanmagan" });
+      return;
+    }
+    if (provider === "click" && !isClickCheckoutConfigured()) {
       res.status(503).json({ error: "To'lov tizimi hali sozlanmagan" });
       return;
     }
@@ -76,18 +112,20 @@ router.post("/orders", requireAuth, async (req: AuthRequest, res) => {
       return;
     }
 
+    const amountSom = await getEffectivePrice(tier, req.user!.id);
+
     const [order] = await db
       .insert(paymentOrdersTable)
       .values({
         userId: req.user!.id,
         tierId: tier.id,
-        provider: "payme",
-        amountSom: tier.priceSom,
+        provider,
+        amountSom,
         status: "pending",
       })
       .returning();
 
-    const checkoutUrl = buildPaymeCheckoutUrl(order);
+    const checkoutUrl = provider === "click" ? buildClickCheckoutUrl(order) : buildPaymeCheckoutUrl(order);
     res.status(201).json({ orderId: order.id, checkoutUrl });
   } catch (err) {
     console.error("Create order error:", err);

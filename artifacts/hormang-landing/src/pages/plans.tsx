@@ -67,6 +67,19 @@ function PlanCard({
   const tierName = locale === "ru" ? tier.nameRu : tier.nameUz;
   const totalTokens = tier.credits + tier.bonusTokens;
 
+  // Mirrors the admin panel's own sale-eligibility check (see admin/index.tsx's
+  // activeCampaigns filter) — the actual charged amount is still decided
+  // server-side in getEffectivePrice, this only controls what's displayed.
+  const now = new Date();
+  const saleActive =
+    tier.salePrice != null &&
+    tier.salePrice < tier.priceSom &&
+    (!tier.startsAt || new Date(tier.startsAt) <= now) &&
+    (!tier.validUntil || new Date(tier.validUntil) > now) &&
+    (tier.saleLimit == null || tier.salePurchaseCount < tier.saleLimit);
+  const displayPrice = saleActive ? tier.salePrice! : tier.priceSom;
+  const savingsPercent = saleActive ? Math.round((1 - tier.salePrice! / tier.priceSom) * 100) : 0;
+
   if (bought) {
     return (
       <div className="bg-emerald-50 border-2 border-emerald-200 rounded-2xl p-5 flex flex-col items-center justify-center min-h-[220px] gap-2">
@@ -113,10 +126,20 @@ function PlanCard({
           </div>
         </div>
 
-        <div className="flex items-baseline gap-2 mb-3">
+        <div className="flex items-baseline gap-2 mb-3 flex-wrap">
           <span className="text-lg font-extrabold text-gray-900">
-            {tier.priceSom.toLocaleString()} {tt.sumSuffix}
+            {displayPrice.toLocaleString()} {tt.sumSuffix}
           </span>
+          {saleActive && (
+            <>
+              <span className="text-xs text-gray-400 line-through">
+                {tier.priceSom.toLocaleString()} {tt.sumSuffix}
+              </span>
+              <span className="text-[10px] font-bold text-orange-600">
+                {tFormat(tt.saveTpl, { n: savingsPercent })}
+              </span>
+            </>
+          )}
         </div>
 
         <button

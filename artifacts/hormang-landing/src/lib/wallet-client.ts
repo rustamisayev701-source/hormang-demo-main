@@ -8,6 +8,12 @@ export interface WalletTier {
   credits: number;
   bonusTokens: number;
   priceSom: number;
+  salePrice: number | null;
+  saleLimit: number | null;
+  salePurchaseCount: number;
+  perUserLimit: number | null;
+  startsAt: string | null;
+  validUntil: string | null;
   active: boolean;
   sortOrder: number;
 }
