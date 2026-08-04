@@ -233,7 +233,7 @@ export const uz = {
       otpPlaceholder: "000000",
       sendCode: "Tasdiqlash kodi yuborish",
       sendCodeShort: "Kodni yuborish",
-      smsHint: "SMS orqali 4 xonali tasdiqlash kodi yuboriladi",
+      smsHint: "SMS orqali 6 xonali tasdiqlash kodi yuboriladi",
       invalidPhone: "To'g'ri telefon raqami kiriting",
       invalidPhoneLong: "To'g'ri telefon raqami kiriting (kamida 9 raqam)",
       invalidOtp: "Tasdiqlash kodini kiriting",

@@ -47,12 +47,7 @@ function otpKey(channel: OtpChannel, destination: string): string {
 }
 
 function storeOtp(channel: OtpChannel, destination: string, purpose: string): string {
-  // Eskiz's approved SMS template has a 4-digit placeholder ("kodi: 0000") and
-  // rejects any other digit count as an unapproved text variant — email has no
-  // such constraint, so it keeps the friendlier 6-digit code.
-  const code = channel === "sms"
-    ? Math.floor(1000 + Math.random() * 9000).toString()
-    : Math.floor(100000 + Math.random() * 900000).toString();
+  const code = Math.floor(100000 + Math.random() * 900000).toString();
   otpStore.set(otpKey(channel, destination), { code, expiresAt: Date.now() + 5 * 60 * 1000, purpose, channel });
   return code;
 }
