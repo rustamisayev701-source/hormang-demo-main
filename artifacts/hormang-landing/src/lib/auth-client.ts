@@ -20,6 +20,7 @@ export interface SafeUser {
   role: "buyer" | "provider";
   createdAt: string;
   deletedAt?: string | null;
+  suspended?: boolean;
 }
 
 export interface ProviderProfile {
@@ -392,15 +393,22 @@ export async function sendEmailCode(
   const normalized = normalizeEmail(email);
   if (!isValidEmail(normalized)) throw new Error("INVALID_EMAIL");
 
+  if (purpose === "login-email") {
+    try {
+      return await apiFetch<{ ok: boolean; devCode?: string }>("/auth/login-email/send", {
+        method: "POST",
+        auth: false,
+        body: { email: normalized },
+      });
+    } catch (err) {
+      throwBackendError(err);
+    }
+  }
+
   if (purpose === "register-email" || purpose === "change-email") {
     const owner = findByEmail(normalized);
     const myId = getToken();
     if (owner && owner.id !== myId) throw new Error("EMAIL_ALREADY_REGISTERED");
-  }
-
-  if (purpose === "login-email") {
-    const owner = findByEmail(normalized);
-    if (!owner || !owner.emailVerified) throw new Error("EMAIL_NOT_REGISTERED");
   }
 
   const code = storeOtp("email", normalized, purpose);
@@ -444,34 +452,14 @@ export async function saveProviderProfile(body: {
   bio?: string;
   preferredLocation?: string;
 }): Promise<{ profile: ProviderProfile }> {
-  const token = getToken();
-  if (!token) throw new Error("AUTH_REQUIRED");
-
-  const profiles = readProfiles();
-  const existing = profiles.findIndex((p) => p.userId === token);
-
-  if (existing >= 0) {
-    profiles[existing] = {
-      ...profiles[existing],
-      categories: body.categories,
-      bio: body.bio ?? profiles[existing].bio,
-      preferredLocation: body.preferredLocation ?? profiles[existing].preferredLocation,
-    };
-    writeProfiles(profiles);
-    return { profile: profiles[existing] };
+  try {
+    return await apiFetch<{ profile: ProviderProfile }>("/auth/provider-profile", {
+      method: "PUT",
+      body,
+    });
+  } catch (err) {
+    throwBackendError(err);
   }
-
-  const profile: ProviderProfile = {
-    id: genId(),
-    userId: token,
-    categories: body.categories,
-    bio: body.bio ?? null,
-    preferredLocation: body.preferredLocation ?? null,
-    isVerified: false,
-  };
-  profiles.push(profile);
-  writeProfiles(profiles);
-  return { profile };
 }
 
 /* ─── 2FA code store (user-defined static code + hint) ────────────────── */
@@ -560,8 +548,7 @@ export async function loginUser(body: {
     }
 
     setToken(res.accessToken);
-    const providerProfile = user.role === "provider" ? findProfile(user.id) : res.providerProfile;
-    return { user, accessToken: res.accessToken, providerProfile };
+    return { user, accessToken: res.accessToken, providerProfile: res.providerProfile };
   } catch (err) {
     throwBackendError(err);
   }
@@ -603,21 +590,23 @@ export async function loginWithEmailCode(body: {
 }): Promise<AuthResponse | LoginChallenge> {
   const normalized = normalizeEmail(body.email);
 
-  if (!verifyOtpEntry("email", normalized, body.otp, "login-email")) {
-    throw new Error("OTP_INVALID");
+  try {
+    const res = await apiFetch<{
+      user: BackendUser;
+      accessToken: string;
+      providerProfile: ProviderProfile | null;
+    }>("/auth/login-email", {
+      method: "POST",
+      auth: false,
+      body: { email: normalized, otp: body.otp },
+    });
+
+    const user = mergeBackendUser(res.user);
+    setToken(res.accessToken);
+    return { user, accessToken: res.accessToken, providerProfile: res.providerProfile };
+  } catch (err) {
+    throwBackendError(err);
   }
-
-  const user = findByEmail(normalized);
-  if (!user) throw new Error("USER_NOT_FOUND");
-
-  if (user.twoFactorEnabled) {
-    const challenge = await issue2FAChallenge(user);
-    return challenge;
-  }
-
-  setToken(user.id);
-  const providerProfile = user.role === "provider" ? findProfile(user.id) : null;
-  return { user, accessToken: user.id, providerProfile };
 }
 
 async function issue2FAChallenge(user: SafeUser, pendingAccessToken?: string): Promise<LoginChallenge> {
@@ -1088,40 +1077,26 @@ export async function updateProviderProfile(body: {
   bio?: string;
   preferredLocation?: string;
 }): Promise<{ profile: ProviderProfile }> {
-  const token = getToken();
-  if (!token) throw new Error("AUTH_REQUIRED");
-
-  const profiles = readProfiles();
-  const existing = profiles.findIndex((p) => p.userId === token);
-
-  if (existing >= 0) {
-    if (body.categories !== undefined) profiles[existing].categories = body.categories;
-    if (body.bio !== undefined) profiles[existing].bio = body.bio ?? null;
-    if (body.preferredLocation !== undefined)
-      profiles[existing].preferredLocation = body.preferredLocation ?? null;
-    writeProfiles(profiles);
-    return { profile: profiles[existing] };
+  try {
+    return await apiFetch<{ profile: ProviderProfile }>("/auth/provider-profile", {
+      method: "PUT",
+      body,
+    });
+  } catch (err) {
+    throwBackendError(err);
   }
-
-  const profile: ProviderProfile = {
-    id: genId(),
-    userId: token,
-    categories: body.categories ?? [],
-    bio: body.bio ?? null,
-    preferredLocation: body.preferredLocation ?? null,
-    isVerified: false,
-  };
-  profiles.push(profile);
-  writeProfiles(profiles);
-  return { profile };
 }
 
 export async function getProviderPublicProfile(id: string): Promise<{
   user: SafeUser;
   providerProfile: ProviderProfile | null;
 }> {
-  const user = findById(id);
-  if (!user || user.role !== "provider") throw new Error("PROVIDER_NOT_FOUND");
-  const providerProfile = findProfile(id);
-  return { user, providerProfile };
+  try {
+    return await apiFetch<{ user: SafeUser; providerProfile: ProviderProfile | null }>(
+      `/auth/providers/${id}`,
+      { auth: false },
+    );
+  } catch (err) {
+    throwBackendError(err);
+  }
 }

@@ -1,5 +1,5 @@
 import { Router, type IRouter } from "express";
-import { and, eq, desc, isNull } from "drizzle-orm";
+import { and, eq, desc, isNull, sql } from "drizzle-orm";
 import {
   db,
   usersTable,
@@ -7,6 +7,7 @@ import {
   pricingTiersTable,
   tangaTransactionsTable,
   paymentOrdersTable,
+  referralsTable,
   type PricingTier,
 } from "@workspace/db";
 import type { AuthRequest } from "../middlewares/auth.js";
@@ -144,6 +145,114 @@ router.post("/profile-bonus", requireAuth, async (req: AuthRequest, res) => {
     res.json({ granted: true, balance });
   } catch (err) {
     console.error("Profile bonus error:", err);
+    res.status(500).json({ error: "Xatolik yuz berdi" });
+  }
+});
+
+const REFERRAL_REWARD = 3;
+const MAX_REFERRALS = 5;
+
+// ─── POST /referral-reward — credit the referrer's real wallet ────────────
+// Called (once) by the INVITEE right after completing their provider profile.
+// Referral codes are deterministic (HORMANG-<first 6 chars of userId>), so
+// the referrer is resolved server-side by prefix match — no client-side
+// index/localStorage needed, and it works across devices/browsers.
+// Idempotency is enforced by the unique constraint on referrals.inviteeId.
+router.post("/referral-reward", requireAuth, async (req: AuthRequest, res) => {
+  try {
+    const { referrerCode } = req.body as { referrerCode?: string };
+    if (!referrerCode || typeof referrerCode !== "string") {
+      res.status(400).json({ error: "referrerCode talab qilinadi" });
+      return;
+    }
+
+    const prefix = referrerCode.trim().toUpperCase().replace(/^HORMANG-/, "").toLowerCase();
+    if (prefix.length < 4) {
+      res.status(400).json({ error: "Noto'g'ri referral kod" });
+      return;
+    }
+
+    const candidates = await db
+      .select({ id: usersTable.id })
+      .from(usersTable)
+      .where(sql`${usersTable.id} LIKE ${prefix + "%"}`)
+      .limit(2);
+
+    if (candidates.length !== 1) {
+      res.status(404).json({ error: "Taklif qiluvchi topilmadi" });
+      return;
+    }
+    const referrerId = candidates[0].id;
+
+    if (referrerId === req.user!.id) {
+      res.status(400).json({ error: "O'zingizni taklif qila olmaysiz" });
+      return;
+    }
+
+    const result = await db.transaction(async (tx) => {
+      const inserted = await tx
+        .insert(referralsTable)
+        .values({ referrerId, inviteeId: req.user!.id })
+        .onConflictDoNothing({ target: referralsTable.inviteeId })
+        .returning({ id: referralsTable.id });
+
+      if (inserted.length === 0) {
+        return { granted: false as const, alreadyGranted: true as const };
+      }
+
+      const rewardedSoFar = await tx
+        .select({ id: referralsTable.id })
+        .from(referralsTable)
+        .where(and(eq(referralsTable.referrerId, referrerId), eq(referralsTable.rewarded, true)));
+
+      if (rewardedSoFar.length >= MAX_REFERRALS) {
+        return { granted: false as const, capped: true as const };
+      }
+
+      const [existingWallet] = await tx.select().from(walletsTable).where(eq(walletsTable.userId, referrerId)).limit(1);
+      const nextBalance = (existingWallet?.balance ?? 0) + REFERRAL_REWARD;
+      if (existingWallet) {
+        await tx.update(walletsTable).set({ balance: nextBalance, updatedAt: new Date() }).where(eq(walletsTable.userId, referrerId));
+      } else {
+        await tx.insert(walletsTable).values({ userId: referrerId, balance: nextBalance });
+      }
+
+      await tx.insert(tangaTransactionsTable).values({
+        userId: referrerId,
+        type: "referral",
+        direction: "in",
+        amount: REFERRAL_REWARD,
+        description: "Do'stni taklif qilish mukofoti",
+      });
+
+      await tx.update(referralsTable).set({ rewarded: true }).where(eq(referralsTable.inviteeId, req.user!.id));
+
+      return { granted: true as const, balance: nextBalance };
+    });
+
+    res.json(result);
+  } catch (err) {
+    console.error("Referral reward error:", err);
+    res.status(500).json({ error: "Xatolik yuz berdi" });
+  }
+});
+
+// ─── GET /referral-stats — the current user's own referral count/earnings ──
+router.get("/referral-stats", requireAuth, async (req: AuthRequest, res) => {
+  try {
+    const rows = await db
+      .select()
+      .from(referralsTable)
+      .where(and(eq(referralsTable.referrerId, req.user!.id), eq(referralsTable.rewarded, true)))
+      .orderBy(desc(referralsTable.createdAt));
+
+    res.json({
+      count: rows.length,
+      earned: rows.length * REFERRAL_REWARD,
+      invitees: rows.map((r) => ({ userId: r.inviteeId, completedAt: r.createdAt })),
+    });
+  } catch (err) {
+    console.error("Get referral stats error:", err);
     res.status(500).json({ error: "Xatolik yuz berdi" });
   }
 });

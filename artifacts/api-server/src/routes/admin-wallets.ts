@@ -1,6 +1,6 @@
 import { Router, type IRouter } from "express";
 import { eq, desc } from "drizzle-orm";
-import { db, walletsTable, usersTable, tangaTransactionsTable, paymentOrdersTable, pricingTiersTable } from "@workspace/db";
+import { db, walletsTable, usersTable, tangaTransactionsTable, paymentOrdersTable, pricingTiersTable, referralsTable } from "@workspace/db";
 import { requireAdminKey } from "../middlewares/admin.js";
 
 const router: IRouter = Router();
@@ -71,6 +71,17 @@ router.get("/transactions", async (_req, res) => {
     });
   } catch (err) {
     console.error("List all admin wallet transactions error:", err);
+    res.status(500).json({ error: "Xatolik yuz berdi" });
+  }
+});
+
+// ─── GET /referrals — every referral relationship, for the admin Users tab ─
+router.get("/referrals", async (_req, res) => {
+  try {
+    const rows = await db.select().from(referralsTable).orderBy(desc(referralsTable.createdAt));
+    res.json({ referrals: rows });
+  } catch (err) {
+    console.error("List admin referrals error:", err);
     res.status(500).json({ error: "Xatolik yuz berdi" });
   }
 });

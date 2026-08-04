@@ -1,29 +1,10 @@
 /**
  * safety-store.ts
- * Cross-cutting safety helpers — currently: user suspension enforcement.
- *
- * Storage keys consumed:
- *   hormang_admin_suspended_users — string[] of suspended userIds (written by admin panel)
+ * Suspension is enforced server-side (users are checked against the real
+ * user_moderation table on login and on GET /auth/me) — callers should read
+ * `user.suspended` from useAuth() directly. This module just keeps the
+ * shared toast copy.
  */
-
-const SUSPENDED_KEY = "hormang_admin_suspended_users";
-
-function readSuspended(): Set<string> {
-  try {
-    const raw = localStorage.getItem(SUSPENDED_KEY);
-    if (!raw) return new Set();
-    const arr = JSON.parse(raw);
-    return new Set(Array.isArray(arr) ? (arr as string[]) : []);
-  } catch {
-    return new Set();
-  }
-}
-
-/** True if the given userId is currently in the admin suspended set. */
-export function isUserSuspended(userId: string | null | undefined): boolean {
-  if (!userId) return false;
-  return readSuspended().has(userId);
-}
 
 /** Suspension copy shown in toasts / banners. */
 export const SUSPENDED_MESSAGE =

@@ -31,7 +31,7 @@ import {
   getCompletedCount,
   getProviderReviewAverages,
 } from "./completion-store";
-import { getTangaTransactions } from "./tanga-history-store";
+import { getWalletTransactions } from "./wallet-client";
 import { emitStoreChange } from "./store-events";
 import { apiFetch } from "./api-client";
 import { adminFetch, AdminApiError } from "./admin-client";
@@ -272,21 +272,32 @@ function appendAuditLog(entry: {
 /* ─── Auto-badge evaluation ────────────────────────────────────────── */
 
 /**
- * Cumulative acquired Tanga across the user's lifetime.
- * Counts every "in"-direction transaction (purchase, referral, refund,
- * profile reward, admin grant). Excludes spends.
+ * Cumulative acquired Tanga across the user's lifetime (real wallet ledger).
+ * computeQualifiedAutoBadges() must stay synchronous (it's called on every
+ * store-change event across several render paths), so this reads from a
+ * small in-memory cache — refreshed in the background on first read for a
+ * given user, matching the fast-path-cache pattern used for wallet balance
+ * (see wallet-balance.ts). A badge that depends on this may lag by one
+ * store-change tick after login, not indefinitely.
  */
+const acquiredTangaCache = new Map<string, number>();
+const acquiredTangaInFlight = new Set<string>();
+
 function cumulativeAcquiredTanga(userId: string): number {
-  return getTangaTransactions(userId).reduce((sum, tx) => {
-    if (tx.direction === "in") return sum + Math.abs(tx.amount);
-    if (tx.direction === "out") return sum;
-    // Legacy untyped fallback
-    if (tx.type === "purchase" || tx.type === "referral" ||
-        tx.type === "refund"   || tx.type === "profile_completion_reward") {
-      return sum + Math.abs(tx.amount);
-    }
-    return sum;
-  }, 0);
+  if (!acquiredTangaInFlight.has(userId)) {
+    acquiredTangaInFlight.add(userId);
+    getWalletTransactions()
+      .then((res) => {
+        const total = res.transactions
+          .filter((tx) => tx.direction === "in")
+          .reduce((sum, tx) => sum + Math.abs(tx.amount), 0);
+        acquiredTangaCache.set(userId, total);
+        emitStoreChange();
+      })
+      .catch(() => {})
+      .finally(() => acquiredTangaInFlight.delete(userId));
+  }
+  return acquiredTangaCache.get(userId) ?? 0;
 }
 
 /** Account age in days. Returns 0 if createdAt is missing/invalid. */

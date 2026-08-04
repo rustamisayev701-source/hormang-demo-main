@@ -11,7 +11,7 @@ import { getCachedTangaBalance, refreshTangaBalance } from "@/lib/wallet-balance
 import { getWallet, createWalletOrder, type WalletTier } from "@/lib/wallet-client";
 import { ApiError } from "@/lib/api-client";
 import { ReferralCard } from "@/components/referral-card";
-import { isUserSuspended, SUSPENDED_MESSAGE } from "@/lib/safety-store";
+import { SUSPENDED_MESSAGE } from "@/lib/safety-store";
 import { useI18n } from "@/contexts/i18n-context";
 import { tFormat } from "@/lib/i18n";
 
@@ -246,7 +246,7 @@ export default function PlansPage() {
 
   async function handleBuy(tier: WalletTier, provider: "payme" | "click") {
     if (!userId || buying) return;
-    if (isUserSuspended(userId)) {
+    if (user?.suspended) {
       toast({ title: SUSPENDED_MESSAGE, variant: "destructive" });
       return;
     }

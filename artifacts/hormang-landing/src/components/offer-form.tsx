@@ -32,7 +32,7 @@ import { getRequestLocation } from "@/lib/regions";
 import { ImageGrid, getAnswerImageUrls } from "@/components/image-grid";
 import { getWallet } from "@/lib/wallet-client";
 import { calculateOfferCost } from "@/lib/offer-cost";
-import { isUserSuspended, SUSPENDED_MESSAGE } from "@/lib/safety-store";
+import { SUSPENDED_MESSAGE } from "@/lib/safety-store";
 import { useLocation } from "wouter";
 import { useI18n } from "@/contexts/i18n-context";
 import { tFormat, getBudgetLabel } from "@/lib/i18n";
@@ -179,7 +179,7 @@ export function OfferForm({ request, onClose, onSubmitted }: Props) {
   async function handleSubmit() {
     if (!hasEnoughTanga) return;
     if (!validate()) return;
-    if (user && isUserSuspended(user.id)) {
+    if (user?.suspended) {
       toast({ title: SUSPENDED_MESSAGE, variant: "destructive" });
       return;
     }

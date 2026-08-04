@@ -72,6 +72,12 @@ export function fetchAllWalletTransactions() {
 export function fetchWalletTransactions(userId: string) {
   return adminFetch<{ transactions: BackendTangaTx[] }>(`/admin/wallets/${userId}/transactions`);
 }
+export interface BackendReferral {
+  id: string; referrerId: string; inviteeId: string; rewarded: boolean; createdAt: string;
+}
+export function fetchAdminReferrals() {
+  return adminFetch<{ referrals: BackendReferral[] }>("/admin/wallets/referrals");
+}
 export function adjustWalletBalance(userId: string, amount: number, direction: "in" | "out", reason?: string) {
   return adminFetch<{ ok: boolean; balance: number }>(`/admin/wallets/${userId}/adjust`, {
     method: "POST",

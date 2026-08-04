@@ -2,7 +2,6 @@ import { createContext, useContext, useEffect, useState, useCallback } from "rea
 import { getMe, logoutUser, refreshToken, type SafeUser, type ProviderProfile } from "@/lib/auth-client";
 import { saveCustomerToRegistry, savePhoneToRegistry } from "@/lib/requests-store";
 import { getLocalProfile, hasProviderAccess, markProviderAccess } from "@/lib/local-profile";
-import { isUserSuspended } from "@/lib/safety-store";
 
 type Role = "buyer" | "provider";
 
@@ -151,7 +150,7 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
         getMe()
           .then(({ user: u, providerProfile: pp }) => {
             // Suspended users are blocked even on cross-tab token sync.
-            if (isUserSuspended(u.id)) {
+            if (u.suspended) {
               console.warn(`[Hormang] 🚫 Suspended user (cross-tab) bloklandi: ${u.id.slice(0, 8)}`);
               logoutUser().catch(() => {});
               setUser(null);
@@ -187,7 +186,7 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
 
     function applyUser(u: SafeUser, pp: ProviderProfile | null) {
       // Suspended users are immediately logged out — they cannot access the app.
-      if (isUserSuspended(u.id)) {
+      if (u.suspended) {
         console.warn(`[Hormang] 🚫 Suspended user kirishga uringan: ${u.id.slice(0, 8)} — chiqarildi`);
         logoutUser().finally(() => {
           setUser(null);
@@ -230,7 +229,7 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
     }
 
     // Suspended users cannot log in.
-    if (isUserSuspended(u.id)) {
+    if (u.suspended) {
       console.warn(`[Hormang] 🚫 Suspended user setAuth bloklandi: ${u.id.slice(0, 8)}`);
       logoutUser().catch(() => {});
       setUser(null);

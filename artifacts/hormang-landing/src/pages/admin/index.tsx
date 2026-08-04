@@ -44,8 +44,9 @@ import {
   fetchAdminWallets, fetchAllWalletTransactions, fetchWalletTransactions, adjustWalletBalance as adjustWalletBalanceBackend,
   fetchAdminUsers, setUserSuspended as setUserSuspendedBackend, setUserVerified as setUserVerifiedBackend,
   setUserFlagCountBackend, setUserTagsBackend, addUserNoteBackend, removeUserNoteBackend, deleteUserBackend,
+  fetchAdminReferrals,
   type BackendPricingTier, type BackendWallet, type BackendTangaTx, type BackendAdminUser,
-  type BackendUserModeration, type PricingTierInput,
+  type BackendUserModeration, type PricingTierInput, type BackendReferral,
 } from "@/lib/admin-data";
 import { CategoryIcon } from "@/components/category-icon";
 import {
@@ -71,7 +72,7 @@ import {
   type TangaTransaction as TangaTx,
 } from "@/lib/tanga-history-store";
 import { getTangaBalance } from "@/lib/tanga-store";
-import { getReferralCode, getReferralStats, getInviterId, processReferralReward, TANGA_PER_REFERRAL } from "@/lib/referral-store";
+import { getReferralCode, TANGA_PER_REFERRAL } from "@/lib/referral-store";
 import { getAllOffersAdmin, getAllRequestsAdmin, getAllChatsAdmin, getPhoneRegistry, getOffersByRequestId, markOfferCompleted, type Offer as BuyerOfferFull, type CustomerRequest as StoreCustomerRequest, type Chat as StoreChat, updateOfferStatus, deleteRequestCascade, adminSetRequestStatus, adminDeleteOffer, deleteUserDataCascade, getLast10RejectedEligibility, adminRefundProvider, getRecentRequestCount, getRequestById, REQUEST_DAILY_FLAG_THRESHOLD } from "@/lib/requests-store";
 import { getAvgResponseMinutes, formatAvgResponseTime } from "@/lib/response-time-store";
 import {
@@ -590,11 +591,20 @@ function OverviewSection({ refreshKey, setSection }: { refreshKey: number; setSe
       setOffers(ofrs);
     }).catch((err) => console.error("Load marketplace overview data failed:", err));
   }, [refreshKey]);
-  const txs        = getAllTangaTransactions();
-  const tiers      = readKey<PricingTier[]>(K.PRICING_TIERS, []);
-  const authUsers  = readKey<{ id: string; firstName?: string; lastName?: string; role: string; createdAt?: string }[]>("hormang_auth_users", []);
-  const userFlags  = getUserFlags();
-  const providers  = getAllProviderSummaries(offers);
+  const [txs, setTxs]           = useState<TangaTx[]>([]);
+  const [tiers, setTiers]       = useState<PricingTier[]>([]);
+  const [authUsers, setAuthUsers] = useState<BackendAdminUser[]>([]);
+  const [providers, setProviders] = useState<ProviderSummary[]>([]);
+  useEffect(() => {
+    Promise.all([fetchAllWalletTransactions(), fetchPricingTiers(), fetchAdminUsers(), fetchAdminWallets()])
+      .then(([{ transactions }, { tiers: backendTiers }, { users }, { wallets }]) => {
+        setTxs(backendTxsToLocal(transactions));
+        setTiers(backendTiers.map(backendTierToLocal));
+        setAuthUsers(users);
+        setProviders(backendWalletsToProviders(wallets));
+      })
+      .catch((err) => console.error("Load overview monetization data failed:", err));
+  }, [refreshKey]);
 
   /* ─── Time helpers ────────────────────────────────────────────── */
   const now       = Date.now();
@@ -668,22 +678,17 @@ function OverviewSection({ refreshKey, setSection }: { refreshKey: number; setSe
     if (!r.createdAt) return false;
     return (now - new Date(r.createdAt).getTime()) / 3600000 >= STALE_HOURS;
   }).length;
-  const flaggedUsers = Object.values(userFlags).filter((c) => (c as number) > 0).length;
+  const flaggedUsers = authUsers.filter((u) => u.flagCount > 0).length;
   const alerts: { icon: typeof AlertCircle; tone: string; text: string; cta?: () => void }[] = [];
   if (staleNoOffer > 0)    alerts.push({ icon: Inbox,        tone: "amber",  text: `${staleNoOffer} ta so'rov ${STALE_HOURS} soatdan beri taklifsiz`, cta: () => setSection("marketplace") });
   if (lowBalanceProvs > 0) alerts.push({ icon: Wallet,       tone: "rose",   text: `${lowBalanceProvs} ta ijrochi balansi <3 🪙`,                     cta: () => setSection("monetization") });
   if (flaggedUsers > 0)    alerts.push({ icon: Flag,         tone: "red",    text: `${flaggedUsers} ta belgilangan foydalanuvchi`,                     cta: () => setSection("users") });
 
-  /* ─── 6. Referral (single pass over users) ────────────────────── */
-  let referralCount = 0;
-  let referralEarned = 0;
-  let activeReferrers = 0;
-  authUsers.forEach((u) => {
-    const s = getReferralStats(u.id);
-    referralCount  += s.count;
-    referralEarned += s.earned;
-    if (s.count > 0) activeReferrers += 1;
-  });
+  /* ─── 6. Referral (real "referral" Tanga transactions) ─────────── */
+  const referralTxs      = txs.filter((t) => t.type === "referral");
+  const referralCount    = referralTxs.length;
+  const referralEarned   = referralTxs.reduce((s, t) => s + t.amount, 0);
+  const activeReferrers  = new Set(referralTxs.map((t) => t.userId)).size;
 
   /* ─── 7. Trends — 7-day requests/offers + revenue ─────────────── */
   const activityData = Array.from({ length: 7 }, (_, i) => {
@@ -1304,6 +1309,7 @@ interface AdminUser {
   referredBy?:      string;
   referralCount?:   number;
   referralEarned?:  number;
+  referralInvitees?: { userId: string; completedAt: string }[];
   /* ── Admin-managed metadata ── */
   flagCount?:              number;
   reportCount?:            number;
@@ -1802,7 +1808,7 @@ function AdvancedUserDetailModal({
 
             {/* ── REFERRAL ── */}
             {tab === "referral" && (() => {
-              const refStats = getReferralStats(u.userId);
+              const invitees = u.referralInvitees ?? [];
               const userById = new Map(allUsers.map((x) => [x.userId, x] as const));
               return (
                 <div className="space-y-4">
@@ -1829,15 +1835,15 @@ function AdvancedUserDetailModal({
                   {/* Invited users list */}
                   <div>
                     <p className="text-[10px] font-bold text-gray-400 uppercase tracking-widest mb-2 flex items-center gap-1.5">
-                      <Gift className="w-3 h-3" /> Kimlarni taklif qilgan ({refStats.invitees.length})
+                      <Gift className="w-3 h-3" /> Kimlarni taklif qilgan ({invitees.length})
                     </p>
-                    {refStats.invitees.length === 0 ? (
+                    {invitees.length === 0 ? (
                       <div className="text-center py-6 bg-gray-50 rounded-xl border border-gray-100">
                         <p className="text-gray-400 text-sm">Hali hech kimni taklif qilmagan</p>
                       </div>
                     ) : (
                       <div className="space-y-2">
-                        {refStats.invitees.map((inv) => {
+                        {invitees.map((inv) => {
                           const invitee = userById.get(inv.userId);
                           const initials = invitee?.initials ?? inv.userId.slice(0, 2).toUpperCase();
                           const color = invitee?.color ?? "#7C3AED";
@@ -3024,27 +3030,25 @@ function UsersSection({ refreshKey, onGoToFeedback, openUserId, onOpenUserIdCons
 
     result.push(...userMap.values());
 
-    /* ── Step 4: Retroactively process any pending referral rewards ──
-       Earlier signups may have failed to award the inviter because the
-       referrer's code→userId index didn't exist yet. Only invitees who
-       completed a provider profile qualify — same rule as register flow. */
-    for (let i = 0; i < localStorage.length; i++) {
-      const lsKey = localStorage.key(i);
-      if (!lsKey?.startsWith("hormang_ref_pending_")) continue;
-      const uid = lsKey.slice("hormang_ref_pending_".length);
-      const hasProviderProfile = localStorage.getItem(`user_${uid}_localProfile`) !== null;
-      if (hasProviderProfile) processReferralReward(uid);
+    /* ── Step 4/5: Enrich all users with real referral data (referrals table —
+       rewarding now happens server-side via POST /wallet/referral-reward,
+       called by the invitee themselves right after their profile completes,
+       so there's nothing left to retroactively process here). ── */
+    let allReferrals: BackendReferral[] = [];
+    try {
+      allReferrals = (await fetchAdminReferrals()).referrals;
+    } catch (err) {
+      console.error("Load referrals failed:", err);
     }
-
-    /* ── Step 5: Enrich all users with referral data ── */
     const nameById = new Map(result.map((u) => [u.userId, u.name] as const));
+    const referrerByInvitee = new Map(allReferrals.map((r) => [r.inviteeId, r.referrerId] as const));
     for (const u of result) {
       u.referralCode = getReferralCode(u.userId);
-      const rStats = getReferralStats(u.userId);
-      u.referralCount = rStats.count;
-      u.referralEarned = rStats.earned;
-      // Resolve who invited this user (stable userId, survives reward processing).
-      const inviterId = getInviterId(u.userId);
+      const rewarded = allReferrals.filter((r) => r.referrerId === u.userId && r.rewarded);
+      u.referralCount = rewarded.length;
+      u.referralEarned = rewarded.length * TANGA_PER_REFERRAL;
+      u.referralInvitees = rewarded.map((r) => ({ userId: r.inviteeId, completedAt: r.createdAt }));
+      const inviterId = referrerByInvitee.get(u.userId);
       if (inviterId) {
         u.referredBy = nameById.get(inviterId) ?? getReferralCode(inviterId);
       }
@@ -3713,51 +3717,6 @@ type ProviderSummary = {
   totalPurchased: number; totalSpent: number; referralEarned: number; txCount: number;
 };
 
-function getAllProviderSummaries(offers: BuyerOffer[] = []): ProviderSummary[] {
-  const map = new Map<string, { userId: string; name: string }>();
-
-  // 1. Real registered users (canonical source — auth-client.ts USERS_KEY)
-  try {
-    const au = JSON.parse(localStorage.getItem("hormang_auth_users") ?? "[]") as { id: string; firstName: string; lastName: string; role: string }[];
-    for (const u of au) {
-      if (u.role === "provider") {
-        const fullName = `${u.firstName ?? ""} ${u.lastName ?? ""}`.trim() || `Ijrochi ${u.id.slice(0, 6)}`;
-        map.set(u.id, { userId: u.id, name: fullName });
-      }
-    }
-  } catch {}
-
-  const allTxs    = getAllTangaTransactions();
-
-  // 2. Anyone who ever spent/purchased/received Tanga (catches role-swapped buyers, legacy users)
-  for (const tx of allTxs) {
-    if (!map.has(tx.userId)) {
-      // Try to enrich name from offer (masterName) if any
-      const offer = offers.find((o) => o.masterId === tx.userId);
-      const name  = offer?.masterName?.trim() || `Ijrochi ${tx.userId.slice(0, 6)}`;
-      map.set(tx.userId, { userId: tx.userId, name });
-    }
-  }
-
-  // 3. Anyone with a non-zero Tanga balance (provider_tokens_<id>) but no auth/tx record
-  for (let i = 0; i < localStorage.length; i++) {
-    const k = localStorage.key(i);
-    if (!k?.startsWith("provider_tokens_")) continue;
-    const uid = k.replace("provider_tokens_", "");
-    if (!uid || map.has(uid)) continue;
-    const offer = offers.find((o) => o.masterId === uid);
-    map.set(uid, { userId: uid, name: offer?.masterName?.trim() || `Ijrochi ${uid.slice(0, 6)}` });
-  }
-
-  return Array.from(map.values()).map(({ userId, name }) => {
-    const userTxs = allTxs.filter((t) => t.userId === userId);
-    const totalPurchased = userTxs.filter((t) => t.type === "purchase").reduce((s, t) => s + t.amount, 0);
-    const totalSpent     = userTxs.filter((t) => t.type === "spend" || (!t.type && t.amount > 0)).reduce((s, t) => s + t.amount, 0);
-    const referralEarned = userTxs.filter((t) => t.type === "referral").reduce((s, t) => s + t.amount, 0);
-    return { userId, name, balance: getTangaBalance(userId), totalPurchased, totalSpent, referralEarned, txCount: userTxs.length };
-  }).sort((a, b) => b.balance - a.balance);
-}
-
 /* ─── Backend ↔ local shape converters (real pricing_tiers/wallets/tanga_transactions tables) ─── */
 function slugify(s: string): string {
   return s.toLowerCase().trim().replace(/[^a-z0-9]+/g, "-").replace(/(^-|-$)/g, "") || "tier";
@@ -3796,7 +3755,12 @@ function backendTierToLocal(t: BackendPricingTier): PricingTier {
     active: t.active,
   };
 }
-function backendWalletsToProviders(wallets: BackendWallet[]): ProviderSummary[] {
+function backendWalletsToProviders(wallets: BackendWallet[], referrals: BackendReferral[] = []): ProviderSummary[] {
+  const referralEarnedByUser = new Map<string, number>();
+  for (const r of referrals) {
+    if (!r.rewarded) continue;
+    referralEarnedByUser.set(r.referrerId, (referralEarnedByUser.get(r.referrerId) ?? 0) + TANGA_PER_REFERRAL);
+  }
   return wallets
     .filter((w) => w.role === "provider")
     .map((w) => ({
@@ -3805,7 +3769,7 @@ function backendWalletsToProviders(wallets: BackendWallet[]): ProviderSummary[] 
       balance: w.balance,
       totalPurchased: w.totalPurchased,
       totalSpent: w.totalSpent,
-      referralEarned: getReferralStats(w.userId).earned ?? 0,
+      referralEarned: referralEarnedByUser.get(w.userId) ?? 0,
       txCount: w.txCount,
     }))
     .sort((a, b) => b.balance - a.balance);
@@ -3834,6 +3798,7 @@ function MonetizationSection({ refreshKey }: { refreshKey: number }) {
   const [tiers, setTiers] = useState<PricingTier[]>([]);
   const [txs, setTxs]           = useState<TangaTx[]>([]);
   const [providers, setProviders] = useState<ProviderSummary[]>([]);
+  const [referrals, setReferrals] = useState<BackendReferral[]>([]);
   const [loadError, setLoadError] = useState<string | null>(null);
 
   void refreshKey;
@@ -3841,12 +3806,13 @@ function MonetizationSection({ refreshKey }: { refreshKey: number }) {
   const reload = useCallback(() => {
     (async () => {
       try {
-        const [{ tiers: backendTiers }, { wallets }, { transactions }] = await Promise.all([
-          fetchPricingTiers(), fetchAdminWallets(), fetchAllWalletTransactions(),
+        const [{ tiers: backendTiers }, { wallets }, { transactions }, { referrals }] = await Promise.all([
+          fetchPricingTiers(), fetchAdminWallets(), fetchAllWalletTransactions(), fetchAdminReferrals(),
         ]);
         setTiers(backendTiers.map(backendTierToLocal));
-        setProviders(backendWalletsToProviders(wallets));
+        setProviders(backendWalletsToProviders(wallets, referrals));
         setTxs(backendTxsToLocal(transactions));
+        setReferrals(referrals);
         setLoadError(null);
       } catch (err) {
         console.error("Load monetization data failed:", err);
@@ -3898,7 +3864,7 @@ function MonetizationSection({ refreshKey }: { refreshKey: number }) {
       {monoTab === "plans"        && <MonoPlans tiers={tiers} txs={txs} reload={reload} />}
       {monoTab === "transactions" && <MonoTransactions txs={txs} reload={reload} />}
       {monoTab === "balances"     && <MonoBalances providers={providers} reload={reload} />}
-      {monoTab === "referral"     && <MonoReferral providers={providers} />}
+      {monoTab === "referral"     && <MonoReferral providers={providers} referrals={referrals} />}
     </div>
   );
 }
@@ -4961,10 +4927,15 @@ function MonoBalances({ providers, reload }: { providers: ProviderSummary[]; rel
 }
 
 /* ─── Referral Economy Tab ───────────────────────────────────────── */
-function MonoReferral({ providers }: { providers: ProviderSummary[] }) {
+function MonoReferral({ providers, referrals }: { providers: ProviderSummary[]; referrals: BackendReferral[] }) {
   const referralData = providers.map((p) => {
-    const stats = getReferralStats(p.userId);
-    return { ...p, refCount: stats.count ?? 0, refEarned: stats.earned ?? p.referralEarned, invitees: stats.invitees ?? [] };
+    const rewarded = referrals.filter((r) => r.referrerId === p.userId && r.rewarded);
+    return {
+      ...p,
+      refCount: rewarded.length,
+      refEarned: rewarded.length * TANGA_PER_REFERRAL,
+      invitees: rewarded.map((r) => ({ userId: r.inviteeId, completedAt: r.createdAt })),
+    };
   }).filter((p) => p.refCount > 0 || p.refEarned > 0).sort((a, b) => b.refEarned - a.refEarned);
 
   const totalRefTanga     = referralData.reduce((s, r) => s + r.refEarned, 0);

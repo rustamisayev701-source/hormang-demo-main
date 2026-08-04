@@ -6,7 +6,8 @@ import { useAuth } from "@/contexts/auth-context";
 import { useToast } from "@/hooks/use-toast";
 import {
   getReferralCode, getReferralLink, getReferralStats,
-  ensureReferralIndex, TANGA_PER_REFERRAL, MAX_REFERRALS, MAX_REFERRAL_TANGA,
+  TANGA_PER_REFERRAL, MAX_REFERRALS, MAX_REFERRAL_TANGA,
+  type ReferralStats,
 } from "@/lib/referral-store";
 import { useI18n } from "@/contexts/i18n-context";
 import { tFormat } from "@/lib/i18n";
@@ -22,10 +23,11 @@ export function ReferralCard({ title }: { title?: string } = {}) {
   const userId = user?.id ?? "";
   const referralCode = userId ? getReferralCode(userId) : "";
   const referralLink = userId ? getReferralLink(userId) : "";
-  const stats = userId ? getReferralStats(userId) : { count: 0, earned: 0, invitees: [] };
+  const [stats, setStats] = useState<ReferralStats>({ count: 0, earned: 0, invitees: [] });
 
   useEffect(() => {
-    if (userId) ensureReferralIndex(userId);
+    if (!userId) return;
+    getReferralStats().then(setStats).catch(() => {});
   }, [userId]);
 
   const progressPct = Math.min(100, (stats.count / MAX_REFERRALS) * 100);

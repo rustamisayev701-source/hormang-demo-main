@@ -1,6 +1,6 @@
 import { Router } from "express";
 import { eq } from "drizzle-orm";
-import { db, usersTable, providerProfilesTable } from "@workspace/db";
+import { db, usersTable, providerProfilesTable, userModerationTable } from "@workspace/db";
 import {
   hashPassword,
   comparePassword,
@@ -40,6 +40,15 @@ function maskEmail(email: string): string {
   if (!domain) return email;
   const visible = user.slice(0, Math.min(2, user.length));
   return `${visible}${"*".repeat(Math.max(user.length - visible.length, 1))}@${domain}`;
+}
+
+async function isUserSuspended(userId: string): Promise<boolean> {
+  const [mod] = await db
+    .select({ suspended: userModerationTable.suspended })
+    .from(userModerationTable)
+    .where(eq(userModerationTable.userId, userId))
+    .limit(1);
+  return mod?.suspended ?? false;
 }
 
 function otpKey(channel: OtpChannel, destination: string): string {
@@ -340,6 +349,11 @@ router.post("/login", async (req, res) => {
 
     clearAttempts(normalized);
 
+    if (await isUserSuspended(user.id)) {
+      res.status(403).json({ error: "Hisobingiz vaqtincha to'xtatilgan. Iltimos, qo'llab-quvvatlash bilan bog'laning." });
+      return;
+    }
+
     await db
       .update(usersTable)
       .set({ lastLoginAt: new Date() })
@@ -347,7 +361,7 @@ router.post("/login", async (req, res) => {
 
     const providerProfile = user.role === "provider" ? await getProviderProfile(user.id) : null;
 
-    const safeUser = { ...user, passwordHash: undefined };
+    const safeUser = { ...user, passwordHash: undefined, suspended: false };
     const accessToken = generateAccessToken({ ...user });
     const refreshToken = generateRefreshToken(user.id);
 
@@ -355,6 +369,100 @@ router.post("/login", async (req, res) => {
     res.json({ user: safeUser, accessToken, providerProfile });
   } catch (err) {
     console.error("Login error:", err);
+    res.status(500).json({ error: "Xatolik yuz berdi. Qayta urinib ko'ring." });
+  }
+});
+
+// ─── POST /login-email/send (send a login code to a verified email, no phone) ─
+router.post("/login-email/send", async (req, res) => {
+  try {
+    const { email } = req.body as { email?: string };
+    if (!email || !isValidEmail(email)) {
+      res.status(400).json({ error: "To'g'ri email talab qilinadi" });
+      return;
+    }
+    const normalized = normalizeEmail(email);
+
+    const [user] = await db
+      .select({ id: usersTable.id, emailVerified: usersTable.emailVerified })
+      .from(usersTable)
+      .where(eq(usersTable.email, normalized))
+      .limit(1);
+
+    if (!user || !user.emailVerified) {
+      res.status(404).json({ error: "Bu email ro'yxatdan o'tmagan" });
+      return;
+    }
+
+    if (!isResendConfigured()) {
+      res.status(502).json({ error: "Email xizmati sozlanmagan" });
+      return;
+    }
+
+    const code = storeOtp("email", normalized, "login");
+    await sendOtpEmail(normalized, code);
+    res.json({ ok: true, maskedDestination: maskEmail(normalized), ...(env.isProduction ? {} : { devCode: code }) });
+  } catch (err) {
+    console.error("Login-email send error:", err);
+    res.status(500).json({ error: "Xatolik yuz berdi" });
+  }
+});
+
+// ─── POST /login-email (verify the code, log in by email — no phone needed) ─
+router.post("/login-email", async (req, res) => {
+  const { email, otp } = req.body as { email?: string; otp?: string };
+  if (!email || !otp) {
+    res.status(400).json({ error: "Email va tasdiqlash kodi talab qilinadi" });
+    return;
+  }
+  const normalized = normalizeEmail(email);
+  const { blocked, remaining } = checkRateLimit(`email:${normalized}`);
+  if (blocked) {
+    res.status(429).json({ error: `Juda ko'p urinish. ${remaining} soniyadan so'ng qayta urinib ko'ring.` });
+    return;
+  }
+
+  try {
+    const [user] = await db
+      .select()
+      .from(usersTable)
+      .where(eq(usersTable.email, normalized))
+      .limit(1);
+
+    if (!user) {
+      recordFailedAttempt(`email:${normalized}`);
+      res.status(401).json({ error: "Foydalanuvchi topilmadi" });
+      return;
+    }
+
+    if (!verifyOtp("email", normalized, otp, "login")) {
+      recordFailedAttempt(`email:${normalized}`);
+      res.status(401).json({ error: "Tasdiqlash kodi noto'g'ri yoki muddati o'tgan" });
+      return;
+    }
+
+    clearAttempts(`email:${normalized}`);
+
+    if (await isUserSuspended(user.id)) {
+      res.status(403).json({ error: "Hisobingiz vaqtincha to'xtatilgan. Iltimos, qo'llab-quvvatlash bilan bog'laning." });
+      return;
+    }
+
+    await db
+      .update(usersTable)
+      .set({ lastLoginAt: new Date() })
+      .where(eq(usersTable.id, user.id));
+
+    const providerProfile = user.role === "provider" ? await getProviderProfile(user.id) : null;
+
+    const safeUser = { ...user, passwordHash: undefined, suspended: false };
+    const accessToken = generateAccessToken({ ...user });
+    const refreshToken = generateRefreshToken(user.id);
+
+    res.cookie("refreshToken", refreshToken, COOKIE_OPTS);
+    res.json({ user: safeUser, accessToken, providerProfile });
+  } catch (err) {
+    console.error("Login-email error:", err);
     res.status(500).json({ error: "Xatolik yuz berdi. Qayta urinib ko'ring." });
   }
 });
@@ -712,7 +820,8 @@ router.get("/me", requireAuth, async (req: AuthRequest, res) => {
       return;
     }
 
-    const safeUser = { ...user, passwordHash: undefined };
+    const suspended = await isUserSuspended(user.id);
+    const safeUser = { ...user, passwordHash: undefined, suspended };
     const providerProfile = user.role === "provider" ? await getProviderProfile(user.id) : null;
 
     res.json({ user: safeUser, providerProfile });

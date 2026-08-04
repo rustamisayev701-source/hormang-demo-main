@@ -29,7 +29,7 @@ import {
 import { isBlockedBy } from "@/lib/report-store";
 import { getAvgResponseMinutes, formatAvgResponseTime } from "@/lib/response-time-store";
 import { addReview, hasReviewedRequest } from "@/lib/completion-store";
-import { isUserSuspended, SUSPENDED_MESSAGE } from "@/lib/safety-store";
+import { SUSPENDED_MESSAGE } from "@/lib/safety-store";
 import { useToast } from "@/hooks/use-toast";
 import { useI18n } from "@/contexts/i18n-context";
 import { tFormat } from "@/lib/i18n";
@@ -371,7 +371,7 @@ export default function ChatPage() {
   async function handleSend() {
     if (!chat) return;
     if (!input.trim() && !attachPreview) return;
-    if (user && isUserSuspended(user.id)) {
+    if (user?.suspended) {
       toast({ title: SUSPENDED_MESSAGE, variant: "destructive" });
       return;
     }
@@ -404,7 +404,7 @@ export default function ChatPage() {
 
   async function handleComplete() {
     if (!offer || !chat) return;
-    if (user && isUserSuspended(user.id)) {
+    if (user?.suspended) {
       toast({ title: SUSPENDED_MESSAGE, variant: "destructive" });
       return;
     }
