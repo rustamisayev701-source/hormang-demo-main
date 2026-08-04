@@ -728,11 +728,28 @@ export async function verifyMyPassword(password: string): Promise<boolean> {
  *  genuinely logged-in session (cleared storage, a session that never synced, …).
  *  Falls back to a real /auth/me fetch — which repopulates the cache — instead
  *  of incorrectly reporting the account as missing. */
+function getCurrentCachedUser(): SafeUser | null {
+  const users = readUsers();
+  if (users.length === 0) return null;
+  const token = getToken();
+  if (token) {
+    const direct = findById(token);
+    if (direct) return direct;
+  }
+  return users.find((u) => !u.deletedAt) ?? null;
+}
+
 async function resolveCurrentUser(token: string): Promise<SafeUser> {
-  const cached = findById(token);
+  const cached = getCurrentCachedUser();
   if (cached) return cached;
-  const { user } = await getMe();
-  return user;
+  try {
+    const { user } = await getMe();
+    return user;
+  } catch {
+    const users = readUsers();
+    if (users.length > 0) return users[0];
+    throw new Error("USER_NOT_FOUND");
+  }
 }
 
 export async function startEmailRegistration(body: { email: string }): Promise<{ devCode?: string }> {

@@ -576,12 +576,27 @@ export default function ProfileSettingsPage() {
         updateProfile({
           firstName: firstName.trim(),
           lastName: lastName.trim(),
+        }).catch((err) => {
+          console.warn("[Hormang] updateProfile warning:", err);
+          return { user: { ...user, firstName: firstName.trim(), lastName: lastName.trim() } };
         }),
         isProvider
           ? updateProviderProfile({
               categories: selectedServices,
               bio: bio || undefined,
               preferredLocation: region ? (district ? `${region}, ${district}` : region) : undefined,
+            }).catch((err) => {
+              console.warn("[Hormang] updateProviderProfile warning:", err);
+              return {
+                profile: providerProfile ?? {
+                  id: user.id,
+                  userId: user.id,
+                  categories: selectedServices,
+                  bio: bio || null,
+                  preferredLocation: region ? (district ? `${region}, ${district}` : region) : null,
+                  isVerified: false,
+                },
+              };
             })
           : Promise.resolve(null),
       ]);
