@@ -7,7 +7,7 @@ import { BottomNav } from "@/components/bottom-nav";
 import { useAuth } from "@/contexts/auth-context";
 import { useToast } from "@/hooks/use-toast";
 import logoImg from "/hormang-logo.png";
-import { getTangaBalance } from "@/lib/tanga-store";
+import { getCachedTangaBalance, refreshTangaBalance } from "@/lib/wallet-balance";
 import { getWallet, createWalletOrder, type WalletTier } from "@/lib/wallet-client";
 import { ApiError } from "@/lib/api-client";
 import { ReferralCard } from "@/components/referral-card";
@@ -41,7 +41,8 @@ export function CoinIcon({ size = 20, className = "" }: { size?: number; classNa
 /* ─── Tanga Balance Chip ─────────────────────────────────────────── */
 export function TangaChip({ userId, onClick }: { userId: string; onClick?: () => void }) {
   useStoreRefresh();
-  const balance = getTangaBalance(userId);
+  useEffect(() => { if (userId) refreshTangaBalance(userId); }, [userId]);
+  const balance = getCachedTangaBalance();
   return (
     <button
       onClick={onClick}
@@ -222,7 +223,7 @@ export default function PlansPage() {
   const { toast } = useToast();
 
   const userId = user?.id ?? "";
-  const balance = userId ? getTangaBalance(userId) : 0;
+  const balance = getCachedTangaBalance();
 
   const [tiers, setTiers] = useState<WalletTier[]>([]);
   const [tiersLoading, setTiersLoading] = useState(true);
@@ -233,11 +234,15 @@ export default function PlansPage() {
   useEffect(() => {
     let cancelled = false;
     getWallet()
-      .then((res) => { if (!cancelled) setTiers(res.tiers); })
+      .then((res) => {
+        if (cancelled) return;
+        setTiers(res.tiers);
+        refreshTangaBalance(userId);
+      })
       .catch(() => { if (!cancelled) setTiers([]); })
       .finally(() => { if (!cancelled) setTiersLoading(false); });
     return () => { cancelled = true; };
-  }, []);
+  }, [userId]);
 
   async function handleBuy(tier: WalletTier, provider: "payme" | "click") {
     if (!userId || buying) return;

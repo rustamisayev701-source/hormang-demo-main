@@ -9,8 +9,9 @@ import { motion, AnimatePresence } from "framer-motion";
 import { ChevronLeft, ExternalLink } from "lucide-react";
 import { useAuth } from "@/contexts/auth-context";
 import { useStoreRefresh } from "@/hooks/use-store-refresh";
-import { getTangaTransactions, type TangaTransaction } from "@/lib/tanga-history-store";
-import { getTangaBalance } from "@/lib/tanga-store";
+import type { TangaTransaction } from "@/lib/tanga-history-store";
+import { getWalletTransactions } from "@/lib/wallet-client";
+import { getCachedTangaBalance, refreshTangaBalance } from "@/lib/wallet-balance";
 import { getRequestById, type Offer } from "@/lib/requests-store";
 import { getOffers } from "@/lib/provider-store";
 import { getCategoryDisplayName } from "@/lib/categories";
@@ -127,12 +128,28 @@ export default function TangaHistoryPage() {
   const { user } = useAuth();
   const [viewOfferId, setViewOfferId] = useState<string | null>(null);
 
-  const transactions = user ? getTangaTransactions(user.id) : [];
-  const balance = user ? getTangaBalance(user.id) : 0;
+  const balance = getCachedTangaBalance();
+  const [transactions, setTransactions] = useState<TangaTransaction[]>([]);
   const [allOffers, setAllOffers] = useState<Offer[]>([]);
   useEffect(() => {
-    if (!user?.id) { setAllOffers([]); return; }
+    if (!user?.id) { setAllOffers([]); setTransactions([]); return; }
     getOffers(user.id).then(setAllOffers).catch((err) => console.error("Load offers failed:", err));
+    refreshTangaBalance(user.id);
+    getWalletTransactions()
+      .then((res) => setTransactions(res.transactions.map((tx) => ({
+        id: tx.id,
+        userId: tx.userId,
+        offerId: tx.offerId ?? "",
+        requestId: tx.requestId ?? "",
+        categoryName: "",
+        description: tx.description ?? "",
+        amount: tx.amount,
+        type: tx.type,
+        direction: tx.direction,
+        priceSom: tx.priceSom ?? undefined,
+        createdAt: tx.createdAt,
+      }))))
+      .catch((err) => console.error("Load wallet transactions failed:", err));
   }, [user?.id]);
 
   // Only "spend" type counts as offer-sending cost

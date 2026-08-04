@@ -1,18 +1,16 @@
 /**
- * /wallet/return — Payme redirects here after the hosted checkout page.
- * Polls the order until the webhook (PerformTransaction) has confirmed
- * payment server-side, then mirrors the credit into the local Tanga
- * balance so the rest of the app (spending, history, badges) keeps
- * working unchanged — see wallet-client.ts for why that mirror exists.
+ * /wallet/return — Payme/Click redirect here after the hosted checkout page.
+ * Polls the order until the webhook (PerformTransaction / Complete) has
+ * confirmed payment server-side — which already credited the real wallet
+ * and recorded the ledger row — then just refetches the real balance.
  */
 import { useEffect, useState } from "react";
 import { useLocation, useSearch } from "wouter";
 import { Check, X, Clock } from "lucide-react";
 import { useAuth } from "@/contexts/auth-context";
 import { useI18n } from "@/contexts/i18n-context";
-import { getWalletOrder, isOrderSynced, markOrderSynced, type WalletOrder, type WalletTier } from "@/lib/wallet-client";
-import { addTangaBalance } from "@/lib/tanga-store";
-import { recordTangaTransaction } from "@/lib/tanga-history-store";
+import { getWalletOrder, type WalletOrder, type WalletTier } from "@/lib/wallet-client";
+import { refreshTangaBalance } from "@/lib/wallet-balance";
 
 const POLL_INTERVAL_MS = 2000;
 const POLL_TIMEOUT_MS = 30000;
@@ -53,22 +51,7 @@ export default function WalletReturnPage() {
 
       if (order.status === "paid") {
         const total = tier.credits + tier.bonusTokens;
-        if (!isOrderSynced(order.id)) {
-          addTangaBalance(user!.id, total);
-          recordTangaTransaction({
-            userId: user!.id,
-            offerId: "",
-            requestId: "",
-            categoryName: locale === "ru" ? tier.nameRu : tier.nameUz,
-            categoryEmoji: "💳",
-            description: `${locale === "ru" ? tier.nameRu : tier.nameUz} — Payme`,
-            amount: total,
-            priceSom: order.amountSom,
-            type: "purchase",
-            source: "normal_purchase",
-          });
-          markOrderSynced(order.id);
-        }
+        await refreshTangaBalance(user!.id);
         if (!cancelled) {
           setCredited(total);
           setStatus("success");

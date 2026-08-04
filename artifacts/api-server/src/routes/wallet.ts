@@ -1,7 +1,8 @@
 import { Router, type IRouter } from "express";
-import { and, eq, desc } from "drizzle-orm";
+import { and, eq, desc, isNull } from "drizzle-orm";
 import {
   db,
+  usersTable,
   walletsTable,
   pricingTiersTable,
   tangaTransactionsTable,
@@ -80,6 +81,69 @@ router.get("/transactions", requireAuth, async (req: AuthRequest, res) => {
     res.json({ transactions });
   } catch (err) {
     console.error("Get wallet transactions error:", err);
+    res.status(500).json({ error: "Xatolik yuz berdi" });
+  }
+});
+
+// ─── POST /profile-bonus — one-time +5 Tanga for a 100%-complete profile ───
+// Safe to call every time the client detects 100% completion — the DB flag
+// (users.profile_bonus_granted_at) makes it idempotent server-side, so the
+// old client-only "write the flag first" race-guard is no longer needed.
+router.post("/profile-bonus", requireAuth, async (req: AuthRequest, res) => {
+  try {
+    const [user] = await db
+      .select({ profileBonusGrantedAt: usersTable.profileBonusGrantedAt })
+      .from(usersTable)
+      .where(eq(usersTable.id, req.user!.id))
+      .limit(1);
+
+    if (!user) {
+      res.status(404).json({ error: "Foydalanuvchi topilmadi" });
+      return;
+    }
+    if (user.profileBonusGrantedAt) {
+      const [wallet] = await db.select().from(walletsTable).where(eq(walletsTable.userId, req.user!.id)).limit(1);
+      res.json({ granted: false, alreadyGranted: true, balance: wallet?.balance ?? 0 });
+      return;
+    }
+
+    const BONUS_AMOUNT = 5;
+    const balance = await db.transaction(async (tx) => {
+      const [claimed] = await tx
+        .update(usersTable)
+        .set({ profileBonusGrantedAt: new Date(), updatedAt: new Date() })
+        .where(and(eq(usersTable.id, req.user!.id), isNull(usersTable.profileBonusGrantedAt)))
+        .returning({ id: usersTable.id });
+      if (!claimed) return null; // Lost a race with a concurrent claim — no double credit.
+
+      const [existingWallet] = await tx.select().from(walletsTable).where(eq(walletsTable.userId, req.user!.id)).limit(1);
+      const nextBalance = (existingWallet?.balance ?? 0) + BONUS_AMOUNT;
+      if (existingWallet) {
+        await tx.update(walletsTable).set({ balance: nextBalance, updatedAt: new Date() }).where(eq(walletsTable.userId, req.user!.id));
+      } else {
+        await tx.insert(walletsTable).values({ userId: req.user!.id, balance: nextBalance });
+      }
+
+      await tx.insert(tangaTransactionsTable).values({
+        userId: req.user!.id,
+        type: "profile_completion_reward",
+        direction: "in",
+        amount: BONUS_AMOUNT,
+        description: "Profil 100% to'ldirilgani uchun bonus",
+      });
+
+      return nextBalance;
+    });
+
+    if (balance === null) {
+      const [wallet] = await db.select().from(walletsTable).where(eq(walletsTable.userId, req.user!.id)).limit(1);
+      res.json({ granted: false, alreadyGranted: true, balance: wallet?.balance ?? 0 });
+      return;
+    }
+
+    res.json({ granted: true, balance });
+  } catch (err) {
+    console.error("Profile bonus error:", err);
     res.status(500).json({ error: "Xatolik yuz berdi" });
   }
 });

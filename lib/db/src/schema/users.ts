@@ -14,6 +14,8 @@ export const usersTable = pgTable("users", {
   passwordHash: text("password_hash").notNull(),
   role: userRoleEnum("role").notNull(),
   lastLoginAt: timestamp("last_login_at"),
+  /** One-time 100%-profile-completion Tanga reward — set the first (and only) time it's granted. */
+  profileBonusGrantedAt: timestamp("profile_bonus_granted_at"),
   createdAt: timestamp("created_at").notNull().defaultNow(),
   updatedAt: timestamp("updated_at").notNull().defaultNow(),
 });

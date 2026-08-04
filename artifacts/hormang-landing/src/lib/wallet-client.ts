@@ -18,6 +18,20 @@ export interface WalletTier {
   sortOrder: number;
 }
 
+export interface WalletTransaction {
+  id: string;
+  userId: string;
+  orderId: string | null;
+  type: "purchase" | "spend" | "referral" | "refund" | "admin_adjustment" | "profile_completion_reward";
+  direction: "in" | "out";
+  amount: number;
+  priceSom: number | null;
+  description: string | null;
+  offerId: string | null;
+  requestId: string | null;
+  createdAt: string;
+}
+
 export interface WalletOrder {
   id: string;
   userId: string;
@@ -36,6 +50,10 @@ export function getWallet(): Promise<{ balance: number; tiers: WalletTier[] }> {
   return apiFetch("/wallet");
 }
 
+export function getWalletTransactions(): Promise<{ transactions: WalletTransaction[] }> {
+  return apiFetch("/wallet/transactions");
+}
+
 export function createWalletOrder(
   tierId: string,
   provider: "payme" | "click" = "payme"
@@ -47,33 +65,3 @@ export function getWalletOrder(orderId: string): Promise<{ order: WalletOrder; t
   return apiFetch(`/wallet/orders/${orderId}`);
 }
 
-/* ─── Local mirror bookkeeping ──────────────────────────────────────────────
- * The rest of the app (offer spending, Tanga history, badges, admin panel)
- * still reads/writes the localStorage balance from tanga-store.ts — that
- * whole spend-side economy has no backend yet. Once a Payme order is
- * confirmed paid (verified server-side via the webhook, not by the client),
- * the wallet return page mirrors the credit into that local balance so the
- * rest of the app keeps working unchanged. This flag just prevents mirroring
- * the same paid order twice if the user revisits the return page. */
-const SYNCED_ORDERS_KEY = "hormang_wallet_synced_orders";
-
-export function isOrderSynced(orderId: string): boolean {
-  try {
-    const ids = JSON.parse(localStorage.getItem(SYNCED_ORDERS_KEY) ?? "[]") as string[];
-    return ids.includes(orderId);
-  } catch {
-    return false;
-  }
-}
-
-export function markOrderSynced(orderId: string): void {
-  try {
-    const ids = JSON.parse(localStorage.getItem(SYNCED_ORDERS_KEY) ?? "[]") as string[];
-    if (!ids.includes(orderId)) {
-      ids.push(orderId);
-      localStorage.setItem(SYNCED_ORDERS_KEY, JSON.stringify(ids));
-    }
-  } catch {
-    localStorage.setItem(SYNCED_ORDERS_KEY, JSON.stringify([orderId]));
-  }
-}

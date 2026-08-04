@@ -223,13 +223,17 @@ function ProfileCompletion() {
 
   useEffect(() => {
     if (!user?.id || pct !== 100) return;
-    const wasJustGranted = tryGrantProfileReward(user.id);
-    if (wasJustGranted) {
-      setRewardGranted(true);
-      setJustRewarded(true);
-    } else {
-      setRewardGranted(getProfileRewardStatus(user.id).granted);
-    }
+    let cancelled = false;
+    tryGrantProfileReward(user.id).then((wasJustGranted) => {
+      if (cancelled) return;
+      if (wasJustGranted) {
+        setRewardGranted(true);
+        setJustRewarded(true);
+      } else {
+        setRewardGranted(getProfileRewardStatus(user.id).granted);
+      }
+    });
+    return () => { cancelled = true; };
   }, [user?.id, pct]);
 
   useEffect(() => {
