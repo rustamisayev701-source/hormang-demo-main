@@ -156,10 +156,11 @@ function PlanCard({
 
 /* ─── Payment Method Sheet ───────────────────────────────────────── */
 function PaymentMethodSheet({
-  onClose, onChoosePayme,
+  onClose, onChoosePayme, onChooseClick,
 }: {
   onClose: () => void;
   onChoosePayme: () => void;
+  onChooseClick: () => void;
 }) {
   const { t } = useI18n();
   const tt = t.plansPage;
@@ -196,13 +197,15 @@ function PaymentMethodSheet({
             <span className="font-bold text-sm text-gray-900">{tt.payWithPayme}</span>
           </button>
 
-          <div className="w-full flex items-center gap-3 p-3.5 rounded-2xl border-2 border-gray-100 opacity-50">
+          <button
+            onClick={onChooseClick}
+            className="w-full flex items-center gap-3 p-3.5 rounded-2xl border-2 border-gray-100 hover:border-blue-300 hover:bg-blue-50/50 transition-all active:scale-[.98]"
+          >
             <div className="w-11 h-11 rounded-xl flex items-center justify-center flex-shrink-0" style={{ background: "#0074E4" }}>
               <span className="text-white font-black text-[13px] tracking-tight">Click</span>
             </div>
             <span className="font-bold text-sm text-gray-900">{tt.payWithClick}</span>
-            <span className="ml-auto text-[10px] font-bold text-gray-400 bg-gray-100 px-2 py-1 rounded-full flex-shrink-0">{tt.comingSoon}</span>
-          </div>
+          </button>
         </div>
       </motion.div>
     </motion.div>
@@ -236,7 +239,7 @@ export default function PlansPage() {
     return () => { cancelled = true; };
   }, []);
 
-  async function handleBuy(tier: WalletTier) {
+  async function handleBuy(tier: WalletTier, provider: "payme" | "click") {
     if (!userId || buying) return;
     if (isUserSuspended(userId)) {
       toast({ title: SUSPENDED_MESSAGE, variant: "destructive" });
@@ -244,7 +247,7 @@ export default function PlansPage() {
     }
     setBuying(tier.id);
     try {
-      const { checkoutUrl } = await createWalletOrder(tier.id, "payme");
+      const { checkoutUrl } = await createWalletOrder(tier.id, provider);
       window.location.href = checkoutUrl;
     } catch (err) {
       setBuying(null);
@@ -349,7 +352,12 @@ export default function PlansPage() {
             onChoosePayme={() => {
               const tier = pickerTier;
               setPickerTier(null);
-              handleBuy(tier);
+              handleBuy(tier, "payme");
+            }}
+            onChooseClick={() => {
+              const tier = pickerTier;
+              setPickerTier(null);
+              handleBuy(tier, "click");
             }}
           />
         )}
