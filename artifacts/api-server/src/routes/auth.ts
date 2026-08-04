@@ -324,12 +324,13 @@ router.post("/login", async (req, res) => {
       return;
     }
 
-    // The code may have gone out over email instead of SMS (see /sms/send) —
-    // check whichever channel this account's login code would have used.
-    const usedEmailChannel = user.emailVerified && !!user.email;
-    const otpOk = usedEmailChannel
-      ? verifyOtp("email", user.email!, otp, "login")
-      : verifyOtp("sms", normalized, otp, "login");
+    // The code may have gone out over email or SMS (see /sms/send — email is
+    // preferred when verified, but the client can force SMS via the "no inbox
+    // access" fallback), and this endpoint isn't told which one was actually
+    // used, so check whichever channel's stored code matches.
+    const otpOk =
+      (user.emailVerified && !!user.email && verifyOtp("email", user.email, otp, "login")) ||
+      verifyOtp("sms", normalized, otp, "login");
 
     if (!otpOk) {
       recordFailedAttempt(normalized);
