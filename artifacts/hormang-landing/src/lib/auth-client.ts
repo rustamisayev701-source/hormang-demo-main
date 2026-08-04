@@ -693,7 +693,7 @@ export async function addPhone(body: {
     throw new Error("OTP_INVALID");
   }
 
-  const user = findById(token);
+  const user = await resolveCurrentUser(token);
   if (!user) throw new Error("USER_NOT_FOUND");
 
   const conflict = findByPhone(normalized);
@@ -1059,7 +1059,37 @@ export async function updateProfile(body: {
   const token = getToken();
   if (!token) throw new Error("AUTH_REQUIRED");
 
-  const user = findById(token);
+  if (looksLikeJwt(token)) {
+    try {
+      const res = await apiFetch<{ user: BackendUser }>("/auth/profile", {
+        method: "PUT",
+        body,
+      });
+      const user = mergeBackendUser(res.user);
+      return { user };
+    } catch {
+      try {
+        const res = await apiFetch<{ user: BackendUser }>("/auth/user", {
+          method: "PUT",
+          body,
+        });
+        const user = mergeBackendUser(res.user);
+        return { user };
+      } catch {
+        const user = await resolveCurrentUser(token);
+        const updated: SafeUser = {
+          ...user,
+          ...(body.firstName !== undefined && { firstName: body.firstName }),
+          ...(body.lastName !== undefined && { lastName: body.lastName }),
+          ...(body.email !== undefined && { email: body.email || null }),
+        };
+        upsertUser(updated);
+        return { user: updated };
+      }
+    }
+  }
+
+  const user = await resolveCurrentUser(token);
   if (!user) throw new Error("USER_NOT_FOUND");
 
   const updated: SafeUser = {
@@ -1083,6 +1113,31 @@ export async function updateProviderProfile(body: {
       body,
     });
   } catch (err) {
+    const token = getToken();
+    if (token) {
+      const user = await resolveCurrentUser(token).catch(() => null);
+      if (user) {
+        const profiles = readProfiles();
+        let prof = profiles.find((p) => p.userId === user.id);
+        if (!prof) {
+          prof = {
+            id: genId(),
+            userId: user.id,
+            categories: body.categories ?? [],
+            bio: body.bio ?? null,
+            preferredLocation: body.preferredLocation ?? null,
+            isVerified: false,
+          };
+          profiles.push(prof);
+        } else {
+          if (body.categories !== undefined) prof.categories = body.categories;
+          if (body.bio !== undefined) prof.bio = body.bio;
+          if (body.preferredLocation !== undefined) prof.preferredLocation = body.preferredLocation;
+        }
+        writeProfiles(profiles);
+        return { profile: prof };
+      }
+    }
     throwBackendError(err);
   }
 }
