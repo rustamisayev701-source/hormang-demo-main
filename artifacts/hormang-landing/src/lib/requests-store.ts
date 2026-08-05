@@ -201,7 +201,7 @@ function snapshotDescription(answers: Record<string, unknown> | undefined): stri
 function toOffer(o: api.BackendOffer): Offer {
   return { ...o };
 }
-function toChatMessage(m: api.BackendChatMessage): ChatMessage {
+export function toChatMessage(m: api.BackendChatMessage): ChatMessage {
   return {
     id: m.id,
     sender: m.sender,

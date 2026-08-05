@@ -3,6 +3,7 @@ import { eq, and, or, asc, inArray, sql, avg, count } from "drizzle-orm";
 import { db, chatsTable, chatMessagesTable, requestsTable, responseTimeSamplesTable, type ChatRow, type ChatMessageRow } from "@workspace/db";
 import { requireAuth, type AuthRequest } from "../middlewares/auth.js";
 import { requireAdminKey } from "../middlewares/admin.js";
+import { broadcastToChat } from "../lib/chat-ws.js";
 
 const router: IRouter = Router();
 
@@ -203,6 +204,8 @@ router.post("/:chatId/messages", requireAuth, async (req: AuthRequest, res) => {
 
     await recordResponseSampleIfReply(chat, message);
 
+    broadcastToChat(chatId, { type: "message", message: messageJson(message) }, req.user!.id);
+
     res.status(201).json({ message: messageJson(message) });
   } catch (err) {
     console.error("Send chat message error:", err);
@@ -226,10 +229,18 @@ router.patch("/:chatId/read", requireAuth, async (req: AuthRequest, res) => {
     }
     await db.update(chatsTable).set(role === "master" ? { providerUnread: 0 } : { customerUnread: 0 }).where(eq(chatsTable.id, chatId));
     const now = new Date();
+    // Only the OTHER side's messages become "read" — the reader opening the
+    // chat must never mark their own just-sent messages as read.
+    const otherSender = role === "master" ? "customer" : "master";
     await db
       .update(chatMessagesTable)
       .set({ readAt: now })
-      .where(and(eq(chatMessagesTable.chatId, chatId), sql`${chatMessagesTable.readAt} is null`));
+      .where(and(
+        eq(chatMessagesTable.chatId, chatId),
+        eq(chatMessagesTable.sender, otherSender),
+        sql`${chatMessagesTable.readAt} is null`,
+      ));
+    broadcastToChat(chatId, { type: "read", chatId, readAt: now.toISOString() }, req.user!.id);
     res.json({ ok: true });
   } catch (err) {
     console.error("Mark chat read error:", err);

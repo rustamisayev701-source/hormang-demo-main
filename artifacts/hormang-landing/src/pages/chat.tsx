@@ -30,6 +30,7 @@ import { isBlockedBy } from "@/lib/report-store";
 import { getAvgResponseMinutes, formatAvgResponseTime } from "@/lib/response-time-store";
 import { addReview, hasReviewedRequest } from "@/lib/completion-store";
 import { SUSPENDED_MESSAGE } from "@/lib/safety-store";
+import { openChatSocket } from "@/lib/chat-socket";
 import { useToast } from "@/hooks/use-toast";
 import { useI18n } from "@/contexts/i18n-context";
 import { tFormat } from "@/lib/i18n";
@@ -314,13 +315,38 @@ export default function ChatPage() {
     }
   }, [requestId, masterId]);
 
-  /* Poll for new messages/status while the thread is open — there's no
-     websocket push, so this is the "live" refresh mechanism. */
   useEffect(() => {
     loadChat();
-    const interval = setInterval(loadChat, 4000);
+    // Slow safety-net poll — covers the rare case the socket below drops
+    // silently (mobile background, flaky network) without firing onclose.
+    const interval = setInterval(loadChat, 20000);
     return () => clearInterval(interval);
   }, [loadChat]);
+
+  /* Real-time push for the open thread. */
+  useEffect(() => {
+    if (!chat?.id) return;
+    const socket = openChatSocket(chat.id, {
+      onMessage: (message) => {
+        setChat((prev) => {
+          if (!prev || prev.messages.some((m) => m.id === message.id)) return prev;
+          return { ...prev, messages: [...prev.messages, message] };
+        });
+      },
+      onRead: (readAt) => {
+        setChat((prev) => {
+          if (!prev) return prev;
+          return {
+            ...prev,
+            messages: prev.messages.map((m) =>
+              m.sender === "customer" && !m.readAt ? { ...m, readAt } : m,
+            ),
+          };
+        });
+      },
+    });
+    return () => socket.close();
+  }, [chat?.id]);
 
   const masterLocal = chat?.masterId ? getLocalProfile(chat.masterId) : null;
   const isBlocked = !!(user && chat && (

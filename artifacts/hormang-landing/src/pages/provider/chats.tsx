@@ -21,6 +21,7 @@ import {
 } from "@/lib/requests-store";
 import { getAvgResponseMinutes, formatAvgResponseTime } from "@/lib/response-time-store";
 import { addReview, hasReviewedRequest } from "@/lib/completion-store";
+import { openChatSocket } from "@/lib/chat-socket";
 import { ReviewModal, type ReviewSubmitData } from "@/components/review-modal";
 import { ConfirmModal } from "@/components/confirm-modal";
 import { CompletionModal } from "@/components/completion-modal";
@@ -419,12 +420,41 @@ function ChatView({ chatId, onClose }: { chatId: string; onClose: () => void }) 
     }
   }, [chatId]);
 
-  /* Poll for new messages/status while the thread is open. */
   useEffect(() => {
     loadChat();
-    const interval = setInterval(loadChat, 4000);
+    // Slow safety-net poll — covers the rare case the socket below drops
+    // silently (mobile background, flaky network) without firing onclose.
+    const interval = setInterval(loadChat, 20000);
     return () => clearInterval(interval);
   }, [loadChat]);
+
+  /* Real-time push for the open thread. */
+  useEffect(() => {
+    if (!chat?.id) return;
+    const socket = openChatSocket(chat.id, {
+      onMessage: (message) => {
+        setChat((prev) => {
+          if (!prev || prev.messages.some((m) => m.id === message.id)) return prev;
+          // ChatMessage uses sender "master"; ProviderChatMessage uses
+          // "provider" — same mapping as chatToProviderChat() above.
+          const mapped = { ...message, sender: message.sender === "master" ? ("provider" as const) : message.sender };
+          return { ...prev, messages: [...prev.messages, mapped] };
+        });
+      },
+      onRead: (readAt) => {
+        setChat((prev) => {
+          if (!prev) return prev;
+          return {
+            ...prev,
+            messages: prev.messages.map((m) =>
+              m.sender === "provider" && !m.readAt ? { ...m, readAt } : m,
+            ),
+          };
+        });
+      },
+    });
+    return () => socket.close();
+  }, [chat?.id]);
 
   /* Mark this chat as read for the provider on mount, on chatId change,
    * and whenever new customer messages arrive while the thread is open. */
