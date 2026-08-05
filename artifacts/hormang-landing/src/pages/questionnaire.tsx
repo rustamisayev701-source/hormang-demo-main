@@ -39,6 +39,20 @@ export interface LocationAnswer {
 }
 export type Answers = Record<string, string | string[] | boolean | number | null | LocationAnswer>;
 
+/**
+ * The questionnaire always collects a location as an `answers.location`
+ * field (see LocationAnswer above), but saveNewRequest() needs it as a
+ * separate top-level {region, district} — without this extraction the
+ * request's dedicated region/district columns stay null even though the
+ * customer did pick a location, which silently hides the request from any
+ * provider whose service-area filter checks those columns.
+ */
+function locationFromAnswers(a: Answers): { region?: string; district?: string } | undefined {
+  const loc = a.location as LocationAnswer | undefined;
+  if (!loc?.region) return undefined;
+  return { region: loc.region, district: loc.district };
+}
+
 const URGENCY_COLORS: Record<string, string> = {
   today_tomorrow: "text-red-600 bg-red-50 border-red-200",
   "3_7_days": "text-orange-600 bg-orange-50 border-orange-200",
@@ -1394,7 +1408,7 @@ export default function QuestionnairePage() {
     const customerName = `${user.firstName ?? ""} ${user.lastName ?? ""}`.trim() || undefined;
     (async () => {
       try {
-        const req = await saveNewRequest(pending.categoryId, pending.categoryName, pending.answers, undefined, user.id, customerName, pending.photos);
+        const req = await saveNewRequest(pending.categoryId, pending.categoryName, pending.answers, locationFromAnswers(pending.answers), user.id, customerName, pending.photos);
         setCategoryId(pending.categoryId);
         setAnswers(pending.answers);
         setCurrentRequestId(req.id);
@@ -1451,7 +1465,7 @@ export default function QuestionnairePage() {
 
     const customerName = `${user.firstName ?? ""} ${user.lastName ?? ""}`.trim() || undefined;
     try {
-      const req = await saveNewRequest(categoryId, cat?.name ?? categoryId, answers, undefined, user.id, customerName, photos.length ? photos : undefined);
+      const req = await saveNewRequest(categoryId, cat?.name ?? categoryId, answers, locationFromAnswers(answers), user.id, customerName, photos.length ? photos : undefined);
       setCurrentRequestId(req.id);
       setStage("recommendations");
     } catch (e) {
