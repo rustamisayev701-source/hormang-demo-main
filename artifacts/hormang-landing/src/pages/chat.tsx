@@ -383,7 +383,7 @@ export default function ChatPage() {
     const attachment = attachPreview ? { type: "image" as const, url: attachPreview } : undefined;
     setInput("");
     setAttachPreview(null);
-    await sendMessage(chat.id, "customer", text, attachment, user?.id);
+    await sendMessage(chat.id, "customer", text, attachment);
     loadChat();
   }
 

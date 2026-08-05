@@ -1,6 +1,6 @@
 import { Router, type IRouter } from "express";
-import { eq, and, or, asc, inArray, sql } from "drizzle-orm";
-import { db, chatsTable, chatMessagesTable, requestsTable, type ChatRow, type ChatMessageRow } from "@workspace/db";
+import { eq, and, or, asc, inArray, sql, avg, count } from "drizzle-orm";
+import { db, chatsTable, chatMessagesTable, requestsTable, responseTimeSamplesTable, type ChatRow, type ChatMessageRow } from "@workspace/db";
 import { requireAuth, type AuthRequest } from "../middlewares/auth.js";
 import { requireAdminKey } from "../middlewares/admin.js";
 
@@ -38,6 +38,65 @@ async function resolveRole(chat: { requestId: string; masterId: string }, userId
   if (request?.customerId === userId) return "customer";
   return null;
 }
+
+/**
+ * Mirrors the old client-side "unanswered burst" pairing: walk backward from
+ * the new message to the oldest consecutive incoming message from the other
+ * side (so 3 incoming + 1 reply = 1 sample measured from the first incoming,
+ * not 3 separate samples), and record how long that took. Done once here,
+ * server-side, at send time — authoritative regardless of which device the
+ * reply comes from.
+ */
+async function recordResponseSampleIfReply(chat: ChatRow, message: ChatMessageRow): Promise<void> {
+  if (message.sender === "system") return;
+
+  const history = await db
+    .select()
+    .from(chatMessagesTable)
+    .where(eq(chatMessagesTable.chatId, chat.id))
+    .orderBy(asc(chatMessagesTable.createdAt));
+  const newIdx = history.findIndex((m) => m.id === message.id);
+  if (newIdx <= 0) return;
+
+  let oldestIncoming: ChatMessageRow | null = null;
+  for (let i = newIdx - 1; i >= 0; i--) {
+    const m = history[i];
+    if (m.sender === "system" || m.deletedForEveryone) continue;
+    if (m.sender === message.sender) break;
+    oldestIncoming = m;
+  }
+  if (!oldestIncoming) return;
+
+  const minutes = (message.createdAt.getTime() - oldestIncoming.createdAt.getTime()) / 60000;
+  if (!Number.isFinite(minutes) || minutes < 0) return;
+
+  let responderId: string;
+  if (message.sender === "master") {
+    responderId = chat.masterId;
+  } else {
+    const [request] = await db.select({ customerId: requestsTable.customerId }).from(requestsTable).where(eq(requestsTable.id, chat.requestId)).limit(1);
+    if (!request?.customerId) return;
+    responderId = request.customerId;
+  }
+
+  await db.insert(responseTimeSamplesTable).values({ userId: responderId, chatId: chat.id, minutes });
+}
+
+// ─── GET /response-time/:userId — average reply time in minutes, or null ───
+router.get("/response-time/:userId", async (req, res) => {
+  try {
+    const userId: string = String(req.params.userId);
+    const [row] = await db
+      .select({ avgMinutes: avg(responseTimeSamplesTable.minutes), sampleCount: count() })
+      .from(responseTimeSamplesTable)
+      .where(eq(responseTimeSamplesTable.userId, userId));
+    const sampleCount = Number(row?.sampleCount ?? 0);
+    res.json({ avgMinutes: sampleCount > 0 ? Number(row!.avgMinutes) : null });
+  } catch (err) {
+    console.error("Get response time error:", err);
+    res.status(500).json({ error: "Xatolik yuz berdi" });
+  }
+});
 
 // ─── GET /admin/all — every chat, with its messages, for admin moderation ──
 router.get("/admin/all", requireAdminKey, async (_req, res) => {
@@ -141,6 +200,8 @@ router.post("/:chatId/messages", requireAuth, async (req: AuthRequest, res) => {
       .update(chatsTable)
       .set(sender === "master" ? { customerUnread: sql`${chatsTable.customerUnread} + 1` } : { providerUnread: sql`${chatsTable.providerUnread} + 1` })
       .where(eq(chatsTable.id, chatId));
+
+    await recordResponseSampleIfReply(chat, message);
 
     res.status(201).json({ message: messageJson(message) });
   } catch (err) {

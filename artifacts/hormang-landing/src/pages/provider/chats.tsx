@@ -476,7 +476,7 @@ function ChatView({ chatId, onClose }: { chatId: string; onClose: () => void }) 
     const attachment = attachPreview ? { type: "image" as const, url: attachPreview } : undefined;
     setText("");
     setAttachPreview(null);
-    await sendProviderMessage(chat.id, "provider", text.trim(), attachment, user?.id);
+    await sendProviderMessage(chat.id, "provider", text.trim(), attachment);
     loadChat();
   }
 

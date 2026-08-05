@@ -465,10 +465,10 @@ export async function getProviderChatById(id: string, masterId: string = ""): Pr
 
 export async function sendProviderMessage(
   chatId: string, sender: "provider" | "customer", text: string,
-  attachment?: import("./requests-store").ChatAttachment, senderUserId?: string,
+  attachment?: import("./requests-store").ChatAttachment,
 ): Promise<void> {
   const unifiedSender = sender === "provider" ? "master" : "customer";
-  await sendMessageStore(chatId, unifiedSender, text, attachment, senderUserId);
+  await sendMessageStore(chatId, unifiedSender, text, attachment);
 }
 
 export async function markChatRead(chatId: string): Promise<void> {

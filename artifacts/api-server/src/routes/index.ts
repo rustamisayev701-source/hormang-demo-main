@@ -15,6 +15,7 @@ import badgesRouter from "./badges";
 import requestsRouter from "./requests";
 import offersRouter from "./offers";
 import chatsRouter from "./chats";
+import reviewsRouter from "./reviews";
 
 const router: IRouter = Router();
 
@@ -30,6 +31,7 @@ router.use("/badges", badgesRouter);
 router.use("/requests", requestsRouter);
 router.use("/offers", offersRouter);
 router.use("/chats", chatsRouter);
+router.use("/reviews", reviewsRouter);
 router.use("/admin/pricing-tiers", adminPricingRouter);
 router.use("/admin/wallets", adminWalletsRouter);
 router.use("/admin/users", adminUsersRouter);

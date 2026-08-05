@@ -1,44 +1,20 @@
 /**
  * completion-store.ts
+ * Reviews/ratings, backed by the real `reviews` table (POST/GET /reviews).
  *
- * Clean review storage system.
- * Key: "hormang_reviews_v2"  →  Review[]
+ * All the read functions below (getReviewsForUser, getAverageRatingForUser,
+ * getProviderReviewAverages, getCompletedCount, hasReviewedRequest) have many
+ * synchronous render-time callers across the app, so — same pattern as
+ * wallet-balance.ts / badge-store.ts's acquired-Tanga cache — they read from
+ * a small in-memory cache that's populated by a background fetch on first
+ * read, then emit a store-change event once the real data lands.
  *
- * Each Review records:
- *   - WHO wrote it (reviewerId + reviewerRole)
- *   - WHO received it (reviewedId + reviewedRole)
- *   - WHICH request/offer it belongs to
- *   - rating + optional comment
- *
- * Completed-count keys (role-separated, incremented on offer completion):
- *   hormang_completed_provider_{uid}
- *   hormang_completed_customer_{uid}
+ * completedCount is NOT a separate counter here — it's derived server-side
+ * from real offer/request completion status, so there's nothing to
+ * increment client-side anymore.
  */
+import { apiFetch } from "./api-client";
 import { emitStoreChange } from "./store-events";
-
-/* ─── Type ───────────────────────────────────────────────────────── */
-
-export interface Review {
-  id: string;
-  requestId: string;
-  offerId?: string;
-  reviewerId: string;
-  reviewerRole: "customer" | "provider";
-  reviewedId: string;
-  reviewedRole: "customer" | "provider";
-  rating: number;             // 1–5
-  comment?: string;
-  photoUrl?: string;
-  platformSentiment?: "positive" | "negative";
-  platformFeedback?: string;
-  providerMetrics?: ProviderReviewMetrics;
-  reviewerName?: string;
-  reviewerInitials?: string;
-  reviewerColor?: string;
-  reviewedName?: string;
-  createdAt: string;
-  serviceCategory?: string;
-}
 
 export interface ProviderReviewMetrics {
   serviceQuality: number;
@@ -46,151 +22,167 @@ export interface ProviderReviewMetrics {
   servicePrice: number;
 }
 
-/* ─── Keys ───────────────────────────────────────────────────────── */
-
-const REVIEWS_KEY = "hormang_reviews_v2";
-
-function providerAveragesKey(providerId: string): string {
-  return `hormang_provider_review_averages_${providerId}`;
+export interface Review {
+  id: string;
+  requestId: string;
+  offerId?: string | null;
+  reviewerId: string;
+  reviewerRole: "customer" | "provider";
+  reviewedId: string;
+  reviewedRole: "customer" | "provider";
+  rating: number;
+  comment?: string | null;
+  photoUrl?: string | null;
+  platformSentiment?: "positive" | "negative" | null;
+  platformFeedback?: string | null;
+  providerMetrics?: ProviderReviewMetrics;
+  /** Not stored server-side — display components already fall back to a
+   * locally-resolved name/initials/color when these are absent. */
+  reviewerName?: string;
+  reviewerInitials?: string;
+  reviewerColor?: string;
+  reviewedName?: string;
+  serviceCategory?: string;
+  createdAt: string;
 }
 
-function completedKey(userId: string, role: "provider" | "customer"): string {
-  return `hormang_completed_${role}_${userId}`;
+interface BackendReview {
+  id: string; requestId: string; offerId: string | null;
+  reviewerId: string; reviewerRole: "customer" | "provider";
+  reviewedId: string; reviewedRole: "customer" | "provider";
+  rating: number; comment: string | null; photoUrl: string | null;
+  serviceQuality: number | null; providerAttitude: number | null; servicePrice: number | null;
+  platformSentiment: string | null; platformFeedback: string | null;
+  createdAt: string;
 }
 
-/* ─── Helpers ────────────────────────────────────────────────────── */
-
-function readJSON<T>(key: string, fallback: T): T {
-  try {
-    const raw = localStorage.getItem(key);
-    if (raw) return JSON.parse(raw) as T;
-  } catch (_) { /* ignore */ }
-  return fallback;
+function fromBackend(r: BackendReview): Review {
+  return {
+    id: r.id, requestId: r.requestId, offerId: r.offerId,
+    reviewerId: r.reviewerId, reviewerRole: r.reviewerRole,
+    reviewedId: r.reviewedId, reviewedRole: r.reviewedRole,
+    rating: r.rating, comment: r.comment, photoUrl: r.photoUrl,
+    platformSentiment: r.platformSentiment as "positive" | "negative" | null,
+    platformFeedback: r.platformFeedback,
+    providerMetrics: r.serviceQuality != null
+      ? { serviceQuality: r.serviceQuality, providerAttitude: r.providerAttitude ?? 0, servicePrice: r.servicePrice ?? 0 }
+      : undefined,
+    createdAt: r.createdAt,
+  };
 }
 
-function genId(): string {
-  return Math.random().toString(36).slice(2, 10) + Date.now().toString(36);
+/* ─── Stats cache (reviews + averages + completedCount, per user+role) ──── */
+
+interface UserReviewStats {
+  reviews: Review[];
+  averageRating: number;
+  completedCount: number;
+  providerMetrics?: ProviderReviewMetrics;
 }
 
-function allReviews(): Review[] {
-  return readJSON<Review[]>(REVIEWS_KEY, []);
+const EMPTY_STATS: UserReviewStats = { reviews: [], averageRating: 0, completedCount: 0 };
+
+const statsCache = new Map<string, UserReviewStats>();
+const statsInFlight = new Set<string>();
+
+function statsKey(userId: string, role: "provider" | "customer"): string {
+  return `${userId}:${role}`;
 }
 
-function averageMetric(oldValue: number, newValue: number): number {
-  return oldValue > 0 ? (oldValue + newValue) / 2 : newValue;
+function ensureStatsLoaded(userId: string, role: "provider" | "customer"): UserReviewStats {
+  const key = statsKey(userId, role);
+  const cached = statsCache.get(key);
+  if (cached) return cached;
+
+  if (!statsInFlight.has(key)) {
+    statsInFlight.add(key);
+    apiFetch<{ reviews: BackendReview[]; averageRating: number; completedCount: number; providerMetrics?: ProviderReviewMetrics }>(
+      `/reviews/user/${userId}?role=${role}`,
+      { auth: false },
+    )
+      .then((res) => {
+        statsCache.set(key, {
+          reviews: res.reviews.map(fromBackend),
+          averageRating: res.averageRating,
+          completedCount: res.completedCount,
+          providerMetrics: res.providerMetrics,
+        });
+        emitStoreChange();
+      })
+      .catch(() => {})
+      .finally(() => statsInFlight.delete(key));
+  }
+  return EMPTY_STATS;
 }
 
-/* ─── Read helpers ───────────────────────────────────────────────── */
-
-/**
- * All reviews about a specific user in a specific role.
- * - provider profile  → getReviewsForUser(masterId, "provider")
- * - customer profile  → getReviewsForUser(customerId, "customer")
- */
 export function getReviewsForUser(userId: string, asRole: "provider" | "customer"): Review[] {
   if (!userId) return [];
-  return allReviews().filter(
-    (r) => r.reviewedId === userId && r.reviewedRole === asRole
-  );
+  return ensureStatsLoaded(userId, asRole).reviews;
 }
 
-export function getAverageRatingForUser(
-  userId: string,
-  asRole: "provider" | "customer"
-): number {
-  const reviews = getReviewsForUser(userId, asRole);
-  if (!reviews.length) return 0;
-  const avg = reviews.reduce((s, r) => s + r.rating, 0) / reviews.length;
-  return Math.round(avg * 100) / 100;
+export function getAverageRatingForUser(userId: string, asRole: "provider" | "customer"): number {
+  if (!userId) return 0;
+  return ensureStatsLoaded(userId, asRole).averageRating;
 }
 
 export function getProviderReviewAverages(providerId: string): ProviderReviewMetrics {
-  if (!providerId) {
-    return { serviceQuality: 0, providerAttitude: 0, servicePrice: 0 };
-  }
-  const key = providerAveragesKey(providerId);
-  const saved = localStorage.getItem(key);
-  if (saved) {
-    try {
-      return JSON.parse(saved) as ProviderReviewMetrics;
-    } catch (_) { /* rebuild from reviews below */ }
-  }
-
-  const derived = getReviewsForUser(providerId, "provider")
-    .filter((review) => review.providerMetrics)
-    .sort((a, b) => new Date(a.createdAt).getTime() - new Date(b.createdAt).getTime())
-    .reduce<ProviderReviewMetrics>(
-      (current, review) => ({
-        serviceQuality: averageMetric(current.serviceQuality, review.providerMetrics!.serviceQuality),
-        providerAttitude: averageMetric(current.providerAttitude, review.providerMetrics!.providerAttitude),
-        servicePrice: averageMetric(current.servicePrice, review.providerMetrics!.servicePrice),
-      }),
-      { serviceQuality: 0, providerAttitude: 0, servicePrice: 0 }
-    );
-
-  if (derived.serviceQuality || derived.providerAttitude || derived.servicePrice) {
-    localStorage.setItem(key, JSON.stringify(derived));
-  }
-  return derived;
+  const fallback = { serviceQuality: 0, providerAttitude: 0, servicePrice: 0 };
+  if (!providerId) return fallback;
+  return ensureStatsLoaded(providerId, "provider").providerMetrics ?? fallback;
 }
+
+export function getCompletedCount(userId: string, role: "provider" | "customer"): number {
+  if (!userId) return 0;
+  return ensureStatsLoaded(userId, role).completedCount;
+}
+
+/* ─── Has-reviewed check (gates the "leave a review" UI) ─────────────────── */
+
+const reviewedCache = new Map<string, boolean>();
+const reviewedInFlight = new Set<string>();
+
+export function hasReviewedRequest(requestId: string, reviewerId: string): boolean {
+  if (!requestId || !reviewerId) return false;
+  const key = `${requestId}:${reviewerId}`;
+  if (reviewedCache.has(key)) return reviewedCache.get(key)!;
+
+  if (!reviewedInFlight.has(key)) {
+    reviewedInFlight.add(key);
+    apiFetch<{ reviewed: boolean }>(`/reviews/check/${requestId}`)
+      .then((res) => {
+        reviewedCache.set(key, res.reviewed);
+        emitStoreChange();
+      })
+      .catch(() => {})
+      .finally(() => reviewedInFlight.delete(key));
+  }
+  return false;
+}
+
+/* ─── Write ────────────────────────────────────────────────────────────── */
 
 /**
- * Has this reviewer already reviewed the given request?
- * Prevents submitting a second review for the same job.
+ * The backend derives reviewerRole/reviewedRole/reviewedId itself from the
+ * request + the authenticated caller (safer — a client can't misattribute a
+ * review), so most fields here are for local cache invalidation only.
  */
-export function hasReviewedRequest(requestId: string, reviewerId: string): boolean {
-  return allReviews().some(
-    (r) => r.requestId === requestId && r.reviewerId === reviewerId
-  );
-}
+export async function addReview(review: Omit<Review, "id" | "createdAt">): Promise<void> {
+  await apiFetch("/reviews", {
+    method: "POST",
+    body: {
+      requestId: review.requestId,
+      rating: review.rating,
+      comment: review.comment,
+      photoUrl: review.photoUrl,
+      serviceQuality: review.providerMetrics?.serviceQuality,
+      providerAttitude: review.providerMetrics?.providerAttitude,
+      servicePrice: review.providerMetrics?.servicePrice,
+      platformSentiment: review.platformSentiment,
+      platformFeedback: review.platformFeedback,
+    },
+  });
 
-/* ─── Write ──────────────────────────────────────────────────────── */
-
-export function addReview(
-  review: Omit<Review, "id" | "createdAt">
-): void {
-  const reviews = allReviews();
-  const isDuplicate = reviews.some(
-    (r) => r.requestId === review.requestId && r.reviewerId === review.reviewerId
-  );
-  if (isDuplicate) return;
-
-  const newReview: Review = {
-    ...review,
-    id: genId(),
-    createdAt: new Date().toISOString(),
-  };
-  localStorage.setItem(REVIEWS_KEY, JSON.stringify([...reviews, newReview]));
-
-  if (newReview.reviewedRole === "provider" && newReview.providerMetrics) {
-    const old = getProviderReviewAverages(newReview.reviewedId);
-    const next: ProviderReviewMetrics = {
-      serviceQuality: averageMetric(old.serviceQuality, newReview.providerMetrics.serviceQuality),
-      providerAttitude: averageMetric(old.providerAttitude, newReview.providerMetrics.providerAttitude),
-      servicePrice: averageMetric(old.servicePrice, newReview.providerMetrics.servicePrice),
-    };
-    localStorage.setItem(providerAveragesKey(newReview.reviewedId), JSON.stringify(next));
-  }
-
-  emitStoreChange();
-}
-
-/* ─── Completed Counts (role-separated, from completion events) ──── */
-
-export function getCompletedCount(
-  userId: string,
-  role: "provider" | "customer"
-): number {
-  if (!userId) return 0;
-  return readJSON<number>(completedKey(userId, role), 0);
-}
-
-export function incrementCompletedCount(
-  userId: string,
-  role: "provider" | "customer"
-): void {
-  if (!userId) return;
-  const current = getCompletedCount(userId, role);
-  localStorage.setItem(completedKey(userId, role), JSON.stringify(current + 1));
+  reviewedCache.set(`${review.requestId}:${review.reviewerId}`, true);
+  statsCache.delete(statsKey(review.reviewedId, review.reviewedRole));
   emitStoreChange();
 }

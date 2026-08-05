@@ -7,8 +7,6 @@
  * so existing consumers change as little as possible. Every function
  * that touches shared (cross-device) data is now async.
  */
-import { incrementCompletedCount } from "./completion-store";
-import { recordReplyFromChat } from "./response-time-store";
 import { recordServiceCompletion } from "./service-history-store";
 import { getBlockedUsers } from "./report-store";
 import { emitStoreChange } from "./store-events";
@@ -442,8 +440,6 @@ export async function confirmCompletion(
   if (offer.status === "completed") {
     try {
       const request = await getRequestById(offer.requestId);
-      if (request?.customerId) incrementCompletedCount(request.customerId, "customer");
-      incrementCompletedCount(offer.masterId, "provider");
       recordServiceCompletion({
         providerId: offer.masterId,
         customerId: request?.customerId,
@@ -571,14 +567,11 @@ export async function sendMessage(
   _sender: "customer" | "master",
   text: string,
   attachment?: ChatAttachment,
-  senderUserId?: string,
 ): Promise<ChatMessage> {
+  // Response-time samples are recorded server-side now (see POST
+  // /chats/:chatId/messages) — authoritative regardless of device.
   const { message } = await api.sendChatMessage(chatId, text, attachment);
-  const local = toChatMessage(message);
-  if (senderUserId) {
-    try { recordReplyFromChat({ id: chatId } as never, local.id, senderUserId); } catch { /* best-effort */ }
-  }
-  return local;
+  return toChatMessage(message);
 }
 
 export async function markProviderChatRead(chatId: string): Promise<void> { await api.markChatRead(chatId); }
