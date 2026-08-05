@@ -45,7 +45,11 @@ export function buildClickCheckoutUrl(order: Pick<PaymentOrder, "id" | "amountSo
     service_id: serviceId,
     transaction_param: order.id,
     amount: String(order.amountSom),
-    return_url: `${env.appBaseUrl}/wallet/return`,
+    // Click appends its own ?payment_status=&payment_id= params on redirect —
+    // without order_id already present, /wallet/return has no way to know
+    // which order to poll, so it shows a false "payment failed" even though
+    // the Complete webhook already credited the wallet successfully.
+    return_url: `${env.appBaseUrl}/wallet/return?order_id=${order.id}`,
   });
   return `https://my.click.uz/services/pay?${params.toString()}`;
 }
