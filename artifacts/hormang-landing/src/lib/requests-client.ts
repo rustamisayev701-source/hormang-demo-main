@@ -102,6 +102,12 @@ export interface BackendOffer {
   completionAfterPhotos?: string[];
   completionNotes?: string;
   completionDurationMinutes?: number;
+  completedAt?: string;
+  portfolioTitle?: string;
+  portfolioDescription?: string;
+  portfolioCoverPhoto?: string;
+  portfolioAdditionalPhotos?: string[];
+  portfolioFeatured?: boolean;
   createdAt: string;
 }
 
@@ -157,6 +163,90 @@ export function adminRefundEligibility(providerId: string) {
 }
 export function adminRefundProvider(providerId: string) {
   return adminFetch<{ ok: boolean; refundAmount: number }>(`/offers/admin/refund/${providerId}`, { method: "POST" });
+}
+
+/* ─── Service history / portfolio (derived from completed offers) ──────── */
+
+export interface BackendPortfolioProject {
+  title: string;
+  description: string;
+  coverPhoto: string;
+  additionalPhotos: string[];
+  featured: boolean;
+  createdAt: string;
+}
+
+export interface BackendServiceHistory {
+  id: string;
+  providerId: string;
+  customerId?: string;
+  customerName?: string;
+  requestId: string;
+  offerId: string;
+  categoryId: string;
+  categoryName: string;
+  emoji?: string;
+  serviceTitle: string;
+  serviceDescription: string;
+  completionNotes?: string;
+  finalPrice: number;
+  status: "completed";
+  rating?: number;
+  review?: string;
+  completedAt: string;
+  durationMinutes?: number;
+  beforePhotos?: string[];
+  afterPhotos?: string[];
+  region?: string;
+  district?: string;
+  isRepeatCustomer: boolean;
+  isPortfolio: boolean;
+  portfolioData?: BackendPortfolioProject;
+}
+
+export interface BackendHistoryStats {
+  totalCompleted: number;
+  totalEarnings: number;
+  thisMonthEarnings: number;
+  averageRating: number;
+  successRate: number;
+  mostPopularCategoryId?: string;
+  mostPopularCategoryName?: string;
+  repeatCustomers: number;
+}
+
+export interface BackendPublicPortfolioProject {
+  id: string;
+  title: string;
+  description: string;
+  coverPhoto?: string;
+  photos: string[];
+  categoryId: string;
+  categoryName: string;
+  emoji?: string;
+  completedAt: string;
+  durationMinutes?: number;
+  rating?: number;
+  review?: string;
+  featured: boolean;
+}
+
+export function fetchProviderHistory(providerId: string) {
+  return apiFetch<{ history: BackendServiceHistory[]; stats: BackendHistoryStats }>(`/offers/history/${providerId}`);
+}
+export function fetchPublicPortfolio(providerId: string) {
+  return apiFetch<{ portfolio: BackendPublicPortfolioProject[] }>(`/offers/portfolio/${providerId}`, { auth: false });
+}
+export function setOfferAfterPhotos(offerId: string, afterPhotos: string[]) {
+  return apiFetch<{ offer: BackendOffer }>(`/offers/${offerId}/after-photos`, { method: "PATCH", body: { afterPhotos } });
+}
+export function saveOfferPortfolio(offerId: string, project: {
+  title: string; description: string; coverPhoto: string; additionalPhotos: string[]; featured: boolean;
+}) {
+  return apiFetch<{ offer: BackendOffer }>(`/offers/${offerId}/portfolio`, { method: "PATCH", body: project });
+}
+export function removeOfferPortfolio(offerId: string) {
+  return apiFetch<{ offer: BackendOffer }>(`/offers/${offerId}/portfolio`, { method: "DELETE" });
 }
 
 /* ─── Chats ──────────────────────────────────────────────────────── */

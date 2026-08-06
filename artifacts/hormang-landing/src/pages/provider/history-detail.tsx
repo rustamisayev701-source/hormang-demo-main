@@ -15,6 +15,7 @@ import { PortfolioProjectModal } from "@/components/portfolio-project-modal";
 import { useStoreRefresh } from "@/hooks/use-store-refresh";
 import { useAuth } from "@/contexts/auth-context";
 import { useI18n } from "@/contexts/i18n-context";
+import { useToast } from "@/hooks/use-toast";
 import { formatDate } from "@/lib/date-utils";
 import { getCategoryDisplayName } from "@/lib/categories";
 import { getRequestLocation } from "@/lib/regions";
@@ -102,10 +103,12 @@ export default function ProviderHistoryDetailPage() {
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [item?.id]);
 
+  const { toast } = useToast();
+
   async function handleAddPhotos(e: React.ChangeEvent<HTMLInputElement>) {
     const files = Array.from(e.target.files ?? []);
     e.target.value = "";
-    if (!files.length || !item) return;
+    if (!files.length || !item || !user?.id) return;
     const current = item.afterPhotos ?? [];
     const room = MAX_AFTER_PHOTOS - current.length;
     if (room <= 0) return;
@@ -115,20 +118,30 @@ export default function ProviderHistoryDetailPage() {
       for (const f of files.slice(0, room)) {
         next.push(await compressImage(f, 1024, 0.72));
       }
-      setAfterPhotos(item.id, [...current, ...next].slice(0, MAX_AFTER_PHOTOS));
+      await setAfterPhotos(user.id, item.id, [...current, ...next].slice(0, MAX_AFTER_PHOTOS));
+    } catch (err) {
+      toast({ title: err instanceof Error ? err.message : t.common.errorGeneric, variant: "destructive" });
     } finally {
       setUploading(false);
     }
   }
 
-  function handleSavePortfolio(project: PortfolioProject) {
-    if (!item) return;
-    savePortfolioProject(item.id, project);
+  async function handleSavePortfolio(project: PortfolioProject) {
+    if (!item || !user?.id) return;
+    try {
+      await savePortfolioProject(user.id, item.id, project);
+    } catch (err) {
+      toast({ title: err instanceof Error ? err.message : t.common.errorGeneric, variant: "destructive" });
+    }
   }
 
-  function handleRemovePortfolio() {
-    if (!item) return;
-    removePortfolioProject(item.id);
+  async function handleRemovePortfolio() {
+    if (!item || !user?.id) return;
+    try {
+      await removePortfolioProject(user.id, item.id);
+    } catch (err) {
+      toast({ title: err instanceof Error ? err.message : t.common.errorGeneric, variant: "destructive" });
+    }
   }
 
   if (!item) {

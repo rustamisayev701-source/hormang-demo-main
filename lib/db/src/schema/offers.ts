@@ -26,6 +26,12 @@ export const offersTable = pgTable("offers", {
   completionAfterPhotos: jsonb("completion_after_photos").$type<string[]>(),
   completionNotes: text("completion_notes"),
   completionDurationMinutes: integer("completion_duration_minutes"),
+  completedAt: timestamp("completed_at"),
+  portfolioTitle: text("portfolio_title"),
+  portfolioDescription: text("portfolio_description"),
+  portfolioCoverPhoto: text("portfolio_cover_photo"),
+  portfolioAdditionalPhotos: jsonb("portfolio_additional_photos").$type<string[]>(),
+  portfolioFeatured: boolean("portfolio_featured").notNull().default(false),
   createdAt: timestamp("created_at").notNull().defaultNow(),
 });
 

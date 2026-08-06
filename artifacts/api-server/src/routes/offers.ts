@@ -2,7 +2,7 @@ import { Router, type IRouter } from "express";
 import { eq, and, desc, inArray, sql } from "drizzle-orm";
 import {
   db, requestsTable, offersTable, chatsTable, chatMessagesTable,
-  walletsTable, tangaTransactionsTable, type OfferRow, type RequestRow,
+  walletsTable, tangaTransactionsTable, reviewsTable, type OfferRow, type RequestRow, type Review,
 } from "@workspace/db";
 import { requireAuth, type AuthRequest } from "../middlewares/auth.js";
 import { requireAdminKey } from "../middlewares/admin.js";
@@ -23,6 +23,11 @@ function toJson(row: OfferRow) {
     completionAfterPhotos: row.completionAfterPhotos ?? undefined,
     completionNotes: row.completionNotes ?? undefined,
     completionDurationMinutes: row.completionDurationMinutes ?? undefined,
+    completedAt: row.completedAt ? row.completedAt.toISOString() : undefined,
+    portfolioTitle: row.portfolioTitle ?? undefined,
+    portfolioDescription: row.portfolioDescription ?? undefined,
+    portfolioCoverPhoto: row.portfolioCoverPhoto ?? undefined,
+    portfolioAdditionalPhotos: row.portfolioAdditionalPhotos ?? undefined,
     createdAt: row.createdAt.toISOString(),
   };
 }
@@ -335,6 +340,7 @@ router.patch("/:id/confirm-completion", requireAuth, async (req: AuthRequest, re
         providerConfirmedCompleted,
         customerConfirmedCompleted,
         status: bothConfirmed ? "completed" : offer.status,
+        ...(bothConfirmed ? { completedAt: new Date() } : {}),
         ...(completion?.afterPhotos?.length ? { completionAfterPhotos: completion.afterPhotos } : {}),
         ...(completion?.completionNotes !== undefined ? { completionNotes: completion.completionNotes } : {}),
         ...(completion?.durationMinutes !== undefined ? { completionDurationMinutes: completion.durationMinutes } : {}),
@@ -365,6 +371,278 @@ router.patch("/:id/confirm-completion", requireAuth, async (req: AuthRequest, re
     res.json({ offer: toJson(row) });
   } catch (err) {
     console.error("Confirm offer completion error:", err);
+    res.status(500).json({ error: "Xatolik yuz berdi" });
+  }
+});
+
+// ─── Provider service history — derived live from completed offers ─────────
+
+const MAX_FEATURED_PROJECTS = 3;
+const MAX_AFTER_PHOTOS = 10;
+
+function descriptionFromAnswers(answers: Record<string, unknown>): string {
+  const skip = new Set(["urgency", "budget", "budget_open", "region", "district", "location"]);
+  const parts: string[] = [];
+  for (const [k, v] of Object.entries(answers ?? {})) {
+    if (skip.has(k) || k.endsWith("_other")) continue;
+    if (v === null || v === undefined || v === "") continue;
+    if (typeof v === "string") {
+      if (v.startsWith("data:")) continue;
+      parts.push(v);
+    } else if (typeof v === "number") {
+      parts.push(String(v));
+    } else if (Array.isArray(v)) {
+      const joined = (v as unknown[]).filter((x) => typeof x === "string" && !(x as string).startsWith("data:")).join(", ");
+      if (joined) parts.push(joined);
+    }
+  }
+  return parts.join(" · ");
+}
+
+type HistoryRow = { offer: OfferRow; request: RequestRow; review: Review | null };
+
+function historyItemJson(row: HistoryRow, isRepeatCustomer: boolean) {
+  const { offer, request, review } = row;
+  const completedAt = (offer.completedAt ?? offer.createdAt).toISOString();
+  return {
+    id: offer.id,
+    providerId: offer.masterId,
+    customerId: request.customerId ?? undefined,
+    customerName: request.customerName ?? undefined,
+    requestId: offer.requestId,
+    offerId: offer.id,
+    categoryId: request.categoryId,
+    categoryName: request.categoryName,
+    emoji: request.emoji,
+    serviceTitle: request.categoryName,
+    serviceDescription: descriptionFromAnswers(request.answers),
+    completionNotes: offer.completionNotes ?? undefined,
+    finalPrice: offer.price,
+    status: "completed" as const,
+    rating: review?.rating,
+    review: review?.comment ?? undefined,
+    completedAt,
+    durationMinutes: offer.completionDurationMinutes ?? undefined,
+    beforePhotos: request.requestPhotos ?? undefined,
+    afterPhotos: offer.completionAfterPhotos ?? undefined,
+    region: request.region ?? undefined,
+    district: request.district ?? undefined,
+    isRepeatCustomer,
+    isPortfolio: !!offer.portfolioTitle,
+    portfolioData: offer.portfolioTitle ? {
+      title: offer.portfolioTitle,
+      description: offer.portfolioDescription ?? "",
+      coverPhoto: offer.portfolioCoverPhoto ?? "",
+      additionalPhotos: offer.portfolioAdditionalPhotos ?? [],
+      featured: offer.portfolioFeatured,
+      createdAt: completedAt,
+    } : undefined,
+  };
+}
+
+function computeStats(history: ReturnType<typeof historyItemJson>[]) {
+  const totalCompleted = history.length;
+  const totalEarnings = history.reduce((s, h) => s + (h.finalPrice || 0), 0);
+
+  const now = new Date();
+  const thisMonthEarnings = history.reduce((s, h) => {
+    const d = new Date(h.completedAt);
+    return d.getFullYear() === now.getFullYear() && d.getMonth() === now.getMonth() ? s + (h.finalPrice || 0) : s;
+  }, 0);
+
+  const rated = history.filter((h) => typeof h.rating === "number");
+  const averageRating = rated.length
+    ? Math.round((rated.reduce((s, h) => s + (h.rating || 0), 0) / rated.length) * 100) / 100
+    : 0;
+
+  const successful = history.filter((h) => h.rating == null || (h.rating as number) >= 4).length;
+  const successRate = totalCompleted ? Math.round((successful / totalCompleted) * 100) : 0;
+
+  let mostPopularCategoryId: string | undefined;
+  let mostPopularCategoryName: string | undefined;
+  const counts = new Map<string, { name: string; n: number }>();
+  for (const h of history) {
+    const prev = counts.get(h.categoryId);
+    counts.set(h.categoryId, { name: h.categoryName, n: (prev?.n ?? 0) + 1 });
+  }
+  let best = 0;
+  for (const [id, { name, n }] of counts) {
+    if (n > best) { best = n; mostPopularCategoryId = id; mostPopularCategoryName = name; }
+  }
+
+  const perCustomer = new Map<string, number>();
+  for (const h of history) {
+    if (!h.customerId) continue;
+    perCustomer.set(h.customerId, (perCustomer.get(h.customerId) ?? 0) + 1);
+  }
+  let repeatCustomers = 0;
+  for (const n of perCustomer.values()) if (n >= 2) repeatCustomers += 1;
+
+  return { totalCompleted, totalEarnings, thisMonthEarnings, averageRating, successRate, mostPopularCategoryId, mostPopularCategoryName, repeatCustomers };
+}
+
+async function fetchProviderHistory(providerId: string) {
+  const rows = await db
+    .select({ offer: offersTable, request: requestsTable, review: reviewsTable })
+    .from(offersTable)
+    .innerJoin(requestsTable, eq(requestsTable.id, offersTable.requestId))
+    .leftJoin(reviewsTable, and(
+      eq(reviewsTable.requestId, offersTable.requestId),
+      eq(reviewsTable.reviewedId, offersTable.masterId),
+      eq(reviewsTable.reviewedRole, "provider"),
+    ))
+    .where(and(eq(offersTable.masterId, providerId), eq(offersTable.status, "completed")))
+    .orderBy(desc(offersTable.completedAt), desc(offersTable.createdAt));
+
+  const customerCounts = new Map<string, number>();
+  for (const r of rows) {
+    if (r.request.customerId) customerCounts.set(r.request.customerId, (customerCounts.get(r.request.customerId) ?? 0) + 1);
+  }
+
+  return rows.map((r) => historyItemJson(r, !!r.request.customerId && (customerCounts.get(r.request.customerId) ?? 0) > 1));
+}
+
+// GET /history/:providerId — the provider's own completed-job history + stats.
+router.get("/history/:providerId", requireAuth, async (req: AuthRequest, res) => {
+  try {
+    const providerId: string = String(req.params.providerId);
+    if (req.user!.id !== providerId) {
+      res.status(403).json({ error: "Ruxsat yo'q" });
+      return;
+    }
+    const history = await fetchProviderHistory(providerId);
+    res.json({ history, stats: computeStats(history) });
+  } catch (err) {
+    console.error("Get provider history error:", err);
+    res.status(500).json({ error: "Xatolik yuz berdi" });
+  }
+});
+
+// GET /portfolio/:providerId — public, sanitized portfolio for the public profile.
+router.get("/portfolio/:providerId", async (req, res) => {
+  try {
+    const providerId: string = String(req.params.providerId);
+    const history = await fetchProviderHistory(providerId);
+    const mapped = history
+      .filter((h) => h.isPortfolio && h.portfolioData)
+      .map((h) => {
+        const p = h.portfolioData!;
+        const cover = p.coverPhoto || h.afterPhotos?.[0] || h.beforePhotos?.[0];
+        const photos = Array.from(new Set([cover, ...p.additionalPhotos].filter((x): x is string => !!x)));
+        return {
+          id: h.id,
+          title: p.title,
+          description: p.description,
+          coverPhoto: cover,
+          photos,
+          categoryId: h.categoryId,
+          categoryName: h.categoryName,
+          emoji: h.emoji,
+          completedAt: h.completedAt,
+          durationMinutes: h.durationMinutes,
+          rating: h.rating,
+          review: h.review,
+          featured: p.featured,
+        };
+      });
+    mapped.sort((a, b) => {
+      if (a.featured !== b.featured) return a.featured ? -1 : 1;
+      return new Date(b.completedAt).getTime() - new Date(a.completedAt).getTime();
+    });
+    res.json({ portfolio: mapped });
+  } catch (err) {
+    console.error("Get public portfolio error:", err);
+    res.status(500).json({ error: "Xatolik yuz berdi" });
+  }
+});
+
+// PATCH /:id/after-photos — provider appends/replaces "after" photos on a completed job.
+router.patch("/:id/after-photos", requireAuth, async (req: AuthRequest, res) => {
+  try {
+    const id: string = String(req.params.id);
+    const { afterPhotos } = req.body as { afterPhotos?: string[] };
+    if (!Array.isArray(afterPhotos)) {
+      res.status(400).json({ error: "afterPhotos massiv bo'lishi kerak" });
+      return;
+    }
+    const [offer] = await db.select().from(offersTable).where(eq(offersTable.id, id)).limit(1);
+    if (!offer || offer.masterId !== req.user!.id) {
+      res.status(404).json({ error: "Taklif topilmadi" });
+      return;
+    }
+    const [row] = await db
+      .update(offersTable)
+      .set({ completionAfterPhotos: afterPhotos.slice(0, MAX_AFTER_PHOTOS) })
+      .where(eq(offersTable.id, id))
+      .returning();
+    res.json({ offer: toJson(row) });
+  } catch (err) {
+    console.error("Set after-photos error:", err);
+    res.status(500).json({ error: "Xatolik yuz berdi" });
+  }
+});
+
+// PATCH /:id/portfolio — publish/update a completed job as a portfolio project.
+router.patch("/:id/portfolio", requireAuth, async (req: AuthRequest, res) => {
+  try {
+    const id: string = String(req.params.id);
+    const { title, description, coverPhoto, additionalPhotos, featured } = req.body as {
+      title?: string; description?: string; coverPhoto?: string; additionalPhotos?: string[]; featured?: boolean;
+    };
+    if (!title?.trim() || !description?.trim() || !coverPhoto) {
+      res.status(400).json({ error: "title, description, coverPhoto talab qilinadi" });
+      return;
+    }
+    const [offer] = await db.select().from(offersTable).where(eq(offersTable.id, id)).limit(1);
+    if (!offer || offer.masterId !== req.user!.id || offer.status !== "completed") {
+      res.status(404).json({ error: "Taklif topilmadi" });
+      return;
+    }
+
+    let resolvedFeatured = !!featured;
+    if (resolvedFeatured) {
+      const [{ count }] = await db
+        .select({ count: sql<number>`count(*)::int` })
+        .from(offersTable)
+        .where(and(eq(offersTable.masterId, req.user!.id), eq(offersTable.portfolioFeatured, true), sql`${offersTable.id} != ${id}`));
+      if (count >= MAX_FEATURED_PROJECTS) resolvedFeatured = false;
+    }
+
+    const [row] = await db
+      .update(offersTable)
+      .set({
+        portfolioTitle: title.trim(),
+        portfolioDescription: description.trim(),
+        portfolioCoverPhoto: coverPhoto,
+        portfolioAdditionalPhotos: additionalPhotos?.length ? additionalPhotos : null,
+        portfolioFeatured: resolvedFeatured,
+      })
+      .where(eq(offersTable.id, id))
+      .returning();
+    res.json({ offer: toJson(row) });
+  } catch (err) {
+    console.error("Save portfolio project error:", err);
+    res.status(500).json({ error: "Xatolik yuz berdi" });
+  }
+});
+
+// DELETE /:id/portfolio — remove a job from the portfolio.
+router.delete("/:id/portfolio", requireAuth, async (req: AuthRequest, res) => {
+  try {
+    const id: string = String(req.params.id);
+    const [offer] = await db.select().from(offersTable).where(eq(offersTable.id, id)).limit(1);
+    if (!offer || offer.masterId !== req.user!.id) {
+      res.status(404).json({ error: "Taklif topilmadi" });
+      return;
+    }
+    const [row] = await db
+      .update(offersTable)
+      .set({ portfolioTitle: null, portfolioDescription: null, portfolioCoverPhoto: null, portfolioAdditionalPhotos: null, portfolioFeatured: false })
+      .where(eq(offersTable.id, id))
+      .returning();
+    res.json({ offer: toJson(row) });
+  } catch (err) {
+    console.error("Remove portfolio project error:", err);
     res.status(500).json({ error: "Xatolik yuz berdi" });
   }
 });
@@ -409,7 +687,7 @@ router.post("/admin/:id/force-complete", requireAdminKey, async (req, res) => {
       res.status(404).json({ error: "Taklif topilmadi" });
       return;
     }
-    await db.update(offersTable).set({ status: "completed", providerConfirmedCompleted: true, customerConfirmedCompleted: true }).where(eq(offersTable.id, id));
+    await db.update(offersTable).set({ status: "completed", providerConfirmedCompleted: true, customerConfirmedCompleted: true, completedAt: new Date() }).where(eq(offersTable.id, id));
     await db.update(requestsTable).set({ status: "completed" }).where(eq(requestsTable.id, offer.requestId));
     const [chat] = await db.select().from(chatsTable).where(and(eq(chatsTable.requestId, offer.requestId), eq(chatsTable.masterId, offer.masterId))).limit(1);
     if (chat) {

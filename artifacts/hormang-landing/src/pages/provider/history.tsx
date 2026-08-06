@@ -405,7 +405,7 @@ export default function ProviderHistoryPage() {
                         index={i}
                         onOpen={() => navigate(`/provider/history/${item.id}`)}
                         onEditPortfolio={() => navigate(`/provider/history/${item.id}?portfolio=edit`)}
-                        onRemovePortfolio={() => removePortfolioProject(item.id)}
+                        onRemovePortfolio={() => removePortfolioProject(providerId, item.id)}
                       />
                     ))}
                   </AnimatePresence>

@@ -7,7 +7,6 @@
  * so existing consumers change as little as possible. Every function
  * that touches shared (cross-device) data is now async.
  */
-import { recordServiceCompletion } from "./service-history-store";
 import { getBlockedUsers } from "./report-store";
 import { emitStoreChange } from "./store-events";
 import * as api from "./requests-client";
@@ -175,28 +174,6 @@ function colorFromId(id: string): string {
 
 function toCustomerRequest(r: api.BackendRequest): CustomerRequest {
   return { ...r, offerCount: r.offerCount ?? 0 };
-}
-/** Plain-text snapshot of a request's answers, captured at completion time so
- * the Service-History record keeps a readable description even after the
- * original request (and its live question-tree formatting) is gone. */
-function snapshotDescription(answers: Record<string, unknown> | undefined): string {
-  if (!answers) return "";
-  const skip = new Set(["urgency", "budget", "budget_open", "region", "district", "location"]);
-  const parts: string[] = [];
-  for (const [k, v] of Object.entries(answers)) {
-    if (skip.has(k) || k.endsWith("_other")) continue;
-    if (v === null || v === undefined || v === "") continue;
-    if (typeof v === "string") {
-      if (v.startsWith("data:")) continue;
-      parts.push(v);
-    } else if (typeof v === "number") {
-      parts.push(String(v));
-    } else if (Array.isArray(v)) {
-      const joined = (v as unknown[]).filter((x) => typeof x === "string" && !(x as string).startsWith("data:")).join(", ");
-      if (joined) parts.push(joined);
-    }
-  }
-  return parts.join(" · ");
 }
 function toOffer(o: api.BackendOffer): Offer {
   return { ...o };
@@ -437,32 +414,7 @@ export async function confirmCompletion(
   const { offer } = await api.confirmOfferCompletion(offerId, role, completion ? {
     afterPhotos: completion.afterPhotos, completionNotes: completion.completionNotes, durationMinutes: completion.durationMinutes,
   } : undefined);
-  if (offer.status === "completed") {
-    try {
-      const request = await getRequestById(offer.requestId);
-      recordServiceCompletion({
-        providerId: offer.masterId,
-        customerId: request?.customerId,
-        customerName: request?.customerName,
-        requestId: offer.requestId,
-        offerId: offer.id,
-        categoryId: request?.categoryId ?? "",
-        categoryName: request?.categoryName ?? "",
-        emoji: request?.emoji,
-        serviceTitle: request?.categoryName ?? "",
-        serviceDescription: snapshotDescription(request?.answers),
-        completionNotes: offer.completionNotes,
-        durationMinutes: offer.completionDurationMinutes,
-        finalPrice: offer.price,
-        region: request?.region,
-        district: request?.district,
-        beforePhotos: request?.requestPhotos,
-        afterPhotos: offer.completionAfterPhotos,
-      });
-    } catch { /* best-effort local analytics — never block the completion flow */ }
-    return "completed";
-  }
-  return "waiting";
+  return offer.status === "completed" ? "completed" : "waiting";
 }
 
 export async function getLast10RejectedEligibility(providerId: string): Promise<{ eligible: boolean; refundAmount: number; offers: Offer[] }> {
