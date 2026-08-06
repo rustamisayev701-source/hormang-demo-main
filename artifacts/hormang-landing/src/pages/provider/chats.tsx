@@ -551,28 +551,32 @@ function ChatView({ chatId, onClose }: { chatId: string; onClose: () => void }) 
     loadChat();
   }
 
-  function handleReviewSubmit(data: ReviewSubmitData) {
+  async function handleReviewSubmit(data: ReviewSubmitData) {
     if (!offer || !chat) return;
-    addReview({
-      requestId: chat.requestId,
-      offerId: offer.id,
-      reviewerId: masterId,
-      reviewerRole: "provider",
-      reviewedId: chat.customerId,
-      reviewedRole: "customer",
-      rating: data.rating,
-      comment: data.text || undefined,
-      photoUrl: data.photoUrl,
-      platformSentiment: data.platformSentiment,
-      platformFeedback: data.platformFeedback,
-      reviewerName: offer.masterName,
-      reviewerInitials: offer.masterInitials,
-      reviewerColor: offer.masterColor,
-      reviewedName: chat.customerName,
-      serviceCategory: chat.categoryName,
-    });
-    setShowReview(false);
-    setReviewDismissed(true);
+    try {
+      await addReview({
+        requestId: chat.requestId,
+        offerId: offer.id,
+        reviewerId: masterId,
+        reviewerRole: "provider",
+        reviewedId: chat.customerId,
+        reviewedRole: "customer",
+        rating: data.rating,
+        comment: data.text || undefined,
+        photoUrl: data.photoUrl,
+        platformSentiment: data.platformSentiment,
+        platformFeedback: data.platformFeedback,
+        reviewerName: offer.masterName,
+        reviewerInitials: offer.masterInitials,
+        reviewerColor: offer.masterColor,
+        reviewedName: chat.customerName,
+        serviceCategory: chat.categoryName,
+      });
+      setShowReview(false);
+      setReviewDismissed(true);
+    } catch (err) {
+      toast({ title: err instanceof Error ? err.message : t.common.errorGeneric, variant: "destructive" });
+    }
   }
 
   if (!chat) return null;

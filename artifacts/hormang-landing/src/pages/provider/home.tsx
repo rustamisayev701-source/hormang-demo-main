@@ -412,6 +412,7 @@ function UpcomingServices() {
   useStoreRefresh();
   const { user } = useAuth();
   const { t, locale } = useI18n();
+  const { toast } = useToast();
   const masterId = user?.id ?? "";
   const services = getUpcomingServices(masterId).filter((s) => s.status === "upcoming");
   const [selectedService, setSelectedService] = useState<UpcomingService | null>(null);
@@ -441,24 +442,28 @@ function UpcomingServices() {
     if (!reviewService) return;
     if (reviewService.customerId && reviewService.requestId) {
       const offer = reviewService.offerId ? await getOfferById(reviewService.offerId) : null;
-      addReview({
-        requestId: reviewService.requestId,
-        offerId: reviewService.offerId,
-        reviewerId: masterId,
-        reviewerRole: "provider",
-        reviewedId: reviewService.customerId,
-        reviewedRole: "customer",
-        rating: data.rating,
-        comment: data.text || undefined,
-        photoUrl: data.photoUrl,
-        platformSentiment: data.platformSentiment,
-        platformFeedback: data.platformFeedback,
-        reviewerName: offer?.masterName,
-        reviewerInitials: offer?.masterInitials,
-        reviewerColor: offer?.masterColor,
-        reviewedName: reviewService.customerName,
-        serviceCategory: reviewService.title,
-      });
+      try {
+        await addReview({
+          requestId: reviewService.requestId,
+          offerId: reviewService.offerId,
+          reviewerId: masterId,
+          reviewerRole: "provider",
+          reviewedId: reviewService.customerId,
+          reviewedRole: "customer",
+          rating: data.rating,
+          comment: data.text || undefined,
+          photoUrl: data.photoUrl,
+          platformSentiment: data.platformSentiment,
+          platformFeedback: data.platformFeedback,
+          reviewerName: offer?.masterName,
+          reviewerInitials: offer?.masterInitials,
+          reviewerColor: offer?.masterColor,
+          reviewedName: reviewService.customerName,
+          serviceCategory: reviewService.title,
+        });
+      } catch (err) {
+        toast({ title: err instanceof Error ? err.message : t.common.errorGeneric, variant: "destructive" });
+      }
     }
     markServiceDone(reviewService.id, masterId);
     setReviewService(null);

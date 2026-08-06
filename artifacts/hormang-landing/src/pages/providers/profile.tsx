@@ -10,7 +10,8 @@ import { getProviderPublicProfile, type SafeUser, type ProviderProfile } from "@
 import { useAuth } from "@/contexts/auth-context";
 import { onStoreChange } from "@/lib/store-events";
 import { getLocalProfile, type LocalProfile, type PortfolioItem } from "@/lib/local-profile";
-import { getCompletedCount } from "@/lib/completion-store";
+import { getCompletedCount, getReviewsForUser, getAverageRatingForUser, type Review } from "@/lib/completion-store";
+import { useStoreRefresh } from "@/hooks/use-store-refresh";
 import { getPublicPortfolio, type PublicPortfolioProject } from "@/lib/service-history-store";
 import { PortfolioDetailModal } from "@/components/portfolio-detail-modal";
 import { CategoryIcon } from "@/components/category-icon";
@@ -78,8 +79,10 @@ function StarRating({ rating, count, newLabel, reviewsCountTpl }: { rating?: num
 }
 
 export default function ProviderProfilePage() {
+  useStoreRefresh();
   const { t, locale } = useI18n();
   const tt = t.providerProfilePage;
+  const rt = t.providerReviewsPage;
   const params = useParams<{ id: string }>();
   const [, setLocation] = useLocation();
   const { user: currentUser } = useAuth();
@@ -166,6 +169,9 @@ export default function ProviderProfilePage() {
   const categories: string[] = profile?.categories ?? [];
   const serviceAreas: string[] = localData.serviceAreas ?? [];
   const locationStr = district ? `${district}, ${region}` : region;
+  const avgRating = getAverageRatingForUser(provider.id, "provider");
+  const reviews: Review[] = getReviewsForUser(provider.id, "provider")
+    .sort((a, b) => new Date(b.createdAt).getTime() - new Date(a.createdAt).getTime());
 
   return (
     <div className="min-h-screen bg-gray-50">
@@ -213,7 +219,7 @@ export default function ProviderProfilePage() {
                       </span>
                     )}
                   </div>
-                  <StarRating rating={profile?.rating} count={provider ? getCompletedCount(provider.id, "provider") : undefined} newLabel={tt.newRating} reviewsCountTpl={tt.reviewsCountTpl} />
+                  <StarRating rating={avgRating || undefined} count={reviews.length || undefined} newLabel={tt.newRating} reviewsCountTpl={tt.reviewsCountTpl} />
                   {provider && getCompletedCount(provider.id, "provider") > 0 ? (
                     <p className="text-xs text-white/60 mt-0.5">
                       {tFormat(tt.completedCountTpl, { n: getCompletedCount(provider.id, "provider") })}
@@ -404,6 +410,47 @@ export default function ProviderProfilePage() {
             )}
             {!provider.phone && !profile?.isVerified && (
               <span className="text-xs text-gray-400">{tt.noVerifyData}</span>
+            )}
+          </div>
+
+          {/* ── Reviews ── */}
+          <div className="bg-white rounded-2xl border border-gray-100 shadow-sm p-5">
+            <div className="flex items-center justify-between mb-3">
+              <p className="text-[10px] font-bold text-gray-500 uppercase tracking-widest">{rt.title}</p>
+              {reviews.length > 0 && (
+                <div className="flex items-center gap-1">
+                  <Star className="w-3.5 h-3.5 fill-amber-400 text-amber-400" />
+                  <span className="text-xs font-bold text-gray-800">{avgRating.toFixed(1)}</span>
+                  <span className="text-xs text-gray-400">{tFormat(rt.reviewsCountTpl, { n: reviews.length })}</span>
+                </div>
+              )}
+            </div>
+            {reviews.length === 0 ? (
+              <div className="text-center py-6">
+                <p className="text-sm font-semibold text-gray-500">{rt.emptyTitle}</p>
+                <p className="text-xs text-gray-400 mt-1">{rt.emptyDesc}</p>
+              </div>
+            ) : (
+              <div className="space-y-3">
+                {reviews.slice(0, 5).map((review) => (
+                  <div key={review.id} className="bg-gray-50 rounded-xl p-3 border border-gray-100">
+                    <div className="flex items-center justify-between mb-1.5">
+                      <div className="flex items-center gap-1">
+                        {[1, 2, 3, 4, 5].map((s) => (
+                          <Star
+                            key={s}
+                            className={`w-3 h-3 ${s <= review.rating ? "fill-amber-400 text-amber-400" : "fill-gray-200 text-gray-200"}`}
+                          />
+                        ))}
+                      </div>
+                      <span className="text-[10px] text-gray-400">{formatDate(review.createdAt, { months: t.shared.months })}</span>
+                    </div>
+                    <p className="text-xs text-gray-700 leading-relaxed">
+                      {review.comment?.trim() || rt.noComment}
+                    </p>
+                  </div>
+                ))}
+              </div>
             )}
           </div>
 
