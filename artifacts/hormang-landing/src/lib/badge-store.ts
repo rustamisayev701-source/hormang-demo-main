@@ -7,15 +7,20 @@
  *   • 2 ADMIN-ONLY badges: recommended_by_hormang (provider-only),
  *     under_review (BOTH providers and customers — only badge for customers).
  *
- * Auto badges: localStorage (hormang_badges_<userId>), still tied to local
- * review/completion/tanga data — evaluateAutoBadges() re-derives them lazily
- * whenever a provider views their own profile.
+ * Both categories now live in the real user_badges table (distinguished by
+ * `source: "admin" | "auto"`), fetched in bulk into an in-memory cache
+ * (refreshBadgesCache, called on app boot) so getBadges()/hasBadge() stay
+ * synchronous for their many render-time callers while a grant, remove, or
+ * auto-eval result is visible to every admin/device, not just the browser
+ * that produced it.
  *
- * Admin badges: real user_badges table, fetched in bulk into an in-memory
- * cache (refreshBadgesCache, called on app boot) and merged with the local
- * auto set at read time — so getBadges()/hasBadge() stay synchronous for
- * their many render-time callers while a grant/remove is visible to every
- * admin/device, not just the granting browser.
+ * Auto-badge ELIGIBILITY is still computed client-side (computeQualifiedAutoBadges)
+ * and still partly reads the owner's own local profile data (completion%,
+ * portfolio albums — local-profile.ts is a separate, not-yet-backend-migrated
+ * store), so it only runs when the badge owner views their own profile, same
+ * as before. What changed is where the RESULT is persisted: evaluateAutoBadges()
+ * now posts the qualified set to POST /badges/sync instead of writing
+ * localStorage, so the outcome is visible everywhere, not just that device.
  *
  * Grant/remove actions write to the real audit_log table (admin/index.tsx's
  * logAction backs the same table) — auto-eval changes are not audit-logged,
@@ -202,38 +207,15 @@ export const AUTO_BADGE_TYPES: BadgeType[] = ALL_BADGE_TYPES
 export const ADMIN_BADGE_TYPES: BadgeType[] = ALL_BADGE_TYPES
   .filter((t) => BADGE_META[t].source === "admin");
 
-/* ─── Storage primitives — AUTO badges only ──────────────────────────
- * Auto badges are computed from still-local review/completion/tanga data
- * (Phase D territory) so they stay in localStorage. Admin-granted badges
- * (recommended_by_hormang, under_review) live in the real user_badges
- * table instead — see the cache section below — so a grant/remove is
- * visible to every admin/device, not just the granting browser. ────── */
+/* ─── Badges — real backend, in-memory cache ──────────────────────────
+ * Small, platform-wide dataset, so it's fetched in bulk once (App.tsx boot)
+ * and refreshed after every grant/remove/auto-sync, same pattern as
+ * lib/categories — keeps getBadges()/hasBadge() sync for their many
+ * render-time callers while staying visible to every viewer/device. */
 
-const KEY = (userId: string): string => `hormang_badges_${userId}`;
+interface BackendBadge { userId: string; type: BadgeType; source: "admin" | "auto"; grantedAt: string; grantedBy: string; }
 
-function readBadges(userId: string): Badge[] {
-  if (!userId) return [];
-  try {
-    const raw = localStorage.getItem(KEY(userId));
-    return raw ? (JSON.parse(raw) as Badge[]) : [];
-  } catch {
-    return [];
-  }
-}
-
-function writeBadges(userId: string, badges: Badge[]): void {
-  if (!userId) return;
-  localStorage.setItem(KEY(userId), JSON.stringify(badges));
-}
-
-/* ─── Admin-granted badges — real backend, in-memory cache ───────────
- * Small, platform-wide dataset (privileged grants only), so it's fetched
- * in bulk once (App.tsx boot) and refreshed after every grant/remove,
- * same pattern as lib/categories — keeps getBadges()/hasBadge() sync. */
-
-interface BackendBadge { userId: string; type: BadgeType; grantedAt: string; grantedBy: string; }
-
-let adminBadgesCache = new Map<string, Badge[]>();
+let badgesCache = new Map<string, Badge[]>();
 
 export async function refreshBadgesCache(): Promise<void> {
   try {
@@ -241,18 +223,18 @@ export async function refreshBadgesCache(): Promise<void> {
     const next = new Map<string, Badge[]>();
     for (const b of res.badges) {
       const list = next.get(b.userId) ?? [];
-      list.push({ type: b.type, source: "admin", grantedAt: b.grantedAt, grantedBy: b.grantedBy, visible: true });
+      list.push({ type: b.type, source: b.source, grantedAt: b.grantedAt, grantedBy: b.grantedBy, visible: true });
       next.set(b.userId, list);
     }
-    adminBadgesCache = next;
+    badgesCache = next;
     emitStoreChange();
   } catch (e) {
     console.warn("[Hormang] nishonlarni yuklab bo'lmadi:", e);
   }
 }
 
-function adminBadgesFor(userId: string): Badge[] {
-  return adminBadgesCache.get(userId) ?? [];
+function badgesFor(userId: string): Badge[] {
+  return badgesCache.get(userId) ?? [];
 }
 
 /* ─── Audit log — real backend, shared across every admin/browser.
@@ -365,44 +347,49 @@ export function computeQualifiedAutoBadges(user: SafeUser): Set<BadgeType> {
   return out;
 }
 
+const autoSyncInFlight = new Set<string>();
+
 /**
- * Sync the auto-badge set in storage to match current eligibility.
- * Returns {added, removed} so callers can surface notifications.
- * Idempotent: if nothing changed, no write or event is emitted.
+ * Sync the auto-badge set to match current eligibility. Optimistically
+ * updates the shared cache immediately (so the UI reflects it without
+ * waiting on a round trip) and persists the diff via POST /badges/sync in
+ * the background. Returns {added, removed} so callers can surface
+ * notifications. Idempotent: if nothing changed, no write or event fires.
  */
 export function evaluateAutoBadges(user: SafeUser): { added: BadgeType[]; removed: BadgeType[] } {
-  const stored    = readBadges(user.id); // auto badges only — see storage primitives note above
   const qualified = computeQualifiedAutoBadges(user);
-  const now       = new Date().toISOString();
+  const currentAuto = badgesFor(user.id).filter((b) => b.source === "auto");
+  const currentTypes = new Set(currentAuto.map((b) => b.type));
 
-  const oldAutoMap = new Map(stored.map((b) => [b.type, b]));
-
-  const newAutoBadges: Badge[] = Array.from(qualified).map((type) => {
-    const prev = oldAutoMap.get(type);
-    return {
-      type,
-      source: "auto",
-      grantedAt: prev?.grantedAt ?? now,
-      visible:   prev?.visible   ?? true,
-      lastEvaluatedAt: now,
-    };
-  });
-
-  const added: BadgeType[]   = newAutoBadges
-    .filter((b) => !oldAutoMap.has(b.type))
-    .map((b) => b.type);
-  const removed: BadgeType[] = Array.from(oldAutoMap.keys())
-    .filter((t) => !qualified.has(t));
+  const added: BadgeType[] = Array.from(qualified).filter((t) => !currentTypes.has(t));
+  const removed: BadgeType[] = Array.from(currentTypes).filter((t) => !qualified.has(t));
 
   if (added.length === 0 && removed.length === 0) {
     return { added, removed };
   }
 
+  const now = new Date().toISOString();
+  const oldAutoMap = new Map(currentAuto.map((b) => [b.type, b]));
+  const newAuto: Badge[] = Array.from(qualified).map((type) => ({
+    type,
+    source: "auto",
+    grantedAt: oldAutoMap.get(type)?.grantedAt ?? now,
+    visible: true,
+  }));
+  const adminOnly = badgesFor(user.id).filter((b) => b.source !== "auto");
+  badgesCache.set(user.id, [...adminOnly, ...newAuto]);
+  emitStoreChange();
+
   // Not audit-logged server-side: this runs on every regular user's own
   // profile view (no admin session), and it's a re-derivable computation,
   // not an admin decision — unlike grant/remove below.
-  writeBadges(user.id, newAutoBadges);
-  emitStoreChange();
+  if (!autoSyncInFlight.has(user.id)) {
+    autoSyncInFlight.add(user.id);
+    apiFetch("/badges/sync", { method: "POST", body: { qualified: Array.from(qualified) } })
+      .catch((err) => console.warn("[Hormang] avtomatik nishonlarni sinxronlash muvaffaqiyatsiz:", err))
+      .finally(() => autoSyncInFlight.delete(user.id));
+  }
+
   return { added, removed };
 }
 
@@ -415,22 +402,19 @@ export function evaluateAutoBadges(user: SafeUser): { added: BadgeType[]; remove
  */
 export function getBadges(userId: string, _user?: SafeUser | null): Badge[] {
   if (!userId) return [];
-  const badges = [...readBadges(userId), ...adminBadgesFor(userId)].filter((b) => b.visible !== false);
-  return badges.sort(
-    (a, b) => (BADGE_META[a.type]?.order ?? 99) - (BADGE_META[b.type]?.order ?? 99),
-  );
-}
-
-/** Same as getBadges but skips re-evaluation — for read-only displays. */
-export function getStoredBadges(userId: string): Badge[] {
-  return [...readBadges(userId), ...adminBadgesFor(userId)]
+  return badgesFor(userId)
     .filter((b) => b.visible !== false)
     .sort((a, b) => (BADGE_META[a.type]?.order ?? 99) - (BADGE_META[b.type]?.order ?? 99));
 }
 
+/** Same as getBadges but skips re-evaluation — for read-only displays. */
+export function getStoredBadges(userId: string): Badge[] {
+  return getBadges(userId);
+}
+
 /** Has the user been granted a specific badge? */
 export function hasBadge(userId: string, type: BadgeType): boolean {
-  return [...readBadges(userId), ...adminBadgesFor(userId)].some((b) => b.type === type && b.visible !== false);
+  return badgesFor(userId).some((b) => b.type === type && b.visible !== false);
 }
 
 /* ─── Admin grant / remove — real backend ────────────────────────────── */
@@ -454,7 +438,7 @@ export async function adminGrantBadge(
   if (meta.scope === "provider" && ctx.targetRole === "customer") {
     return { ok: false, reason: "Bu nishon faqat ijrochilarga beriladi" };
   }
-  if (adminBadgesFor(ctx.targetUserId).some((b) => b.type === type)) {
+  if (badgesFor(ctx.targetUserId).some((b) => b.type === type && b.source === "admin")) {
     return { ok: false, reason: "Bu nishon allaqachon berilgan" };
   }
 
@@ -481,7 +465,7 @@ export async function adminRemoveBadge(
   const meta = BADGE_META[type];
   if (!meta) return { ok: false, reason: "Noma'lum nishon turi" };
 
-  const target = adminBadgesFor(ctx.targetUserId).find((b) => b.type === type);
+  const target = badgesFor(ctx.targetUserId).find((b) => b.type === type && b.source === "admin");
   if (!target) return { ok: false, reason: "Bu nishon mavjud emas" };
 
   try {
