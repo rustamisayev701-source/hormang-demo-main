@@ -387,7 +387,7 @@ export default function CustomerHomePage() {
               <h2 className="font-extrabold text-gray-900 text-sm leading-tight">{t.customerHome.sections.popularServices}</h2>
               <p className="text-[11px] text-gray-400 mt-0.5">{t.customerHome.sections.popularServicesSubtitle}</p>
             </div>
-            <div className="flex gap-2 overflow-x-auto pb-1 pt-3.5 scrollbar-hide">
+            <div className="flex gap-2 overflow-x-auto pb-1 pt-3.5 no-scrollbar">
               {popularCategories.map((cat) => {
                 const name  = getCategoryDisplayName(cat.categoryId, locale);
                 const emoji = getCategoryEmoji(cat.categoryId);
@@ -550,7 +550,7 @@ export default function CustomerHomePage() {
                 <p className="text-sm font-semibold text-gray-400">{t.customerHome.emptyStates.noOffers}</p>
               </div>
             ) : (
-              <div className="flex gap-3 overflow-x-auto pb-1 scrollbar-hide">
+              <div className="flex gap-3 overflow-x-auto pb-1 no-scrollbar">
                 {recentOffers.map((offer) => {
                   const req = allRequests.find(r => r.id === offer.requestId);
                   return (

@@ -1453,7 +1453,7 @@ export function QuestionsEmbedded() {
       </div>
 
       {/* ── Category tabs ── */}
-      <div className="flex gap-1.5 overflow-x-auto scrollbar-hide pb-0.5">
+      <div className="flex gap-1.5 overflow-x-auto no-scrollbar pb-0.5">
         <button onClick={() => setActiveTab(null)}
           className={`flex-shrink-0 px-3 py-1.5 rounded-full text-xs font-bold transition-colors ${activeTab === null ? "bg-blue-600 text-white shadow-sm" : "bg-gray-100 text-gray-600 hover:bg-gray-200"}`}>
           Hammasi
@@ -1597,7 +1597,7 @@ export default function AdminQuestionsPage() {
           </Button>
         </div>
 
-        <div className="max-w-3xl mx-auto px-4 pb-3 flex gap-1.5 overflow-x-auto scrollbar-hide">
+        <div className="max-w-3xl mx-auto px-4 pb-3 flex gap-1.5 overflow-x-auto no-scrollbar">
           <button onClick={() => setActiveTab(null)}
             className={`flex-shrink-0 px-3 py-1.5 rounded-full text-xs font-bold transition-colors ${activeTab === null ? "bg-blue-600 text-white shadow-sm" : "bg-gray-100 text-gray-600 hover:bg-gray-200"}`}>
             Hammasi
