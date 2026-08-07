@@ -26,7 +26,7 @@ import { useI18n } from "@/contexts/i18n-context";
 import { tFormat, getAuthError } from "@/lib/i18n";
 import { BottomNav } from "@/components/bottom-nav";
 import { useToast } from "@/hooks/use-toast";
-import { updateProfile, updateProviderProfile, sendSmsCode, addPhone } from "@/lib/auth-client";
+import { updateProfile, updateProviderProfile, sendSmsCode, addPhone, getProviderPublicProfile } from "@/lib/auth-client";
 import { regionsList, getRegionLabel, getDistrictLabel } from "@/lib/regions";
 import { getActiveCategories, getCategoryDisplayName, migrateCategoryValuesSafe } from "@/lib/categories";
 import { CategoryIcon } from "@/components/category-icon";
@@ -447,6 +447,28 @@ export default function ProfileSettingsPage() {
     setAlbums(next);
     persistAlbums(next);
   }
+
+  /* ── Backfill from the real backend on mount ──────────────────────
+   * The init effect above seeds form state synchronously from getLocalProfile()
+   * (local draft, instant) but the real provider-profile fetch it also kicks
+   * off is async — on a device with no local draft (e.g. editing from a new
+   * phone) that fetch would resolve too late for the sync effect to pick up.
+   * This applies it once it lands, but ONLY into fields that are still empty,
+   * so it can never clobber an in-progress edit or an existing local draft. */
+  useEffect(() => {
+    if (!user?.id) return;
+    let cancelled = false;
+    getProviderPublicProfile(user.id).then(({ providerProfile: pp }) => {
+      if (cancelled || !pp) return;
+      setPhotoUrl((prev) => prev ?? pp.photoUrl ?? undefined);
+      setRegion((prev) => prev || pp.region || "");
+      setDistrict((prev) => prev || pp.district || "");
+      setServiceAreaV2((prev) => (isServiceAreaEmpty(prev) && pp.serviceAreaV2 ? pp.serviceAreaV2 : prev));
+      setExperience((prev) => prev || (pp.experience !== undefined && pp.experience !== null ? String(pp.experience) : ""));
+      setAlbums((prev) => (prev.length > 0 ? prev : (pp.albums ?? [])));
+    }).catch(() => { /* not fatal — local draft (if any) already seeded the form */ });
+    return () => { cancelled = true; };
+  }, [user?.id]);
 
   /* Region */
   const selectedRegionObj = regionsList.find((r) => r.value === region);
