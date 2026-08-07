@@ -1,9 +1,16 @@
 /**
  * local-profile.ts
- * Stores provider-specific profile data that isn't sent to the API:
- * photo, experience, portfolio images, region/district.
+ * Provider profile data: photo, experience, portfolio albums, region/district,
+ * bio, categories. Backed by the real provider_profiles table (fast-path
+ * cache, background-fetched via getProviderPublicProfile) so it's visible to
+ * every viewer/device once saved — not just the browser that saved it.
  *
- * Storage key: user_${userId}_localProfile
+ * Storage key: user_${userId}_localProfile (still used as a same-device
+ * DRAFT layer — instant feedback while typing/uploading before the explicit
+ * "Profilni saqlash" flow syncs to the backend via updateProviderProfile()).
+ * getLocalProfile() merges the two, with the local draft taking priority on
+ * the device that has one — this is why editing feels instant while other
+ * devices/viewers still see the real, synced data.
  *
  * ISOLATION GUARANTEE: every read and write is strictly scoped to the
  * provided userId. If userId is empty or falsy the operation is a no-op
@@ -13,6 +20,7 @@
  */
 
 import type { SafeUser, ProviderProfile } from "./auth-client";
+import { getProviderPublicProfile } from "./auth-client";
 import { emitStoreChange } from "./store-events";
 import { type ProviderServiceArea, emptyProviderServiceArea, isServiceAreaEmpty } from "./matching";
 import { TOSHKENT_DISTRICTS, regionsList } from "./regions";
@@ -92,11 +100,44 @@ export function hasStoredProviderAccess(userId: string): boolean {
   return !!userId && localStorage.getItem(providerAccessKey(userId)) === "1";
 }
 
-export function getLocalProfile(userId: string): LocalProfile {
-  if (!userId) {
-    console.warn("[Hormang] getLocalProfile: userId bo'sh — {} qaytarildi.");
-    return {};
-  }
+/* ─── Real backend — fast-path cache ─────────────────────────────────
+ * getLocalProfile() must stay synchronous (dozens of render-time callers),
+ * so this mirrors the pattern used by service-history-store.ts etc.: a
+ * background fetch populates an in-memory cache, and getLocalProfile()
+ * merges it with the local draft on every call. */
+
+const backendProfileCache = new Map<string, LocalProfile>();
+const backendProfileInFlight = new Set<string>();
+
+function backendToLocal(pp: ProviderProfile): LocalProfile {
+  return {
+    photoUrl: pp.photoUrl ?? undefined,
+    experience: pp.experience ?? undefined,
+    region: pp.region ?? undefined,
+    district: pp.district ?? undefined,
+    serviceAreaV2: pp.serviceAreaV2 ?? undefined,
+    albums: pp.albums ?? undefined,
+    bio: pp.bio ?? undefined,
+    categories: pp.categories?.length ? pp.categories : undefined,
+  };
+}
+
+function ensureBackendProfileLoaded(userId: string): void {
+  if (!userId || backendProfileCache.has(userId) || backendProfileInFlight.has(userId)) return;
+  backendProfileInFlight.add(userId);
+  getProviderPublicProfile(userId)
+    .then(({ providerProfile }) => {
+      if (providerProfile) {
+        backendProfileCache.set(userId, backendToLocal(providerProfile));
+        emitStoreChange();
+      }
+    })
+    .catch(() => { /* not a provider yet, or fetch failed — local draft only */ })
+    .finally(() => backendProfileInFlight.delete(userId));
+}
+
+/** Same-device draft layer only — see getLocalProfile() for the merged read. */
+function readLocalDraft(userId: string): LocalProfile {
   try {
     const raw = localStorage.getItem(key(userId));
     const p = raw ? (JSON.parse(raw) as LocalProfile) : {};
@@ -146,6 +187,21 @@ export function getLocalProfile(userId: string): LocalProfile {
   } catch {
     return {};
   }
+}
+
+/**
+ * Merged read: real backend data (visible to every viewer/device) as the
+ * base, overlaid with this device's local draft (if any — e.g. mid-edit,
+ * or not yet synced). Triggers a background fetch of the backend copy on
+ * first read for a given userId.
+ */
+export function getLocalProfile(userId: string): LocalProfile {
+  if (!userId) {
+    console.warn("[Hormang] getLocalProfile: userId bo'sh — {} qaytarildi.");
+    return {};
+  }
+  ensureBackendProfileLoaded(userId);
+  return { ...backendProfileCache.get(userId), ...readLocalDraft(userId) };
 }
 
 export function saveLocalProfile(userId: string, data: LocalProfile): void {

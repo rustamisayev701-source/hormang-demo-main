@@ -737,11 +737,20 @@ router.put("/email/verify", requireAuth, async (req: AuthRequest, res) => {
 // ─── PUT /provider-profile ─────────────────────────────────────────────────
 router.put("/provider-profile", requireAuth, async (req: AuthRequest, res) => {
   try {
-    const { categories, bio, workingHours, preferredLocation } = req.body as {
+    const {
+      categories, bio, workingHours, preferredLocation,
+      photoUrl, experience, region, district, serviceAreaV2, albums,
+    } = req.body as {
       categories?: string[];
       bio?: string;
       workingHours?: string;
       preferredLocation?: string;
+      photoUrl?: string | null;
+      experience?: number | null;
+      region?: string | null;
+      district?: string | null;
+      serviceAreaV2?: unknown;
+      albums?: unknown;
     };
 
     const existing = await db
@@ -755,6 +764,12 @@ router.put("/provider-profile", requireAuth, async (req: AuthRequest, res) => {
     if (bio !== undefined) updates.bio = bio;
     if (workingHours !== undefined) updates.workingHours = workingHours;
     if (preferredLocation !== undefined) updates.preferredLocation = preferredLocation;
+    if (photoUrl !== undefined) updates.photoUrl = photoUrl;
+    if (experience !== undefined) updates.experience = experience;
+    if (region !== undefined) updates.region = region;
+    if (district !== undefined) updates.district = district;
+    if (serviceAreaV2 !== undefined) updates.serviceAreaV2 = serviceAreaV2;
+    if (albums !== undefined) updates.albums = albums;
 
     let profile;
     if (existing.length > 0) {
@@ -766,7 +781,11 @@ router.put("/provider-profile", requireAuth, async (req: AuthRequest, res) => {
     } else {
       [profile] = await db
         .insert(providerProfilesTable)
-        .values({ userId: req.user!.id, categories: categories ?? [], bio, workingHours, preferredLocation })
+        .values({
+          userId: req.user!.id, categories: categories ?? [], bio, workingHours, preferredLocation,
+          photoUrl, experience, region, district,
+          serviceAreaV2: serviceAreaV2 as never, albums: albums as never,
+        })
         .returning();
     }
 

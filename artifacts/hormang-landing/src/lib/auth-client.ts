@@ -23,6 +23,18 @@ export interface SafeUser {
   suspended?: boolean;
 }
 
+export interface ProviderServiceAreaData {
+  toshkent_city: { all: boolean; districts: string[] };
+  toshkent_region: { all: boolean; cities: string[] };
+}
+
+export interface PortfolioAlbumData {
+  id: string;
+  title: string;
+  photos: { url: string; caption?: string }[];
+  coverIdx?: number;
+}
+
 export interface ProviderProfile {
   id: string;
   userId: string;
@@ -31,6 +43,12 @@ export interface ProviderProfile {
   preferredLocation?: string | null;
   isVerified: boolean;
   rating?: number;
+  photoUrl?: string | null;
+  experience?: number | null;
+  region?: string | null;
+  district?: string | null;
+  serviceAreaV2?: ProviderServiceAreaData | null;
+  albums?: PortfolioAlbumData[] | null;
 }
 
 export interface AuthResponse {
@@ -1123,6 +1141,12 @@ export async function updateProviderProfile(body: {
   categories?: string[];
   bio?: string;
   preferredLocation?: string;
+  photoUrl?: string | null;
+  experience?: number | null;
+  region?: string | null;
+  district?: string | null;
+  serviceAreaV2?: ProviderServiceAreaData | null;
+  albums?: PortfolioAlbumData[] | null;
 }): Promise<{ profile: ProviderProfile }> {
   try {
     return await apiFetch<{ profile: ProviderProfile }>("/auth/provider-profile", {
@@ -1144,12 +1168,24 @@ export async function updateProviderProfile(body: {
             bio: body.bio ?? null,
             preferredLocation: body.preferredLocation ?? null,
             isVerified: false,
+            photoUrl: body.photoUrl ?? null,
+            experience: body.experience ?? null,
+            region: body.region ?? null,
+            district: body.district ?? null,
+            serviceAreaV2: body.serviceAreaV2 ?? null,
+            albums: body.albums ?? null,
           };
           profiles.push(prof);
         } else {
           if (body.categories !== undefined) prof.categories = body.categories;
           if (body.bio !== undefined) prof.bio = body.bio;
           if (body.preferredLocation !== undefined) prof.preferredLocation = body.preferredLocation;
+          if (body.photoUrl !== undefined) prof.photoUrl = body.photoUrl;
+          if (body.experience !== undefined) prof.experience = body.experience;
+          if (body.region !== undefined) prof.region = body.region;
+          if (body.district !== undefined) prof.district = body.district;
+          if (body.serviceAreaV2 !== undefined) prof.serviceAreaV2 = body.serviceAreaV2;
+          if (body.albums !== undefined) prof.albums = body.albums;
         }
         writeProfiles(profiles);
         return { profile: prof };

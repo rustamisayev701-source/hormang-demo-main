@@ -22,6 +22,7 @@ import { getTransactionByOfferId } from "@/lib/tanga-history-store";
 import { getAllQuestionsForCategory, collectActiveQuestions } from "@/lib/questionnaire-store";
 import { formatDate as formatUzDate } from "@/lib/date-utils";
 import { getLocalProfile } from "@/lib/local-profile";
+import { getAvgResponseMinutes, formatAvgResponseTime } from "@/lib/response-time-store";
 import { PublicProfilePreviewModal } from "@/components/public-profile-preview-modal";
 import { AcceptConfirmModal } from "@/components/accept-confirm-modal";
 import { ImageGrid, getAnswerImageUrls } from "@/components/image-grid";
@@ -116,6 +117,7 @@ interface OfferDetailModalProps {
 }
 
 export function OfferDetailModal({ offer, onClose, readOnly = false }: OfferDetailModalProps) {
+  useStoreRefresh();
   const [, setLocation] = useLocation();
   const [showProviderProfile, setShowProviderProfile] = useState(false);
   const [showConfirm, setShowConfirm] = useState(false);
@@ -292,7 +294,7 @@ export function OfferDetailModal({ offer, onClose, readOnly = false }: OfferDeta
                     <p className="font-extrabold text-sm text-gray-900">{offer.masterName}</p>
                     <div className="flex items-center gap-1 mt-0.5">
                       <Clock className="w-3 h-3 text-gray-400" />
-                      <span className="text-[11px] text-gray-400">{tFormat(tt.minutesResponseTpl, { n: offer.avgResponseTime })}</span>
+                      <span className="text-[11px] text-gray-400">{formatAvgResponseTime(getAvgResponseMinutes(offer.masterId), t.shared.responseTime)}</span>
                     </div>
                   </div>
                   {/* Status badge */}

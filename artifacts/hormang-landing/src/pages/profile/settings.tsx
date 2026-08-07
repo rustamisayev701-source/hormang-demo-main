@@ -585,6 +585,12 @@ export default function ProfileSettingsPage() {
               categories: selectedServices,
               bio: bio || undefined,
               preferredLocation: region ? (district ? `${region}, ${district}` : region) : undefined,
+              photoUrl: photoUrl ?? null,
+              experience: experience ? Number(experience) : null,
+              region: region || null,
+              district: district || null,
+              serviceAreaV2: isServiceAreaEmpty(serviceAreaV2) ? null : serviceAreaV2,
+              albums: albums.length > 0 ? albums : null,
             }).catch((err) => {
               console.warn("[Hormang] updateProviderProfile warning:", err);
               return {

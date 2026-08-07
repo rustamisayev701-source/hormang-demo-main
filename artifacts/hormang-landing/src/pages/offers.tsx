@@ -26,6 +26,7 @@ import { useI18n } from "@/contexts/i18n-context";
 import { tFormat } from "@/lib/i18n";
 import { getCategoryDisplayName } from "@/lib/categories";
 import { CategoryIcon } from "@/components/category-icon";
+import { getAvgResponseMinutes, formatAvgResponseTime } from "@/lib/response-time-store";
 
 /* ─── Offer Card ─────────────────────────────────────────────────── */
 function OfferCard({ offer, req, index, anyAccepted, onChanged }: { offer: Offer; req: CustomerRequest | undefined; index: number; anyAccepted: boolean; onChanged: () => void }) {
@@ -110,7 +111,7 @@ function OfferCard({ offer, req, index, anyAccepted, onChanged }: { offer: Offer
               <div className="flex items-center gap-1 mt-0.5">
                 <Clock className="w-3 h-3 text-gray-400" />
                 <span className="text-[11px] text-gray-400 font-medium">
-                  {tFormat(tt.minutesTpl, { n: offer.avgResponseTime })}
+                  {formatAvgResponseTime(getAvgResponseMinutes(offer.masterId), t.shared.responseTime)}
                 </span>
               </div>
             </div>
