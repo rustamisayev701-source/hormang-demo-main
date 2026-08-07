@@ -4596,31 +4596,27 @@ function MonoTransactions({ txs, reload }: { txs: TangaTx[]; reload: () => void 
   const [filterDate, setFilterDate]   = useState<"all" | "today" | "week" | "month">("all");
   const [viewOfferId, setViewOfferId] = useState<string | null>(null);
   const [allOffers, setAllOffers] = useState<BuyerOfferFull[]>([]);
+  const [adminUsers, setAdminUsers] = useState<BackendAdminUser[]>([]);
   useEffect(() => {
     getAllOffersAdmin().then(setAllOffers).catch((err) => console.error("Load offers failed:", err));
+    fetchAdminUsers().then((r) => setAdminUsers(r.users)).catch((err) => console.error("Load users failed:", err));
   }, []);
 
   /* ── User lookup: id → { name, phone } ────────────────────────── */
   const userLookup = useMemo(() => {
     const map = new Map<string, { name: string; phone: string | null }>();
-    try {
-      const au = JSON.parse(localStorage.getItem("hormang_auth_users") ?? "[]") as {
-        id: string; firstName?: string; lastName?: string; phone?: string | null; role?: string;
-      }[];
-      for (const u of au) {
-        if (!u.id) continue;
-        const name = `${u.firstName ?? ""} ${u.lastName ?? ""}`.trim()
-          || (u.role === "provider" ? "Ijrochi" : "Mijoz");
-        map.set(u.id, { name, phone: u.phone ?? null });
-      }
-    } catch {}
+    for (const u of adminUsers) {
+      const name = `${u.firstName ?? ""} ${u.lastName ?? ""}`.trim()
+        || (u.role === "provider" ? "Ijrochi" : "Mijoz");
+      map.set(u.id, { name, phone: u.phone ?? null });
+    }
     for (const offer of allOffers) {
       if (offer.masterId && !map.has(offer.masterId) && offer.masterName) {
         map.set(offer.masterId, { name: offer.masterName, phone: null });
       }
     }
     return map;
-  }, [allOffers]);
+  }, [adminUsers, allOffers]);
   const now      = new Date();
   const todayStr = now.toISOString().slice(0, 10);
   const weekAgo  = new Date(now.getTime() - 7 * 86400000);
