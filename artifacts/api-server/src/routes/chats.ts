@@ -62,7 +62,12 @@ async function recordResponseSampleIfReply(chat: ChatRow, message: ChatMessageRo
   let oldestIncoming: ChatMessageRow | null = null;
   for (let i = newIdx - 1; i >= 0; i--) {
     const m = history[i];
-    if (m.sender === "system" || m.deletedForEveryone) continue;
+    if (m.deletedForEveryone) continue;
+    // A system message (offer accepted, job completed, etc.) marks a
+    // conversation-phase boundary — stop here rather than walking through it,
+    // otherwise a reply sent long after completion gets paired with a
+    // customer message from a completely different phase of the chat.
+    if (m.sender === "system") break;
     if (m.sender === message.sender) break;
     oldestIncoming = m;
   }
