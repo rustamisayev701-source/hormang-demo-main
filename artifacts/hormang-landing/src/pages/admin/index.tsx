@@ -492,21 +492,25 @@ const NAV_ITEMS: { id: Section; label: string; icon: React.FC<{ className?: stri
   { id: "feedback",       label: "Fikrlar",            icon: MessageSquare   },
 ];
 
-function Sidebar({ active, onChange, collapsed, onToggle, onLogout }: {
+function Sidebar({ active, onChange, collapsed, onToggle, onLogout, isDesktop, onCloseMobile }: {
   active: Section; onChange: (s: Section) => void;
   collapsed: boolean; onToggle: () => void; onLogout: () => void;
+  isDesktop: boolean; onCloseMobile: () => void;
 }) {
+  // Icon-rail collapse is a desktop-only concept — on mobile the sidebar is an
+  // overlay drawer that's always full width whenever it's shown at all.
+  const showLabels = isDesktop ? !collapsed : true;
   return (
-    <div className={`h-full flex flex-col transition-all duration-300 ${collapsed ? "w-16" : "w-60"}`}
+    <div className={`h-full flex flex-col transition-all duration-300 w-60 ${collapsed ? "lg:w-16" : "lg:w-60"}`}
       style={{ background: "linear-gradient(180deg, #1a0505 0%, #0f0202 100%)", borderRight: "1px solid rgba(220,38,38,0.15)" }}>
       <div className="px-3 py-4 flex items-center gap-3 min-h-[60px]"
         style={{ borderBottom: "1px solid rgba(220,38,38,0.1)" }}>
-        <button onClick={onToggle}
+        <button onClick={isDesktop ? onToggle : onCloseMobile}
           className="w-8 h-8 rounded-lg flex items-center justify-center flex-shrink-0 text-white transition-all hover:opacity-80 active:scale-95"
           style={{ background: "linear-gradient(135deg, #DC2626, #991B1B)" }}>
-          {collapsed ? <Menu className="w-4 h-4" /> : <ChevronLeft className="w-4 h-4" />}
+          {isDesktop ? (collapsed ? <Menu className="w-4 h-4" /> : <ChevronLeft className="w-4 h-4" />) : <X className="w-4 h-4" />}
         </button>
-        {!collapsed && (
+        {showLabels && (
           <div>
             <span className="font-extrabold text-white text-sm tracking-tight">Hormang</span>
             <span className="font-extrabold text-sm tracking-tight" style={{ color: "#DC2626" }}> Admin</span>
@@ -519,7 +523,7 @@ function Sidebar({ active, onChange, collapsed, onToggle, onLogout }: {
           const Icon = item.icon;
           const isActive = active === item.id;
           return (
-            <button key={item.id} onClick={() => onChange(item.id)}
+            <button key={item.id} onClick={() => { onChange(item.id); if (!isDesktop) onCloseMobile(); }}
               className={`w-full flex items-center gap-3 px-3 py-2.5 rounded-xl text-sm font-semibold transition-all ${isActive ? "text-white" : ""}`}
               style={isActive
                 ? { background: "linear-gradient(135deg, #DC2626 0%, #B91C1C 100%)", boxShadow: "0 4px 12px rgba(220,38,38,0.35)" }
@@ -528,7 +532,7 @@ function Sidebar({ active, onChange, collapsed, onToggle, onLogout }: {
               onMouseEnter={(e) => { if (!isActive) (e.currentTarget as HTMLElement).style.background = "rgba(220,38,38,0.1)"; }}
               onMouseLeave={(e) => { if (!isActive) (e.currentTarget as HTMLElement).style.background = ""; }}>
               <Icon className="w-5 h-5 flex-shrink-0" />
-              {!collapsed && <span className="truncate">{item.label}</span>}
+              {showLabels && <span className="truncate">{item.label}</span>}
             </button>
           );
         })}
@@ -541,7 +545,7 @@ function Sidebar({ active, onChange, collapsed, onToggle, onLogout }: {
           onMouseEnter={(e) => { (e.currentTarget as HTMLElement).style.background = "rgba(220,38,38,0.15)"; (e.currentTarget as HTMLElement).style.color = "#FCA5A5"; }}
           onMouseLeave={(e) => { (e.currentTarget as HTMLElement).style.background = ""; (e.currentTarget as HTMLElement).style.color = "rgba(252,165,165,0.4)"; }}>
           <LogOut className="w-5 h-5 flex-shrink-0" />
-          {!collapsed && "Chiqish"}
+          {showLabels && "Chiqish"}
         </button>
       </div>
     </div>
@@ -6917,8 +6921,8 @@ function ReportsSection({ refreshKey }: { refreshKey: number }) {
 /* ════════════════════════════════════════════════════════════════════
    TOP BAR
    ════════════════════════════════════════════════════════════════════ */
-function TopBar({ section, unseenAlerts, onRefresh }: {
-  section: Section; unseenAlerts: number; onRefresh: () => void;
+function TopBar({ section, unseenAlerts, onRefresh, onOpenMobileSidebar }: {
+  section: Section; unseenAlerts: number; onRefresh: () => void; onOpenMobileSidebar: () => void;
 }) {
   const [spinning, setSpinning] = useState(false);
 
@@ -6929,12 +6933,18 @@ function TopBar({ section, unseenAlerts, onRefresh }: {
   }
 
   return (
-    <div className="bg-white border-b border-gray-100 px-6 py-3.5 flex items-center justify-between sticky top-0 z-10 shadow-sm">
-      <div>
-        <h1 className="font-extrabold text-gray-900 text-sm">{NAV_ITEMS.find((n) => n.id === section)?.label}</h1>
-        <p className="text-xs text-gray-400">Hormang Admin · <span className="text-red-500">{ADMIN_USER}</span></p>
+    <div className="bg-white border-b border-gray-100 px-4 sm:px-6 py-3.5 flex items-center justify-between gap-3 sticky top-0 z-10 shadow-sm">
+      <div className="flex items-center gap-3 min-w-0">
+        <button onClick={onOpenMobileSidebar}
+          className="lg:hidden flex-shrink-0 w-9 h-9 rounded-xl flex items-center justify-center text-gray-500 bg-gray-50 border border-gray-100 active:scale-95 transition-transform">
+          <Menu className="w-4.5 h-4.5" />
+        </button>
+        <div className="min-w-0">
+          <h1 className="font-extrabold text-gray-900 text-sm truncate">{NAV_ITEMS.find((n) => n.id === section)?.label}</h1>
+          <p className="text-xs text-gray-400 truncate">Hormang Admin · <span className="text-red-500">{ADMIN_USER}</span></p>
+        </div>
       </div>
-      <div className="flex items-center gap-3">
+      <div className="flex items-center gap-3 flex-shrink-0">
         {unseenAlerts > 0 && (
           <div className="flex items-center gap-1.5 px-2.5 py-1.5 rounded-xl bg-red-50 border border-red-100">
             <Bell className="w-3.5 h-3.5 text-red-500" />
@@ -6962,6 +6972,17 @@ export default function AdminDashboard() {
   const [authed,    setAuthed]    = useState(getSession());
   const [section,   setSection]   = useState<Section>("overview");
   const [collapsed, setCollapsed] = useState(false);
+  const [mobileSidebarOpen, setMobileSidebarOpen] = useState(false);
+  const [isDesktop, setIsDesktop] = useState(() => typeof window !== "undefined" ? window.innerWidth >= 1024 : true);
+  useEffect(() => {
+    const mq = window.matchMedia("(min-width: 1024px)");
+    const onChange = () => {
+      setIsDesktop(mq.matches);
+      if (mq.matches) setMobileSidebarOpen(false); // switching to desktop always shows the sidebar inline
+    };
+    mq.addEventListener("change", onChange);
+    return () => mq.removeEventListener("change", onChange);
+  }, []);
   const [refreshKey, setRefreshKey]           = useState(0);
   const [feedbackFilterUserId, setFeedbackFilterUserId] = useState<string | null>(null);
   const [openUserIdInUsers,   setOpenUserIdInUsers]     = useState<string | null>(null);
@@ -7004,15 +7025,31 @@ export default function AdminDashboard() {
 
   return (
     <div className="min-h-screen bg-gray-50 flex [color-scheme:light]">
-      <div className="flex-shrink-0 h-screen sticky top-0">
+      {/* Backdrop — mobile only, shown while the drawer is open */}
+      {mobileSidebarOpen && (
+        <div
+          className="fixed inset-0 z-40 bg-black/50 lg:hidden"
+          onClick={() => setMobileSidebarOpen(false)}
+        />
+      )}
+
+      {/* Sidebar — inline on desktop, an off-canvas drawer (fully open or fully
+          closed, never squished) below the lg breakpoint. */}
+      <div
+        className={`h-screen top-0 z-50 flex-shrink-0 transition-transform duration-300 fixed lg:sticky lg:translate-x-0 ${
+          mobileSidebarOpen ? "translate-x-0" : "-translate-x-full"
+        }`}
+      >
         <Sidebar active={section} onChange={setSection} collapsed={collapsed}
-          onToggle={() => setCollapsed(!collapsed)} onLogout={logout} />
+          onToggle={() => setCollapsed(!collapsed)} onLogout={logout}
+          isDesktop={isDesktop} onCloseMobile={() => setMobileSidebarOpen(false)} />
       </div>
 
       <div className="flex-1 min-w-0 flex flex-col">
-        <TopBar section={section} unseenAlerts={unseenAlerts} onRefresh={() => setRefreshKey((k) => k + 1)} />
+        <TopBar section={section} unseenAlerts={unseenAlerts} onRefresh={() => setRefreshKey((k) => k + 1)}
+          onOpenMobileSidebar={() => setMobileSidebarOpen(true)} />
 
-        <div className="flex-1 p-6 overflow-auto">
+        <div className="flex-1 p-3 sm:p-6 overflow-auto overflow-x-hidden">
           <AnimatePresence mode="wait">
             <motion.div key={section}
               initial={{ opacity: 0, y: 10 }}
