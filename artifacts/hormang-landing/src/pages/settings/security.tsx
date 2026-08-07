@@ -349,6 +349,7 @@ function RegisterEmailFlow({ onDone }: { onDone: () => Promise<void> }) {
 function ChangeEmailFlow({ onDone }: { onDone: () => Promise<void> }) {
   const { t } = useI18n();
   const { toast } = useToast();
+  const { user } = useAuth();
   const [step, setStep] = useState<"form" | "verify">("form");
   const [currentPassword, setCurrentPassword] = useState("");
   const [newEmail, setNewEmail] = useState("");
@@ -384,9 +385,11 @@ function ChangeEmailFlow({ onDone }: { onDone: () => Promise<void> }) {
     return (
       <div className="space-y-3">
         <ErrorBanner msg={error} />
-        <Field label={t.security.flows.changeEmail.currentPasswordLabel}>
-          <PasswordInput value={currentPassword} onChange={setCurrentPassword} autoFocus />
-        </Field>
+        {user?.hasPassword && (
+          <Field label={t.security.flows.changeEmail.currentPasswordLabel}>
+            <PasswordInput value={currentPassword} onChange={setCurrentPassword} autoFocus />
+          </Field>
+        )}
         <Field label={t.security.flows.changeEmail.newEmailLabel}>
           <input type="email" value={newEmail} onChange={(e) => setNewEmail(e.target.value)} placeholder="new@example.com" className="w-full h-11 px-3 rounded-xl border border-border bg-background text-sm focus:outline-none focus:ring-2 focus:ring-primary/40 focus:border-primary" />
         </Field>
@@ -409,6 +412,7 @@ function ChangeEmailFlow({ onDone }: { onDone: () => Promise<void> }) {
 function ChangePhoneFlow({ onDone }: { onDone: () => Promise<void> }) {
   const { t } = useI18n();
   const { toast } = useToast();
+  const { user } = useAuth();
   const tt = t.security.flows.changePhone;
   const [step, setStep] = useState<"form" | "verify-email" | "verify-sms">("form");
   const [currentPassword, setCurrentPassword] = useState("");
@@ -468,9 +472,11 @@ function ChangePhoneFlow({ onDone }: { onDone: () => Promise<void> }) {
     return (
       <div className="space-y-3">
         <ErrorBanner msg={error} />
-        <Field label={tt.currentPasswordLabel}>
-          <PasswordInput value={currentPassword} onChange={setCurrentPassword} autoFocus />
-        </Field>
+        {user?.hasPassword && (
+          <Field label={tt.currentPasswordLabel}>
+            <PasswordInput value={currentPassword} onChange={setCurrentPassword} autoFocus />
+          </Field>
+        )}
         <Field label={tt.newPhoneLabel}>
           <div className="flex">
             <span className="h-11 px-3 flex items-center rounded-l-xl border border-r-0 border-border bg-muted text-sm font-semibold text-muted-foreground select-none">+998</span>
@@ -509,7 +515,7 @@ function Enable2FAFlow({ onDone }: { onDone: () => Promise<void> }) {
   const { t } = useI18n();
   const { toast } = useToast();
   const { user } = useAuth();
-  const [step, setStep] = useState<"password" | "create">(user?.emailVerified ? "password" : "create");
+  const [step, setStep] = useState<"password" | "create">(user?.hasPassword ? "password" : "create");
   const [currentPassword, setCurrentPassword] = useState("");
   const [code, setCode] = useState("");
   const [confirmCode, setConfirmCode] = useState("");
@@ -518,7 +524,7 @@ function Enable2FAFlow({ onDone }: { onDone: () => Promise<void> }) {
   const [error, setError] = useState("");
 
   async function goToCreate() {
-    if (!user?.emailVerified) { setStep("create"); return; }
+    if (!user?.hasPassword) { setStep("create"); return; }
     setError("");
     if (!currentPassword) { setError(t.security.flows.enable2FA.currentPasswordLabel); return; }
     setStep("create");
@@ -530,7 +536,7 @@ function Enable2FAFlow({ onDone }: { onDone: () => Promise<void> }) {
     if (code !== confirmCode) { setError(t.security.flows.enable2FA.codeMismatch); return; }
     setLoading(true);
     try {
-      await setup2FA({ currentPassword: user?.emailVerified ? currentPassword : undefined, code, hint });
+      await setup2FA({ currentPassword: user?.hasPassword ? currentPassword : undefined, code, hint });
       toast({ title: t.security.flows.enable2FA.success });
       await onDone();
     } catch (e) { setError(getAuthError(e instanceof Error ? e.message : "", t)); }
@@ -576,6 +582,7 @@ function Enable2FAFlow({ onDone }: { onDone: () => Promise<void> }) {
 function Disable2FAFlow({ onDone }: { onDone: () => Promise<void> }) {
   const { t } = useI18n();
   const { toast } = useToast();
+  const { user } = useAuth();
   const [currentPassword, setCurrentPassword] = useState("");
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState("");
@@ -593,9 +600,11 @@ function Disable2FAFlow({ onDone }: { onDone: () => Promise<void> }) {
   return (
     <div className="space-y-3">
       <ErrorBanner msg={error} />
-      <Field label={t.security.flows.disable2FA.currentPasswordLabel}>
-        <PasswordInput value={currentPassword} onChange={setCurrentPassword} autoFocus />
-      </Field>
+      {user?.hasPassword && (
+        <Field label={t.security.flows.disable2FA.currentPasswordLabel}>
+          <PasswordInput value={currentPassword} onChange={setCurrentPassword} autoFocus />
+        </Field>
+      )}
       <Button onClick={submit} disabled={loading} className="w-full h-11 font-bold text-sm gap-2 bg-destructive text-destructive-foreground hover:bg-destructive/90">
         {loading ? <Loader2 className="w-4 h-4 animate-spin" /> : null}
         {t.security.flows.disable2FA.confirm}
@@ -650,10 +659,12 @@ function DeleteAccountFlow({ onCancel, onDeleted }: { onCancel: () => void; onDe
           <span>{t.security.flows.deleteAccount.warning}</span>
         </div>
         <ErrorBanner msg={error} />
-        <Field label={t.security.flows.deleteAccount.currentPasswordLabel}>
-          <PasswordInput value={currentPassword} onChange={setCurrentPassword} autoFocus />
-        </Field>
-        <Button onClick={send} disabled={loading || !currentPassword} className="w-full h-11 font-bold text-sm gap-2 bg-destructive text-destructive-foreground hover:bg-destructive/90">
+        {user?.hasPassword && (
+          <Field label={t.security.flows.deleteAccount.currentPasswordLabel}>
+            <PasswordInput value={currentPassword} onChange={setCurrentPassword} autoFocus />
+          </Field>
+        )}
+        <Button onClick={send} disabled={loading || (!!user?.hasPassword && !currentPassword)} className="w-full h-11 font-bold text-sm gap-2 bg-destructive text-destructive-foreground hover:bg-destructive/90">
           {loading ? <Loader2 className="w-4 h-4 animate-spin" /> : null}
           {t.security.flows.deleteAccount.sendCode}
         </Button>

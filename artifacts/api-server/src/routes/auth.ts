@@ -1,5 +1,5 @@
 import { Router } from "express";
-import { eq } from "drizzle-orm";
+import { eq, and, isNull } from "drizzle-orm";
 import { db, usersTable, providerProfilesTable, userModerationTable } from "@workspace/db";
 import {
   hashPassword,
@@ -40,6 +40,32 @@ function maskEmail(email: string): string {
   if (!domain) return email;
   const visible = user.slice(0, Math.min(2, user.length));
   return `${visible}${"*".repeat(Math.max(user.length - visible.length, 1))}@${domain}`;
+}
+
+// ─── Login-time 2FA challenge store ────────────────────────────────────────
+interface TwoFAChallenge { userId: string; expiresAt: number }
+const twoFAChallengeStore = new Map<string, TwoFAChallenge>();
+
+function storeTwoFAChallenge(userId: string): string {
+  const id = crypto.randomUUID();
+  twoFAChallengeStore.set(id, { userId, expiresAt: Date.now() + 10 * 60 * 1000 });
+  return id;
+}
+
+function consumeTwoFAChallenge(id: string): TwoFAChallenge | null {
+  const entry = twoFAChallengeStore.get(id);
+  if (!entry) return null;
+  twoFAChallengeStore.delete(id);
+  if (Date.now() > entry.expiresAt) return null;
+  return entry;
+}
+
+/** Phone/OTP-registered accounts never have a known password (see users.hasPassword
+ *  doc comment) — only verify one if the account actually has one set. */
+async function verifyCurrentPasswordIfSet(user: { hasPassword: boolean; passwordHash: string }, currentPassword?: string): Promise<boolean> {
+  if (!user.hasPassword) return true;
+  if (!currentPassword) return false;
+  return comparePassword(currentPassword, user.passwordHash);
 }
 
 async function isUserSuspended(userId: string): Promise<boolean> {
@@ -249,7 +275,7 @@ router.post("/register", async (req, res) => {
       .values({ firstName, lastName, phone: normalized, passwordHash, role })
       .returning();
 
-    const safeUser = { ...user, passwordHash: undefined };
+    const safeUser = { ...user, passwordHash: undefined, twoFactorCodeHash: undefined };
     const accessToken = generateAccessToken({ ...user });
     const refreshToken = generateRefreshToken(user.id);
 
@@ -354,6 +380,12 @@ router.post("/login", async (req, res) => {
       return;
     }
 
+    if (user.twoFactorEnabled) {
+      const challengeId = storeTwoFAChallenge(user.id);
+      res.json({ needs2FA: true, challengeId, hint: user.twoFactorHint ?? undefined });
+      return;
+    }
+
     await db
       .update(usersTable)
       .set({ lastLoginAt: new Date() })
@@ -361,7 +393,7 @@ router.post("/login", async (req, res) => {
 
     const providerProfile = user.role === "provider" ? await getProviderProfile(user.id) : null;
 
-    const safeUser = { ...user, passwordHash: undefined, suspended: false };
+    const safeUser = { ...user, passwordHash: undefined, twoFactorCodeHash: undefined, suspended: false };
     const accessToken = generateAccessToken({ ...user });
     const refreshToken = generateRefreshToken(user.id);
 
@@ -448,6 +480,12 @@ router.post("/login-email", async (req, res) => {
       return;
     }
 
+    if (user.twoFactorEnabled) {
+      const challengeId = storeTwoFAChallenge(user.id);
+      res.json({ needs2FA: true, challengeId, hint: user.twoFactorHint ?? undefined });
+      return;
+    }
+
     await db
       .update(usersTable)
       .set({ lastLoginAt: new Date() })
@@ -455,7 +493,7 @@ router.post("/login-email", async (req, res) => {
 
     const providerProfile = user.role === "provider" ? await getProviderProfile(user.id) : null;
 
-    const safeUser = { ...user, passwordHash: undefined, suspended: false };
+    const safeUser = { ...user, passwordHash: undefined, twoFactorCodeHash: undefined, suspended: false };
     const accessToken = generateAccessToken({ ...user });
     const refreshToken = generateRefreshToken(user.id);
 
@@ -464,6 +502,52 @@ router.post("/login-email", async (req, res) => {
   } catch (err) {
     console.error("Login-email error:", err);
     res.status(500).json({ error: "Xatolik yuz berdi. Qayta urinib ko'ring." });
+  }
+});
+
+// ─── POST /2fa/verify-login (consume a login challenge with the user's 2FA code) ─
+router.post("/2fa/verify-login", async (req, res) => {
+  try {
+    const { challengeId, otp } = req.body as { challengeId?: string; otp?: string };
+    if (!challengeId || !otp) {
+      res.status(400).json({ error: "Kod talab qilinadi" });
+      return;
+    }
+
+    const challenge = consumeTwoFAChallenge(challengeId);
+    if (!challenge) {
+      res.status(401).json({ error: "Sessiya muddati o'tgan. Qaytadan urinib ko'ring." });
+      return;
+    }
+
+    const [user] = await db.select().from(usersTable).where(eq(usersTable.id, challenge.userId)).limit(1);
+    if (!user || !user.twoFactorEnabled || !user.twoFactorCodeHash) {
+      res.status(401).json({ error: "Foydalanuvchi topilmadi" });
+      return;
+    }
+
+    if (!(await comparePassword(otp, user.twoFactorCodeHash))) {
+      res.status(401).json({ error: "Kod noto'g'ri" });
+      return;
+    }
+
+    if (await isUserSuspended(user.id)) {
+      res.status(403).json({ error: "Hisobingiz vaqtincha to'xtatilgan. Iltimos, qo'llab-quvvatlash bilan bog'laning." });
+      return;
+    }
+
+    await db.update(usersTable).set({ lastLoginAt: new Date() }).where(eq(usersTable.id, user.id));
+
+    const providerProfile = user.role === "provider" ? await getProviderProfile(user.id) : null;
+    const safeUser = { ...user, passwordHash: undefined, twoFactorCodeHash: undefined, suspended: false };
+    const accessToken = generateAccessToken({ ...user });
+    const refreshToken = generateRefreshToken(user.id);
+
+    res.cookie("refreshToken", refreshToken, COOKIE_OPTS);
+    res.json({ user: safeUser, accessToken, providerProfile });
+  } catch (err) {
+    console.error("2FA verify-login error:", err);
+    res.status(500).json({ error: "Xatolik yuz berdi" });
   }
 });
 
@@ -519,13 +603,13 @@ router.post("/migrate-account", async (req, res) => {
 
     const [updated] = await db
       .update(usersTable)
-      .set({ phone: normalized, updatedAt: new Date() })
+      .set({ phone: normalized, hasPassword: true, updatedAt: new Date() })
       .where(eq(usersTable.id, user.id))
       .returning();
 
     const providerProfile = updated.role === "provider" ? await getProviderProfile(updated.id) : null;
 
-    const safeUser = { ...updated, passwordHash: undefined };
+    const safeUser = { ...updated, passwordHash: undefined, twoFactorCodeHash: undefined };
     const accessToken = generateAccessToken({ ...updated });
     const refreshToken = generateRefreshToken(updated.id);
 
@@ -593,7 +677,7 @@ router.put("/profile", requireAuth, async (req: AuthRequest, res) => {
       .where(eq(usersTable.id, req.user!.id))
       .returning();
 
-    const safeUser = { ...user, passwordHash: undefined };
+    const safeUser = { ...user, passwordHash: undefined, twoFactorCodeHash: undefined };
     res.json({ user: safeUser });
   } catch (err) {
     console.error("Update profile error:", err);
@@ -635,7 +719,7 @@ router.put("/add-phone", requireAuth, async (req: AuthRequest, res) => {
       .where(eq(usersTable.id, req.user!.id))
       .returning();
 
-    const safeUser = { ...user, passwordHash: undefined };
+    const safeUser = { ...user, passwordHash: undefined, twoFactorCodeHash: undefined };
     res.json({ user: safeUser });
   } catch (err) {
     console.error("Add phone error:", err);
@@ -726,7 +810,7 @@ router.put("/email/verify", requireAuth, async (req: AuthRequest, res) => {
       .where(eq(usersTable.id, req.user!.id))
       .returning();
 
-    const safeUser = { ...user, passwordHash: undefined };
+    const safeUser = { ...user, passwordHash: undefined, twoFactorCodeHash: undefined };
     res.json({ user: safeUser });
   } catch (err) {
     console.error("Email verify error:", err);
@@ -753,7 +837,7 @@ router.post("/change-phone/start", requireAuth, async (req: AuthRequest, res) =>
       res.status(404).json({ error: "Foydalanuvchi topilmadi" });
       return;
     }
-    if (!(await comparePassword(currentPassword, user.passwordHash))) {
+    if (!(await verifyCurrentPasswordIfSet(user, currentPassword))) {
       res.status(401).json({ error: "Parol noto'g'ri" });
       return;
     }
@@ -873,10 +957,303 @@ router.post("/change-phone/verify-sms", requireAuth, async (req: AuthRequest, re
       .where(eq(usersTable.id, req.user!.id))
       .returning();
 
-    const safeUser = { ...user, passwordHash: undefined };
+    const safeUser = { ...user, passwordHash: undefined, twoFactorCodeHash: undefined };
     res.json({ user: safeUser });
   } catch (err) {
     console.error("Change phone verify-sms error:", err);
+    res.status(500).json({ error: "Xatolik yuz berdi" });
+  }
+});
+
+// ─── Change email (password-if-set, then OTP to the new address) ──────────
+
+// POST /change-email/start — verify password (if the account has one), send
+// an OTP to the NEW address to prove control of it.
+router.post("/change-email/start", requireAuth, async (req: AuthRequest, res) => {
+  try {
+    const { currentPassword, newEmail } = req.body as { currentPassword?: string; newEmail?: string };
+    if (!newEmail) {
+      res.status(400).json({ error: "Yangi email talab qilinadi" });
+      return;
+    }
+
+    const [user] = await db.select().from(usersTable).where(eq(usersTable.id, req.user!.id)).limit(1);
+    if (!user) {
+      res.status(404).json({ error: "Foydalanuvchi topilmadi" });
+      return;
+    }
+    if (!user.email || !user.emailVerified) {
+      res.status(400).json({ error: "Avval tasdiqlangan email qo'shing" });
+      return;
+    }
+    if (!(await verifyCurrentPasswordIfSet(user, currentPassword))) {
+      res.status(401).json({ error: "Parol noto'g'ri" });
+      return;
+    }
+
+    const normalized = normalizeEmail(newEmail);
+    if (!isValidEmail(normalized)) {
+      res.status(400).json({ error: "Noto'g'ri email manzili" });
+      return;
+    }
+    if (normalized === normalizeEmail(user.email)) {
+      res.status(400).json({ error: "Yangi email joriy email bilan bir xil" });
+      return;
+    }
+    const [conflict] = await db.select({ id: usersTable.id }).from(usersTable).where(eq(usersTable.email, normalized)).limit(1);
+    if (conflict && conflict.id !== user.id) {
+      res.status(409).json({ error: "Bu email allaqachon ro'yxatdan o'tgan" });
+      return;
+    }
+
+    if (!isResendConfigured()) {
+      console.error("Resend is not configured — cannot send change-email OTP.");
+      res.status(502).json({ error: "Email xizmati sozlanmagan" });
+      return;
+    }
+    const code = storeOtp("email", normalized, "change-email");
+    try {
+      await sendOtpEmail(normalized, code);
+    } catch (emailErr) {
+      console.error("Resend email send error:", emailErr);
+      res.status(502).json({ error: "Email yuborishda xatolik yuz berdi. Qayta urinib ko'ring." });
+      return;
+    }
+
+    await db.update(usersTable).set({ pendingEmail: normalized, updatedAt: new Date() }).where(eq(usersTable.id, user.id));
+
+    res.json({ ok: true, ...(env.isProduction ? {} : { devCode: code }) });
+  } catch (err) {
+    console.error("Change email start error:", err);
+    res.status(500).json({ error: "Xatolik yuz berdi" });
+  }
+});
+
+// PUT /change-email/verify — confirms the OTP sent to the new address and applies it.
+router.put("/change-email/verify", requireAuth, async (req: AuthRequest, res) => {
+  try {
+    const { otp } = req.body as { otp?: string };
+    if (!otp) {
+      res.status(400).json({ error: "Tasdiqlash kodi talab qilinadi" });
+      return;
+    }
+
+    const [user] = await db.select().from(usersTable).where(eq(usersTable.id, req.user!.id)).limit(1);
+    if (!user?.pendingEmail) {
+      res.status(400).json({ error: "Email o'zgartirish so'rovi topilmadi" });
+      return;
+    }
+
+    if (!verifyOtp("email", user.pendingEmail, otp, "change-email")) {
+      res.status(400).json({ error: "Tasdiqlash kodi noto'g'ri yoki muddati o'tgan" });
+      return;
+    }
+
+    const [conflict] = await db.select({ id: usersTable.id }).from(usersTable).where(eq(usersTable.email, user.pendingEmail)).limit(1);
+    if (conflict && conflict.id !== user.id) {
+      res.status(409).json({ error: "Bu email allaqachon ro'yxatdan o'tgan" });
+      return;
+    }
+
+    const [updated] = await db
+      .update(usersTable)
+      .set({ email: user.pendingEmail, emailVerified: true, pendingEmail: null, updatedAt: new Date() })
+      .where(eq(usersTable.id, user.id))
+      .returning();
+
+    const safeUser = { ...updated, passwordHash: undefined, twoFactorCodeHash: undefined };
+    res.json({ user: safeUser });
+  } catch (err) {
+    console.error("Change email verify error:", err);
+    res.status(500).json({ error: "Xatolik yuz berdi" });
+  }
+});
+
+// POST /change-email/cancel — drop a pending change without applying it.
+router.post("/change-email/cancel", requireAuth, async (req: AuthRequest, res) => {
+  try {
+    await db.update(usersTable).set({ pendingEmail: null, updatedAt: new Date() }).where(eq(usersTable.id, req.user!.id));
+    res.json({ ok: true });
+  } catch (err) {
+    console.error("Change email cancel error:", err);
+    res.status(500).json({ error: "Xatolik yuz berdi" });
+  }
+});
+
+// ─── 2FA: user-chosen login PIN + hint, gated at login by /2fa/verify-login ─
+
+// POST /2fa/setup — set (or replace) the account's 2FA code + hint.
+router.post("/2fa/setup", requireAuth, async (req: AuthRequest, res) => {
+  try {
+    const { currentPassword, code, hint } = req.body as { currentPassword?: string; code?: string; hint?: string };
+    if (!code || code.length < 4) {
+      res.status(400).json({ error: "Kod kamida 4 belgidan iborat bo'lishi kerak" });
+      return;
+    }
+
+    const [user] = await db.select().from(usersTable).where(eq(usersTable.id, req.user!.id)).limit(1);
+    if (!user) {
+      res.status(404).json({ error: "Foydalanuvchi topilmadi" });
+      return;
+    }
+    if (!(await verifyCurrentPasswordIfSet(user, currentPassword))) {
+      res.status(401).json({ error: "Parol noto'g'ri" });
+      return;
+    }
+
+    const codeHash = await hashPassword(code);
+    const [updated] = await db
+      .update(usersTable)
+      .set({ twoFactorEnabled: true, twoFactorCodeHash: codeHash, twoFactorHint: hint || null, updatedAt: new Date() })
+      .where(eq(usersTable.id, user.id))
+      .returning();
+
+    const safeUser = { ...updated, passwordHash: undefined, twoFactorCodeHash: undefined };
+    res.json({ user: safeUser });
+  } catch (err) {
+    console.error("2FA setup error:", err);
+    res.status(500).json({ error: "Xatolik yuz berdi" });
+  }
+});
+
+// POST /2fa/disable
+router.post("/2fa/disable", requireAuth, async (req: AuthRequest, res) => {
+  try {
+    const { currentPassword } = req.body as { currentPassword?: string };
+
+    const [user] = await db.select().from(usersTable).where(eq(usersTable.id, req.user!.id)).limit(1);
+    if (!user) {
+      res.status(404).json({ error: "Foydalanuvchi topilmadi" });
+      return;
+    }
+    if (!(await verifyCurrentPasswordIfSet(user, currentPassword))) {
+      res.status(401).json({ error: "Parol noto'g'ri" });
+      return;
+    }
+
+    const [updated] = await db
+      .update(usersTable)
+      .set({ twoFactorEnabled: false, twoFactorCodeHash: null, twoFactorHint: null, updatedAt: new Date() })
+      .where(eq(usersTable.id, user.id))
+      .returning();
+
+    const safeUser = { ...updated, passwordHash: undefined, twoFactorCodeHash: undefined };
+    res.json({ user: safeUser });
+  } catch (err) {
+    console.error("2FA disable error:", err);
+    res.status(500).json({ error: "Xatolik yuz berdi" });
+  }
+});
+
+// ─── Delete account: password-if-set, then an SMS code to the phone on file,
+// then a soft-delete (row kept, identifying fields cleared). ───────────────
+
+// POST /delete-account/start
+router.post("/delete-account/start", requireAuth, async (req: AuthRequest, res) => {
+  try {
+    const { currentPassword } = req.body as { currentPassword?: string };
+
+    const [user] = await db.select().from(usersTable).where(eq(usersTable.id, req.user!.id)).limit(1);
+    if (!user) {
+      res.status(404).json({ error: "Foydalanuvchi topilmadi" });
+      return;
+    }
+    if (!(await verifyCurrentPasswordIfSet(user, currentPassword))) {
+      res.status(401).json({ error: "Parol noto'g'ri" });
+      return;
+    }
+    if (!user.phone) {
+      res.status(400).json({ error: "Telefon raqami talab qilinadi" });
+      return;
+    }
+
+    const code = storeOtp("sms", user.phone, "delete-account");
+    if (isEskizConfigured()) {
+      try {
+        await sendOtpSms(user.phone, code);
+      } catch (smsErr) {
+        console.error("Eskiz SMS send error:", smsErr);
+        if (env.isProduction) {
+          res.status(502).json({ error: "SMS yuborishda xatolik yuz berdi. Qayta urinib ko'ring." });
+          return;
+        }
+      }
+    } else if (env.isProduction) {
+      console.error("Eskiz SMS is not configured — cannot send delete-account SMS OTP.");
+      res.status(502).json({ error: "SMS xizmati sozlanmagan" });
+      return;
+    }
+
+    await db.update(usersTable).set({ deleteRequestedAt: new Date(), updatedAt: new Date() }).where(eq(usersTable.id, user.id));
+
+    res.json({ ok: true, destination: user.phone, ...(env.isProduction ? {} : { devCode: code }) });
+  } catch (err) {
+    console.error("Delete account start error:", err);
+    res.status(500).json({ error: "Xatolik yuz berdi" });
+  }
+});
+
+// POST /delete-account/confirm — verifies the SMS code and soft-deletes the account.
+router.post("/delete-account/confirm", requireAuth, async (req: AuthRequest, res) => {
+  try {
+    const { otp } = req.body as { otp?: string };
+    if (!otp) {
+      res.status(400).json({ error: "Tasdiqlash kodi talab qilinadi" });
+      return;
+    }
+
+    const [user] = await db.select().from(usersTable).where(eq(usersTable.id, req.user!.id)).limit(1);
+    if (!user?.deleteRequestedAt || !user.phone) {
+      res.status(400).json({ error: "Hisobni o'chirish so'rovi topilmadi" });
+      return;
+    }
+
+    if (!verifyOtp("sms", user.phone, otp, "delete-account")) {
+      res.status(400).json({ error: "Tasdiqlash kodi noto'g'ri yoki muddati o'tgan" });
+      return;
+    }
+
+    await db
+      .update(usersTable)
+      .set({
+        deletedAt: new Date(),
+        deleteRequestedAt: null,
+        email: null,
+        phone: null,
+        pendingEmail: null,
+        emailVerified: false,
+        hasPassword: false,
+        twoFactorEnabled: false,
+        twoFactorCodeHash: null,
+        twoFactorHint: null,
+        passwordHash: await hashPassword(crypto.randomBytes(32).toString("hex")),
+        updatedAt: new Date(),
+      })
+      .where(eq(usersTable.id, user.id));
+
+    res.json({ ok: true });
+  } catch (err) {
+    console.error("Delete account confirm error:", err);
+    res.status(500).json({ error: "Xatolik yuz berdi" });
+  }
+});
+
+// POST /delete-account/cancel
+router.post("/delete-account/cancel", requireAuth, async (req: AuthRequest, res) => {
+  try {
+    const [updated] = await db
+      .update(usersTable)
+      .set({ deleteRequestedAt: null, updatedAt: new Date() })
+      .where(eq(usersTable.id, req.user!.id))
+      .returning();
+    if (!updated) {
+      res.status(404).json({ error: "Foydalanuvchi topilmadi" });
+      return;
+    }
+    const safeUser = { ...updated, passwordHash: undefined, twoFactorCodeHash: undefined };
+    res.json({ user: safeUser });
+  } catch (err) {
+    console.error("Delete account cancel error:", err);
     res.status(500).json({ error: "Xatolik yuz berdi" });
   }
 });
@@ -964,7 +1341,7 @@ router.get("/providers/:id", async (req, res) => {
       .where(eq(providerProfilesTable.userId, id))
       .limit(1);
 
-    const safeUser = { ...user, passwordHash: undefined, phone: undefined };
+    const safeUser = { ...user, passwordHash: undefined, twoFactorCodeHash: undefined, phone: undefined };
     res.json({ user: safeUser, providerProfile: profile ?? null });
   } catch (err) {
     console.error("Get provider error:", err);
@@ -978,7 +1355,7 @@ router.get("/me", requireAuth, async (req: AuthRequest, res) => {
     const [user] = await db
       .select()
       .from(usersTable)
-      .where(eq(usersTable.id, req.user!.id))
+      .where(and(eq(usersTable.id, req.user!.id), isNull(usersTable.deletedAt)))
       .limit(1);
 
     if (!user) {
@@ -987,7 +1364,7 @@ router.get("/me", requireAuth, async (req: AuthRequest, res) => {
     }
 
     const suspended = await isUserSuspended(user.id);
-    const safeUser = { ...user, passwordHash: undefined, suspended };
+    const safeUser = { ...user, passwordHash: undefined, twoFactorCodeHash: undefined, suspended };
     const providerProfile = user.role === "provider" ? await getProviderProfile(user.id) : null;
 
     res.json({ user: safeUser, providerProfile });

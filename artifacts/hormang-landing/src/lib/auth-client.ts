@@ -2,8 +2,6 @@ import { apiFetch, ApiError } from "./api-client";
 
 /* ─── Types ─────────────────────────────────────────────────────────────── */
 
-export type TwoFactorMethod = "sms" | "email";
-
 export interface SafeUser {
   id: string;
   firstName: string;
@@ -11,11 +9,10 @@ export interface SafeUser {
   email?: string | null;
   phone?: string | null;
   emailVerified?: boolean;
+  hasPassword?: boolean;
   twoFactorEnabled?: boolean;
-  twoFactorMethod?: TwoFactorMethod | null;
   twoFactorHint?: string | null;
   pendingEmail?: string | null;
-  pendingPhone?: string | null;
   pendingDeleteRequest?: boolean;
   role: "buyer" | "provider";
   createdAt: string;
@@ -69,7 +66,6 @@ const TOKEN_KEY = "hormang_access_token";
 const USERS_KEY = "hormang_auth_users";
 const PROFILES_KEY = "hormang_auth_provider_profiles";
 const OTP_KEY = "hormang_auth_otp_store";
-const PWD_KEY = "hormang_auth_password_hashes";
 const CHALLENGE_KEY = "hormang_auth_2fa_challenges";
 const TWOFA_CODE_KEY = "hormang_2fa_codes";
 
@@ -119,83 +115,6 @@ function normalizeEmail(email: string): string {
 
 function isValidEmail(email: string): boolean {
   return /^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email);
-}
-
-/* ─── Password hashing (Web Crypto: PBKDF2-HMAC-SHA256) ────────────────── */
-
-interface PasswordHash {
-  algo: "pbkdf2-sha256";
-  salt: string;
-  iterations: number;
-  hash: string;
-}
-
-function bytesToBase64(bytes: Uint8Array): string {
-  let binary = "";
-  for (const b of bytes) binary += String.fromCharCode(b);
-  return btoa(binary);
-}
-function base64ToBytes(b64: string): Uint8Array {
-  const binary = atob(b64);
-  const arr = new Uint8Array(binary.length);
-  for (let i = 0; i < binary.length; i++) arr[i] = binary.charCodeAt(i);
-  return arr;
-}
-
-async function pbkdf2(password: string, saltBytes: Uint8Array, iterations: number): Promise<Uint8Array> {
-  const enc = new TextEncoder();
-  const baseKey = await crypto.subtle.importKey(
-    "raw",
-    enc.encode(password),
-    { name: "PBKDF2" },
-    false,
-    ["deriveBits"],
-  );
-  const bits = await crypto.subtle.deriveBits(
-    { name: "PBKDF2", salt: saltBytes as BufferSource, iterations, hash: "SHA-256" },
-    baseKey,
-    256,
-  );
-  return new Uint8Array(bits);
-}
-
-async function hashPassword(password: string): Promise<PasswordHash> {
-  const saltBytes = crypto.getRandomValues(new Uint8Array(16));
-  const iterations = 100_000;
-  const hashBytes = await pbkdf2(password, saltBytes, iterations);
-  return {
-    algo: "pbkdf2-sha256",
-    salt: bytesToBase64(saltBytes),
-    iterations,
-    hash: bytesToBase64(hashBytes),
-  };
-}
-
-async function verifyPasswordHash(password: string, stored: PasswordHash): Promise<boolean> {
-  const saltBytes = base64ToBytes(stored.salt);
-  const candidate = await pbkdf2(password, saltBytes, stored.iterations);
-  const expected = base64ToBytes(stored.hash);
-  if (candidate.length !== expected.length) return false;
-  let diff = 0;
-  for (let i = 0; i < candidate.length; i++) diff |= candidate[i] ^ expected[i];
-  return diff === 0;
-}
-
-function readPasswordHashes(): Record<string, PasswordHash> {
-  return readLS<Record<string, PasswordHash>>(PWD_KEY, {});
-}
-function writePasswordHash(userId: string, hash: PasswordHash): void {
-  const all = readPasswordHashes();
-  all[userId] = hash;
-  writeLS(PWD_KEY, all);
-}
-function deletePasswordHash(userId: string): void {
-  const all = readPasswordHashes();
-  delete all[userId];
-  writeLS(PWD_KEY, all);
-}
-function getPasswordHash(userId: string): PasswordHash | null {
-  return readPasswordHashes()[userId] ?? null;
 }
 
 export function isStrongPassword(pw: string): boolean {
@@ -248,6 +167,11 @@ interface BackendUser {
   phone?: string | null;
   role: "buyer" | "provider";
   createdAt: string;
+  emailVerified?: boolean;
+  hasPassword?: boolean;
+  twoFactorEnabled?: boolean;
+  twoFactorHint?: string | null;
+  suspended?: boolean;
 }
 
 /** Backend error text -> the error codes the UI's i18n dictionaries already know how to render. */
@@ -258,9 +182,18 @@ const BACKEND_ERROR_CODES: Record<string, string> = {
   "Foydalanuvchi topilmadi": "USER_NOT_FOUND",
   "Parol noto'g'ri": "WRONG_PASSWORD",
   "Email tasdiqlanmagan — avval tasdiqlangan email qo'shing": "EMAIL_REQUIRED_FOR_PHONE_CHANGE",
+  "Avval tasdiqlangan email qo'shing": "EMAIL_NOT_VERIFIED",
   "Noto'g'ri telefon raqami": "INVALID_PHONE",
   "Yangi raqam joriy raqam bilan bir xil": "NEW_PHONE_SAME_AS_OLD",
   "Bu raqam boshqa hisob bilan bog'liq": "PHONE_TAKEN",
+  "Yangi email joriy email bilan bir xil": "NEW_EMAIL_SAME_AS_OLD",
+  "Bu email allaqachon ro'yxatdan o'tgan": "EMAIL_ALREADY_REGISTERED",
+  "Email o'zgartirish so'rovi topilmadi": "EMAIL_CHANGE_NOT_FOUND",
+  "Tasdiqlash kodi talab qilinadi": "OTP_INVALID",
+  "Hisobni o'chirish so'rovi topilmadi": "DELETE_REQUEST_NOT_FOUND",
+  "Telefon raqami talab qilinadi": "PHONE_REQUIRED",
+  "Sessiya muddati o'tgan. Qaytadan urinib ko'ring.": "SESSION_EXPIRED",
+  "Kod noto'g'ri": "TWO_FA_INVALID",
 };
 
 function throwBackendError(err: unknown): never {
@@ -270,24 +203,24 @@ function throwBackendError(err: unknown): never {
   throw err instanceof Error ? err : new Error("SERVER_ERROR");
 }
 
-/** Maps the backend's user row onto the frontend SafeUser shape, preserving any
- * local-only fields (2FA, email verification, …) already stored for this id. */
+/** Maps the backend's user row onto the frontend SafeUser shape. The backend is now
+ * authoritative for every field it returns (2FA, email verification, hasPassword, …);
+ * only the same-device draft/pending UI state some flows keep is preserved locally. */
 function mergeBackendUser(backendUser: BackendUser): SafeUser {
   const existing = findById(backendUser.id);
   const merged: SafeUser = {
     id: backendUser.id,
     firstName: backendUser.firstName,
     lastName: backendUser.lastName,
-    email: backendUser.email ?? existing?.email ?? null,
-    phone: backendUser.phone ?? existing?.phone ?? null,
+    email: backendUser.email ?? null,
+    phone: backendUser.phone ?? null,
     role: backendUser.role,
     createdAt: backendUser.createdAt,
-    emailVerified: existing?.emailVerified ?? false,
-    twoFactorEnabled: existing?.twoFactorEnabled ?? false,
-    twoFactorMethod: existing?.twoFactorMethod ?? null,
-    twoFactorHint: existing?.twoFactorHint ?? null,
+    emailVerified: backendUser.emailVerified ?? false,
+    hasPassword: backendUser.hasPassword ?? false,
+    twoFactorEnabled: backendUser.twoFactorEnabled ?? false,
+    twoFactorHint: backendUser.twoFactorHint ?? null,
     pendingEmail: existing?.pendingEmail ?? null,
-    pendingPhone: existing?.pendingPhone ?? null,
     pendingDeleteRequest: existing?.pendingDeleteRequest ?? false,
   };
   upsertUser(merged);
@@ -382,7 +315,7 @@ export async function sendSmsCode(
 ): Promise<{ ok: boolean; devCode?: string; channel?: "sms" | "email"; maskedDestination?: string }> {
   const normalized = normalizePhone(phone);
 
-  if (purpose === "register" || purpose === "login") {
+  if (purpose === "register" || purpose === "login" || purpose === "migrate" || purpose === "add-phone") {
     try {
       // For "login", the backend may deliver the code to a verified email
       // instead of SMS (see /auth/sms/send) — the phone stays the account
@@ -485,66 +418,12 @@ export async function saveProviderProfile(body: {
   }
 }
 
-/* ─── 2FA code store (user-defined static code + hint) ────────────────── */
-
-interface TwoFAEntry { hash: PasswordHash; hint: string; }
-
-function readTwoFACodes(): Record<string, TwoFAEntry> {
-  return readLS<Record<string, TwoFAEntry>>(TWOFA_CODE_KEY, {});
-}
-function getTwoFAEntry(userId: string): TwoFAEntry | null {
-  return readTwoFACodes()[userId] ?? null;
-}
-function setTwoFAEntry(userId: string, entry: TwoFAEntry): void {
-  const all = readTwoFACodes();
-  all[userId] = entry;
-  writeLS(TWOFA_CODE_KEY, all);
-}
-function deleteTwoFAEntry(userId: string): void {
-  const all = readTwoFACodes();
-  delete all[userId];
-  writeLS(TWOFA_CODE_KEY, all);
-}
-
-/* ─── 2FA challenge store ──────────────────────────────────────────────── */
-
-interface ChallengeEntry {
-  userId: string;
-  method: TwoFactorMethod;
-  destination: string;
-  expiresAt: number;
-  /** The token to persist once the 2FA step passes (real JWT for backend-authenticated logins). */
-  pendingAccessToken: string;
-}
-
-function readChallenges(): Record<string, ChallengeEntry> {
-  return readLS<Record<string, ChallengeEntry>>(CHALLENGE_KEY, {});
-}
-function storeChallenge(entry: ChallengeEntry): string {
-  const id = genId();
-  const all = readChallenges();
-  all[id] = entry;
-  writeLS(CHALLENGE_KEY, all);
-  return id;
-}
-function consumeChallenge(id: string): ChallengeEntry | null {
-  const all = readChallenges();
-  const entry = all[id];
-  if (!entry) return null;
-  if (Date.now() > entry.expiresAt) {
-    delete all[id];
-    writeLS(CHALLENGE_KEY, all);
-    return null;
-  }
-  return entry;
-}
-function dropChallenge(id: string): void {
-  const all = readChallenges();
-  delete all[id];
-  writeLS(CHALLENGE_KEY, all);
-}
 
 /* ─── Phone login (returns 2FA challenge if enabled) ───────────────────── */
+
+type LoginResult =
+  | { user: BackendUser; accessToken: string; providerProfile: ProviderProfile | null }
+  | { needs2FA: true; challengeId: string; hint?: string };
 
 export async function loginUser(body: {
   phone: string;
@@ -553,56 +432,20 @@ export async function loginUser(body: {
   const normalized = normalizePhone(body.phone);
 
   try {
-    const res = await apiFetch<{
-      user: BackendUser;
-      accessToken: string;
-      providerProfile: ProviderProfile | null;
-    }>("/auth/login", {
+    const res = await apiFetch<LoginResult>("/auth/login", {
       method: "POST",
       auth: false,
       body: { phone: normalized, otp: body.otp },
     });
 
+    if ("needs2FA" in res) return res;
+
     const user = mergeBackendUser(res.user);
-
-    if (user.twoFactorEnabled) {
-      const challenge = await issue2FAChallenge(user, res.accessToken);
-      return challenge;
-    }
-
     setToken(res.accessToken);
     return { user, accessToken: res.accessToken, providerProfile: res.providerProfile };
   } catch (err) {
     throwBackendError(err);
   }
-}
-
-/* ─── Email + password login ───────────────────────────────────────────── */
-
-export async function loginWithEmail(body: {
-  email: string;
-  password: string;
-}): Promise<AuthResponse | LoginChallenge> {
-  const email = normalizeEmail(body.email);
-  if (!isValidEmail(email)) throw new Error("INVALID_EMAIL");
-
-  const user = findByEmail(email);
-  if (!user || !user.emailVerified) throw new Error("EMAIL_OR_PASSWORD_WRONG");
-
-  const stored = getPasswordHash(user.id);
-  if (!stored) throw new Error("EMAIL_OR_PASSWORD_WRONG");
-
-  const ok = await verifyPasswordHash(body.password, stored);
-  if (!ok) throw new Error("EMAIL_OR_PASSWORD_WRONG");
-
-  if (user.twoFactorEnabled) {
-    const challenge = await issue2FAChallenge(user);
-    return challenge;
-  }
-
-  setToken(user.id);
-  const providerProfile = user.role === "provider" ? findProfile(user.id) : null;
-  return { user, accessToken: user.id, providerProfile };
 }
 
 /* ─── Email + code login (no password — mirrors phone+OTP login) ──────── */
@@ -614,14 +457,35 @@ export async function loginWithEmailCode(body: {
   const normalized = normalizeEmail(body.email);
 
   try {
+    const res = await apiFetch<LoginResult>("/auth/login-email", {
+      method: "POST",
+      auth: false,
+      body: { email: normalized, otp: body.otp },
+    });
+
+    if ("needs2FA" in res) return res;
+
+    const user = mergeBackendUser(res.user);
+    setToken(res.accessToken);
+    return { user, accessToken: res.accessToken, providerProfile: res.providerProfile };
+  } catch (err) {
+    throwBackendError(err);
+  }
+}
+
+export async function verifyLogin2FA(body: {
+  challengeId: string;
+  otp: string;
+}): Promise<AuthResponse> {
+  try {
     const res = await apiFetch<{
       user: BackendUser;
       accessToken: string;
       providerProfile: ProviderProfile | null;
-    }>("/auth/login-email", {
+    }>("/auth/2fa/verify-login", {
       method: "POST",
       auth: false,
-      body: { email: normalized, otp: body.otp },
+      body,
     });
 
     const user = mergeBackendUser(res.user);
@@ -632,39 +496,6 @@ export async function loginWithEmailCode(body: {
   }
 }
 
-async function issue2FAChallenge(user: SafeUser, pendingAccessToken?: string): Promise<LoginChallenge> {
-  const challengeId = storeChallenge({
-    userId: user.id,
-    method: "sms",
-    destination: "",
-    expiresAt: Date.now() + 30 * 60 * 1_000,
-    pendingAccessToken: pendingAccessToken ?? user.id,
-  });
-  return { needs2FA: true, challengeId, hint: user.twoFactorHint ?? undefined };
-}
-
-export async function verifyLogin2FA(body: {
-  challengeId: string;
-  otp: string;
-}): Promise<AuthResponse> {
-  const ch = consumeChallenge(body.challengeId);
-  if (!ch) throw new Error("SESSION_EXPIRED");
-
-  const user = findById(ch.userId);
-  if (!user) throw new Error("USER_NOT_FOUND");
-
-  const entry = getTwoFAEntry(user.id);
-  if (!entry) throw new Error("TWO_FA_NOT_FOUND");
-
-  const ok = await verifyPasswordHash(body.otp, entry.hash);
-  if (!ok) throw new Error("TWO_FA_INVALID");
-
-  dropChallenge(body.challengeId);
-  setToken(ch.pendingAccessToken);
-  const providerProfile = user.role === "provider" ? findProfile(user.id) : null;
-  return { user, accessToken: ch.pendingAccessToken, providerProfile };
-}
-
 /* ─── Account Migration ─────────────────────────────────────────────────── */
 
 export async function migrateAccount(body: {
@@ -673,32 +504,23 @@ export async function migrateAccount(body: {
   phone: string;
   otp: string;
 }): Promise<AuthResponse> {
-  const normalized = normalizePhone(body.phone);
+  try {
+    const res = await apiFetch<{
+      user: BackendUser;
+      accessToken: string;
+      providerProfile: ProviderProfile | null;
+    }>("/auth/migrate-account", {
+      method: "POST",
+      auth: false,
+      body: { ...body, phone: normalizePhone(body.phone), email: normalizeEmail(body.email) },
+    });
 
-  if (!verifyOtp(normalized, body.otp, "migrate")) {
-    throw new Error("OTP_INVALID");
+    const user = mergeBackendUser(res.user);
+    setToken(res.accessToken);
+    return { user, accessToken: res.accessToken, providerProfile: res.providerProfile };
+  } catch (err) {
+    throwBackendError(err);
   }
-
-  const existing = findByPhone(normalized);
-  if (existing) {
-    setToken(existing.id);
-    return { user: existing, accessToken: existing.id };
-  }
-
-  const user: SafeUser = {
-    id: genId(),
-    firstName: body.email.split("@")[0] ?? "Foydalanuvchi",
-    lastName: "",
-    phone: normalized,
-    email: normalizeEmail(body.email),
-    emailVerified: false,
-    twoFactorEnabled: false,
-    role: "buyer",
-    createdAt: new Date().toISOString(),
-  };
-  upsertUser(user);
-  setToken(user.id);
-  return { user, accessToken: user.id };
 }
 
 /* ─── Add phone to existing account ────────────────────────────────────── */
@@ -707,36 +529,16 @@ export async function addPhone(body: {
   phone: string;
   otp: string;
 }): Promise<{ user: SafeUser }> {
-  const token = getToken();
-  if (!token) throw new Error("AUTH_REQUIRED");
-
-  const normalized = normalizePhone(body.phone);
-
-  if (!verifyOtp(normalized, body.otp, "add-phone")) {
-    throw new Error("OTP_INVALID");
+  if (!getToken()) throw new Error("AUTH_REQUIRED");
+  try {
+    const res = await apiFetch<{ user: BackendUser }>("/auth/add-phone", {
+      method: "PUT",
+      body: { phone: normalizePhone(body.phone), otp: body.otp },
+    });
+    return { user: mergeBackendUser(res.user) };
+  } catch (err) {
+    throwBackendError(err);
   }
-
-  const user = await resolveCurrentUser(token);
-  if (!user) throw new Error("USER_NOT_FOUND");
-
-  const conflict = findByPhone(normalized);
-  if (conflict && conflict.id !== user.id) {
-    throw new Error("PHONE_BELONGS_TO_OTHER");
-  }
-
-  const updated: SafeUser = { ...user, phone: normalized };
-  upsertUser(updated);
-  return { user: updated };
-}
-
-/* ─── Verify password (sensitive-action gate) ──────────────────────────── */
-
-export async function verifyMyPassword(password: string): Promise<boolean> {
-  const token = getToken();
-  if (!token) throw new Error("AUTH_REQUIRED");
-  const stored = getPasswordHash(token);
-  if (!stored) throw new Error("NO_PASSWORD_SET");
-  return verifyPasswordHash(password, stored);
 }
 
 /* ─── Email registration (logged-in user adds a verified email) ─────────
@@ -797,25 +599,18 @@ export async function startEmailRegistration(body: { email: string }): Promise<{
 }
 
 export async function cancelPendingEmail(): Promise<void> {
-  const token = getToken();
-  if (!token) return;
-  const user = findById(token);
-  if (!user) return;
-  if (user.pendingEmail) {
-    upsertUser({ ...user, pendingEmail: null });
-    deletePasswordHash(`${user.id}__pending_email`);
+  if (!getToken()) return;
+  try {
+    await apiFetch("/auth/change-email/cancel", { method: "POST" });
+  } catch {
+    // best-effort — nothing local depends on this succeeding
   }
 }
 
-export async function cancelPendingPhone(): Promise<void> {
-  const token = getToken();
-  if (!token) return;
-  const user = findById(token);
-  if (!user) return;
-  if (user.pendingPhone) {
-    upsertUser({ ...user, pendingPhone: null });
-  }
-}
+/** No server-side pending-phone state exists (the change-phone wizard's progress
+ *  lives entirely in the React form state) — kept as a no-op so existing callers
+ *  don't need to change. */
+export async function cancelPendingPhone(): Promise<void> {}
 
 export async function verifyEmailRegistration(otp: string): Promise<{ user: SafeUser }> {
   const token = getToken();
@@ -841,48 +636,34 @@ export async function verifyEmailRegistration(otp: string): Promise<{ user: Safe
   }
 }
 
-/* ─── Change email (password-gated, OTP confirmed) ─────────────────────── */
+/* ─── Change email (password-if-set, then OTP to the new address) ──────── */
 
 export async function startChangeEmail(body: {
   currentPassword: string;
   newEmail: string;
 }): Promise<{ devCode?: string }> {
-  const token = getToken();
-  if (!token) throw new Error("AUTH_REQUIRED");
-  const user = findById(token);
-  if (!user) throw new Error("USER_NOT_FOUND");
-  if (!user.emailVerified) throw new Error("EMAIL_NOT_VERIFIED");
-
-  const ok = await verifyMyPassword(body.currentPassword);
-  if (!ok) throw new Error("WRONG_PASSWORD");
-
-  const newEmail = normalizeEmail(body.newEmail);
-  if (!isValidEmail(newEmail)) throw new Error("INVALID_EMAIL");
-  if (newEmail === normalizeEmail(user.email ?? "")) throw new Error("NEW_EMAIL_SAME_AS_OLD");
-  const owner = findByEmail(newEmail);
-  if (owner && owner.id !== user.id) throw new Error("EMAIL_ALREADY_REGISTERED");
-
-  upsertUser({ ...user, pendingEmail: newEmail });
-  return sendEmailCode(newEmail, "change-email");
+  if (!getToken()) throw new Error("AUTH_REQUIRED");
+  try {
+    return await apiFetch<{ ok: true; devCode?: string }>("/auth/change-email/start", {
+      method: "POST",
+      body,
+    });
+  } catch (err) {
+    throwBackendError(err);
+  }
 }
 
 export async function verifyChangeEmail(otp: string): Promise<{ user: SafeUser }> {
-  const token = getToken();
-  if (!token) throw new Error("AUTH_REQUIRED");
-  const user = findById(token);
-  if (!user || !user.pendingEmail) throw new Error("EMAIL_CHANGE_NOT_FOUND");
-
-  const ok = verifyOtpEntry("email", user.pendingEmail, otp, "change-email");
-  if (!ok) throw new Error("OTP_INVALID");
-
-  const updated: SafeUser = {
-    ...user,
-    email: user.pendingEmail,
-    emailVerified: true,
-    pendingEmail: null,
-  };
-  upsertUser(updated);
-  return { user: updated };
+  if (!getToken()) throw new Error("AUTH_REQUIRED");
+  try {
+    const res = await apiFetch<{ user: BackendUser }>("/auth/change-email/verify", {
+      method: "PUT",
+      body: { otp },
+    });
+    return { user: mergeBackendUser(res.user) };
+  } catch (err) {
+    throwBackendError(err);
+  }
 }
 
 /* ─── Change phone (real backend): password → email code → SMS code ────── */
@@ -928,116 +709,74 @@ export async function verifyChangePhone(newPhone: string, otp: string): Promise<
   }
 }
 
-/* ─── 2FA setup / disable (user-defined code + hint) ───────────────────── */
+/* ─── 2FA setup / disable (user-defined login PIN + hint) ──────────────── */
 
 export async function setup2FA(body: {
   currentPassword?: string;
   code: string;
   hint: string;
 }): Promise<{ user: SafeUser }> {
-  const token = getToken();
-  if (!token) throw new Error("AUTH_REQUIRED");
-  const user = findById(token);
-  if (!user) throw new Error("USER_NOT_FOUND");
-
-  if (user.emailVerified) {
-    if (!body.currentPassword) throw new Error("PASSWORD_REQUIRED_FOR_2FA");
-    const ok = await verifyMyPassword(body.currentPassword);
-    if (!ok) throw new Error("WRONG_PASSWORD");
+  if (!getToken()) throw new Error("AUTH_REQUIRED");
+  try {
+    const res = await apiFetch<{ user: BackendUser }>("/auth/2fa/setup", {
+      method: "POST",
+      body,
+    });
+    return { user: mergeBackendUser(res.user) };
+  } catch (err) {
+    throwBackendError(err);
   }
-
-  const hash = await hashPassword(body.code);
-  setTwoFAEntry(user.id, { hash, hint: body.hint });
-
-  const updated: SafeUser = {
-    ...user,
-    twoFactorEnabled: true,
-    twoFactorHint: body.hint || null,
-  };
-  upsertUser(updated);
-  return { user: updated };
 }
 
 export async function disable2FA(currentPassword: string): Promise<{ user: SafeUser }> {
-  const token = getToken();
-  if (!token) throw new Error("AUTH_REQUIRED");
-  const user = findById(token);
-  if (!user) throw new Error("USER_NOT_FOUND");
-
-  if (user.emailVerified) {
-    const ok = await verifyMyPassword(currentPassword);
-    if (!ok) throw new Error("WRONG_PASSWORD");
+  if (!getToken()) throw new Error("AUTH_REQUIRED");
+  try {
+    const res = await apiFetch<{ user: BackendUser }>("/auth/2fa/disable", {
+      method: "POST",
+      body: { currentPassword },
+    });
+    return { user: mergeBackendUser(res.user) };
+  } catch (err) {
+    throwBackendError(err);
   }
-
-  deleteTwoFAEntry(user.id);
-  const updated: SafeUser = {
-    ...user,
-    twoFactorEnabled: false,
-    twoFactorMethod: null,
-    twoFactorHint: null,
-  };
-  upsertUser(updated);
-  return { user: updated };
 }
 
-/* ─── Delete account (password + SMS OTP, soft-delete) ─────────────────── */
+/* ─── Delete account (password-if-set + SMS OTP, soft-delete) ──────────── */
 
 export async function startDeleteAccount(currentPassword: string): Promise<{ devCode?: string; destination: string }> {
-  const token = getToken();
-  if (!token) throw new Error("AUTH_REQUIRED");
-  const user = findById(token);
-  if (!user) throw new Error("USER_NOT_FOUND");
-
-  const ok = await verifyMyPassword(currentPassword);
-  if (!ok) throw new Error("WRONG_PASSWORD");
-  if (!user.phone) throw new Error("PHONE_REQUIRED");
-
-  upsertUser({ ...user, pendingDeleteRequest: true });
-  const res = await sendSmsCode(user.phone, "delete-account");
-  return { devCode: res.devCode, destination: user.phone };
+  if (!getToken()) throw new Error("AUTH_REQUIRED");
+  try {
+    return await apiFetch<{ ok: true; destination: string; devCode?: string }>("/auth/delete-account/start", {
+      method: "POST",
+      body: { currentPassword },
+    });
+  } catch (err) {
+    throwBackendError(err);
+  }
 }
 
 export async function confirmDeleteAccount(otp: string): Promise<{ ok: true }> {
-  const token = getToken();
-  if (!token) throw new Error("AUTH_REQUIRED");
-  const user = findById(token);
-  if (!user || !user.pendingDeleteRequest || !user.phone) {
-    throw new Error("DELETE_REQUEST_NOT_FOUND");
+  if (!getToken()) throw new Error("AUTH_REQUIRED");
+  try {
+    await apiFetch<{ ok: true }>("/auth/delete-account/confirm", {
+      method: "POST",
+      body: { otp },
+    });
+  } catch (err) {
+    throwBackendError(err);
   }
-
-  const ok = verifyOtpEntry("sms", user.phone, otp, "delete-account");
-  if (!ok) throw new Error("OTP_INVALID");
-
-  const users = readUsers();
-  const idx = users.findIndex((u) => u.id === user.id);
-  if (idx >= 0) {
-    users[idx] = {
-      ...users[idx],
-      deletedAt: new Date().toISOString(),
-      email: null,
-      phone: null,
-      pendingEmail: null,
-      pendingPhone: null,
-      pendingDeleteRequest: false,
-      emailVerified: false,
-      twoFactorEnabled: false,
-      twoFactorMethod: null,
-    };
-    writeUsers(users);
-  }
-  deletePasswordHash(user.id);
   clearToken();
   return { ok: true };
 }
 
 export async function cancelDeleteAccount(): Promise<{ user: SafeUser }> {
-  const token = getToken();
-  if (!token) throw new Error("AUTH_REQUIRED");
-  const user = findById(token);
-  if (!user) throw new Error("USER_NOT_FOUND");
-  const updated: SafeUser = { ...user, pendingDeleteRequest: false };
-  upsertUser(updated);
-  return { user: updated };
+  if (!getToken()) throw new Error("AUTH_REQUIRED");
+  try {
+    const res = await apiFetch<{ user: BackendUser }>("/auth/delete-account/cancel", { method: "POST" });
+    return { user: mergeBackendUser(res.user) };
+  } catch (err) {
+    throwBackendError(err);
+  }
 }
 
 /* ─── Session ───────────────────────────────────────────────────────────── */
