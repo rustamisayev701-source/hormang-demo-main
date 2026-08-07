@@ -1253,7 +1253,7 @@ function OffersSection({ refreshKey }: { refreshKey: number }) {
                       </div>
                     </td>
                     <td className="px-4 py-3 font-bold text-red-600">
-                      {o.priceLabel ?? fmtMoney(o.price)}
+                      {fmtMoney(o.price)}
                     </td>
                     <td className="px-4 py-3 text-xs text-gray-600">
                       {o.completionDurationMinutes ? `${o.completionDurationMinutes} daqiqa` : "—"}
@@ -2295,7 +2295,7 @@ function RequestCommandCenter({ row, onClose, onAcceptOffer, onRejectOffer, onRe
     { time: r.createdAt, label: "So'rov yaratildi", icon: "📋" },
     ...sortedOffers.map((o) => ({
       time: o.createdAt,
-      label: `Taklif keldi — ${o.masterName} (${o.priceLabel ?? fmtMoney(o.price)})`,
+      label: `Taklif keldi — ${o.masterName} (${fmtMoney(o.price)})`,
       icon: "💼",
     })),
   ];
@@ -2474,7 +2474,7 @@ function RequestCommandCenter({ row, onClose, onAcceptOffer, onRejectOffer, onRe
                           <p className="font-extrabold text-gray-900 text-sm">{o.masterName}</p>
                           <StatusBadge status={o.status} />
                         </div>
-                        <p className="text-red-600 font-extrabold text-base mt-0.5">{o.priceLabel ?? fmtMoney(o.price)}</p>
+                        <p className="text-red-600 font-extrabold text-base mt-0.5">{fmtMoney(o.price)}</p>
                         {o.completionDurationMinutes ? <p className="text-xs text-gray-500 mt-0.5">⏱ {o.completionDurationMinutes} daqiqa</p> : null}
                         {o.message && <p className="text-sm text-gray-700 mt-2 leading-relaxed">{o.message}</p>}
                         {Array.isArray((o as any).fileUrls) && (o as any).fileUrls.length > 0 && (

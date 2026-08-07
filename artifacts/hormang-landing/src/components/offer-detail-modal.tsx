@@ -337,7 +337,7 @@ export function OfferDetailModal({ offer, onClose, readOnly = false }: OfferDeta
                 <div className="px-4 py-3">
                   <p className="text-[10px] text-gray-400 font-semibold uppercase tracking-wide mb-0.5">{tt.priceLabel}</p>
                   <p className="font-extrabold text-base text-blue-600">
-                    {offer.priceLabel ?? (offer.price.toLocaleString() + " " + tt.sumSuffix)}
+                    {offer.price.toLocaleString() + " " + tt.sumSuffix}
                   </p>
                 </div>
               </div>

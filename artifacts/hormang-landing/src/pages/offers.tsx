@@ -118,7 +118,7 @@ function OfferCard({ offer, req, index, anyAccepted, onChanged }: { offer: Offer
             {/* Price */}
             <div className="flex-shrink-0 text-right">
               <p className="font-extrabold text-base text-blue-600">
-                {offer.priceLabel ?? (offer.price.toLocaleString() + " " + tt.sumSuffix)}
+                {offer.price.toLocaleString() + " " + tt.sumSuffix}
               </p>
             </div>
           </div>

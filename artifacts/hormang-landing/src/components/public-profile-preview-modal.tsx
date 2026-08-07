@@ -14,7 +14,7 @@ import {
   Briefcase, Award, ChevronRight, Flag,
   IdCard, Ban, LockOpen,
 } from "lucide-react";
-import { getLocalProfile, getServiceAreaLabels } from "@/lib/local-profile";
+import { getLocalProfile, getServiceAreaLabels, getLiveProviderName } from "@/lib/local-profile";
 import { getCategoryDisplayName } from "@/lib/categories";
 import { getAverageRatingForUser, getReviewsForUser, getCompletedCount } from "@/lib/completion-store";
 import { getAvgResponseMinutes, formatAvgResponseTime } from "@/lib/response-time-store";
@@ -160,6 +160,9 @@ function ProviderPreviewSheet({
   useStoreRefresh();
   const tt = t.publicProfilePreviewModal;
   const local = getLocalProfile(data.masterId);
+  // Prefer the provider's current name — whatever the caller passed in
+  // `data.masterName` may be a snapshot frozen at offer/chat creation time.
+  const liveMasterName = getLiveProviderName(data.masterId) ?? data.masterName;
   const albums = local.albums ?? [];
   const allPhotos = albums.flatMap((a) => a.photos.map((p) => p.url));
   const bio = local.bio;
@@ -187,10 +190,10 @@ function ProviderPreviewSheet({
     if (!user) return;
     if (blocked) {
       unblockUser(user.id, data.masterId);
-      toast({ title: t.chatPage.unblockedToast.replace("{{name}}", data.masterName) });
+      toast({ title: t.chatPage.unblockedToast.replace("{{name}}", liveMasterName) });
     } else {
       blockUser(user.id, data.masterId);
-      toast({ title: t.chatPage.blockedToast.replace("{{name}}", data.masterName) });
+      toast({ title: t.chatPage.blockedToast.replace("{{name}}", liveMasterName) });
     }
   }
 
@@ -263,7 +266,7 @@ function ProviderPreviewSheet({
                 {local.photoUrl ? (
                   <img
                     src={local.photoUrl}
-                    alt={data.masterName}
+                    alt={liveMasterName}
                     className="w-32 h-32 rounded-full object-cover"
                     style={{
                       border: `3px solid ${VIOLET}`,
@@ -303,7 +306,7 @@ function ProviderPreviewSheet({
 
               {/* Name */}
               <h2 className="text-2xl font-black text-gray-900 leading-tight mb-2">
-                {data.masterName}
+                {liveMasterName}
               </h2>
 
               {/* Role + experience badges */}
@@ -537,7 +540,7 @@ function ProviderPreviewSheet({
           <ProviderReviewsSheet
             key="provider-reviews-sheet"
             providerId={data.masterId}
-            providerName={data.masterName}
+            providerName={liveMasterName}
             onClose={() => setShowReviews(false)}
           />
         )}
@@ -550,7 +553,7 @@ function ProviderPreviewSheet({
             key="provider-report-modal"
             reporterUserId={user.id}
             reportedUserId={data.masterId}
-            reportedName={data.masterName}
+            reportedName={liveMasterName}
             onClose={() => setShowReport(false)}
           />
         )}

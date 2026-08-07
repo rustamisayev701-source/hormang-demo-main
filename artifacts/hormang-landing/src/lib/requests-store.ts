@@ -8,6 +8,7 @@
  * that touches shared (cross-device) data is now async.
  */
 import { getBlockedUsers } from "./report-store";
+import { getLiveProviderName } from "./local-profile";
 import { emitStoreChange } from "./store-events";
 import * as api from "./requests-client";
 import { ApiError } from "./requests-client";
@@ -176,7 +177,10 @@ function toCustomerRequest(r: api.BackendRequest): CustomerRequest {
   return { ...r, offerCount: r.offerCount ?? 0 };
 }
 function toOffer(o: api.BackendOffer): Offer {
-  return { ...o };
+  // Prefer the provider's current name over the snapshot frozen on the offer
+  // at submission time — the snapshot goes stale the moment they rename
+  // themselves. Falls back to the snapshot until the live name loads.
+  return { ...o, masterName: getLiveProviderName(o.masterId) ?? o.masterName };
 }
 export function toChatMessage(m: api.BackendChatMessage): ChatMessage {
   return {

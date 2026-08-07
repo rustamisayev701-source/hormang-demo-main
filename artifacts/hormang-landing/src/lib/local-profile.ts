@@ -108,6 +108,10 @@ export function hasStoredProviderAccess(userId: string): boolean {
 
 const backendProfileCache = new Map<string, LocalProfile>();
 const backendProfileInFlight = new Set<string>();
+/** Live current display name (firstName + lastName), same fetch as above —
+ * see getLiveProviderName(). Fixes offer/chat displays that used to freeze a
+ * provider's name at whatever it was when that offer/chat was created. */
+const nameCache = new Map<string, string>();
 
 function backendToLocal(pp: ProviderProfile): LocalProfile {
   return {
@@ -126,14 +130,25 @@ function ensureBackendProfileLoaded(userId: string): void {
   if (!userId || backendProfileCache.has(userId) || backendProfileInFlight.has(userId)) return;
   backendProfileInFlight.add(userId);
   getProviderPublicProfile(userId)
-    .then(({ providerProfile }) => {
+    .then(({ user, providerProfile }) => {
+      const fullName = `${user.firstName ?? ""} ${user.lastName ?? ""}`.trim();
+      if (fullName) nameCache.set(userId, fullName);
       if (providerProfile) {
         backendProfileCache.set(userId, backendToLocal(providerProfile));
-        emitStoreChange();
       }
+      emitStoreChange();
     })
     .catch(() => { /* not a provider yet, or fetch failed — local draft only */ })
     .finally(() => backendProfileInFlight.delete(userId));
+}
+
+/** Live current display name for a provider. Falls back to undefined until
+ * the background fetch resolves — callers should keep using their own
+ * fallback (e.g. a stored snapshot name) until then. */
+export function getLiveProviderName(userId: string): string | undefined {
+  if (!userId) return undefined;
+  ensureBackendProfileLoaded(userId);
+  return nameCache.get(userId);
 }
 
 /** Same-device draft layer only — see getLocalProfile() for the merged read. */

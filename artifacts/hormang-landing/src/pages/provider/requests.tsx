@@ -425,7 +425,7 @@ function OfferDetailModal({
                   <DollarSign className="w-3.5 h-3.5 text-violet-600" />
                   <p className="text-[10px] font-bold text-violet-600 uppercase tracking-wide">{t.providerRequests.offerDetail.offerPrice}</p>
                 </div>
-                <p className="text-sm font-extrabold text-violet-800">{offer.priceLabel}</p>
+                <p className="text-sm font-extrabold text-violet-800">{offer.price.toLocaleString() + " " + t.shared.sumSuffix}</p>
               </div>
             </div>
 
@@ -605,7 +605,7 @@ function RespondedRow({ r, index: i, providerId, onOpenDetail }: {
             {badge.label}
           </span>
           {offer && (
-            <span className="text-[10px] text-violet-600 font-bold">{offer.priceLabel}</span>
+            <span className="text-[10px] text-violet-600 font-bold">{offer.price.toLocaleString() + " " + t.shared.sumSuffix}</span>
           )}
         </div>
         {offer && <Eye className="w-4 h-4 text-gray-300 flex-shrink-0" />}
