@@ -256,6 +256,11 @@ const BACKEND_ERROR_CODES: Record<string, string> = {
   "Bu raqam allaqachon ro'yxatdan o'tgan": "PHONE_ALREADY_REGISTERED",
   "Tasdiqlash kodi noto'g'ri yoki muddati o'tgan": "OTP_INVALID",
   "Foydalanuvchi topilmadi": "USER_NOT_FOUND",
+  "Parol noto'g'ri": "WRONG_PASSWORD",
+  "Email tasdiqlanmagan — avval tasdiqlangan email qo'shing": "EMAIL_REQUIRED_FOR_PHONE_CHANGE",
+  "Noto'g'ri telefon raqami": "INVALID_PHONE",
+  "Yangi raqam joriy raqam bilan bir xil": "NEW_PHONE_SAME_AS_OLD",
+  "Bu raqam boshqa hisob bilan bog'liq": "PHONE_TAKEN",
 };
 
 function throwBackendError(err: unknown): never {
@@ -880,47 +885,47 @@ export async function verifyChangeEmail(otp: string): Promise<{ user: SafeUser }
   return { user: updated };
 }
 
-/* ─── Change phone (password-gated, SMS OTP) ───────────────────────────── */
+/* ─── Change phone (real backend): password → email code → SMS code ────── */
 
 export async function startChangePhone(body: {
   currentPassword: string;
   newPhone: string;
-}): Promise<{ devCode?: string }> {
+}): Promise<{ devCode?: string; maskedEmail?: string }> {
   const token = getToken();
   if (!token) throw new Error("AUTH_REQUIRED");
-  const user = findById(token);
-  if (!user) throw new Error("USER_NOT_FOUND");
-  if (!user.emailVerified) throw new Error("EMAIL_REQUIRED_FOR_PHONE_CHANGE");
-
-  const ok = await verifyMyPassword(body.currentPassword);
-  if (!ok) throw new Error("WRONG_PASSWORD");
-
-  const newPhone = normalizePhone(body.newPhone);
-  if (newPhone.replace(/\D/g, "").length < 9) throw new Error("INVALID_PHONE");
-  if (newPhone === normalizePhone(user.phone ?? "")) throw new Error("NEW_PHONE_SAME_AS_OLD");
-  const owner = findByPhone(newPhone);
-  if (owner && owner.id !== user.id) throw new Error("PHONE_TAKEN");
-
-  upsertUser({ ...user, pendingPhone: newPhone });
-  return sendSmsCode(newPhone, "change-phone");
+  try {
+    return await apiFetch<{ ok: true; maskedEmail: string; devCode?: string }>("/auth/change-phone/start", {
+      method: "POST",
+      body,
+    });
+  } catch (err) {
+    throwBackendError(err);
+  }
 }
 
-export async function verifyChangePhone(otp: string): Promise<{ user: SafeUser }> {
-  const token = getToken();
-  if (!token) throw new Error("AUTH_REQUIRED");
-  const user = findById(token);
-  if (!user || !user.pendingPhone) throw new Error("PHONE_CHANGE_NOT_FOUND");
+/** Middle step: confirms the email code and triggers the SMS code to the new number. */
+export async function verifyChangePhoneEmail(newPhone: string, otp: string): Promise<{ devCode?: string }> {
+  try {
+    return await apiFetch<{ ok: true; devCode?: string }>("/auth/change-phone/verify-email", {
+      method: "POST",
+      body: { newPhone, otp },
+    });
+  } catch (err) {
+    throwBackendError(err);
+  }
+}
 
-  const ok = verifyOtpEntry("sms", user.pendingPhone, otp, "change-phone");
-  if (!ok) throw new Error("OTP_INVALID");
-
-  const updated: SafeUser = {
-    ...user,
-    phone: user.pendingPhone,
-    pendingPhone: null,
-  };
-  upsertUser(updated);
-  return { user: updated };
+/** Final step: confirms the SMS code and applies the new phone number. */
+export async function verifyChangePhone(newPhone: string, otp: string): Promise<{ user: SafeUser }> {
+  try {
+    const res = await apiFetch<{ user: BackendUser }>("/auth/change-phone/verify-sms", {
+      method: "POST",
+      body: { newPhone, otp },
+    });
+    return { user: mergeBackendUser(res.user) };
+  } catch (err) {
+    throwBackendError(err);
+  }
 }
 
 /* ─── 2FA setup / disable (user-defined code + hint) ───────────────────── */

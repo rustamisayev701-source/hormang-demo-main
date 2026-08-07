@@ -15,6 +15,7 @@ import {
   startChangeEmail,
   verifyChangeEmail,
   startChangePhone,
+  verifyChangePhoneEmail,
   verifyChangePhone,
   setup2FA,
   disable2FA,
@@ -408,63 +409,98 @@ function ChangeEmailFlow({ onDone }: { onDone: () => Promise<void> }) {
 function ChangePhoneFlow({ onDone }: { onDone: () => Promise<void> }) {
   const { t } = useI18n();
   const { toast } = useToast();
-  const [step, setStep] = useState<"form" | "verify">("form");
+  const tt = t.security.flows.changePhone;
+  const [step, setStep] = useState<"form" | "verify-email" | "verify-sms">("form");
   const [currentPassword, setCurrentPassword] = useState("");
   const [newPhone, setNewPhone] = useState("");
-  const [otp, setOtp] = useState("");
+  const [emailOtp, setEmailOtp] = useState("");
+  const [smsOtp, setSmsOtp] = useState("");
+  const [maskedEmail, setMaskedEmail] = useState("");
   const [devCode, setDevCode] = useState<string | null>(null);
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState("");
 
   function fullPhone() { return "+998" + newPhone.replace(/\D/g, ""); }
+
+  // Step 1: password + new number → email code sent to the account's own address.
   async function send() {
     setError(""); setLoading(true);
     try {
       const res = await startChangePhone({ currentPassword, newPhone: fullPhone() });
       setDevCode(res.devCode ?? null);
-      setStep("verify");
+      setMaskedEmail(res.maskedEmail ?? "");
+      setStep("verify-email");
     } catch (e) { setError(getAuthError(e instanceof Error ? e.message : "", t)); }
     finally { setLoading(false); }
   }
-  async function verify() {
+  async function resendEmail() {
+    try { const res = await startChangePhone({ currentPassword, newPhone: fullPhone() }); setDevCode(res.devCode ?? null); toast({ title: t.common.newCodeSent }); }
+    catch (e) { setError(getAuthError(e instanceof Error ? e.message : "", t)); }
+  }
+
+  // Step 2: email code → SMS code sent to the new number itself.
+  async function verifyEmail() {
     setError(""); setLoading(true);
     try {
-      await verifyChangePhone(otp);
-      toast({ title: t.security.flows.changePhone.success });
+      const res = await verifyChangePhoneEmail(fullPhone(), emailOtp);
+      setDevCode(res.devCode ?? null);
+      setStep("verify-sms");
+    } catch (e) { setError(getAuthError(e instanceof Error ? e.message : "", t)); }
+    finally { setLoading(false); }
+  }
+  async function resendSms() {
+    try { const res = await verifyChangePhoneEmail(fullPhone(), emailOtp); setDevCode(res.devCode ?? null); toast({ title: t.common.newCodeSent }); }
+    catch (e) { setError(getAuthError(e instanceof Error ? e.message : "", t)); }
+  }
+
+  // Step 3: SMS code → phone number applied.
+  async function verifySms() {
+    setError(""); setLoading(true);
+    try {
+      await verifyChangePhone(fullPhone(), smsOtp);
+      toast({ title: tt.success });
       await onDone();
     } catch (e) { setError(getAuthError(e instanceof Error ? e.message : "", t)); }
     finally { setLoading(false); }
-  }
-  async function resend() {
-    try { const res = await startChangePhone({ currentPassword, newPhone: fullPhone() }); setDevCode(res.devCode ?? null); toast({ title: t.common.newCodeSent }); }
-    catch (e) { setError(getAuthError(e instanceof Error ? e.message : "", t)); }
   }
 
   if (step === "form") {
     return (
       <div className="space-y-3">
         <ErrorBanner msg={error} />
-        <Field label={t.security.flows.changePhone.currentPasswordLabel}>
+        <Field label={tt.currentPasswordLabel}>
           <PasswordInput value={currentPassword} onChange={setCurrentPassword} autoFocus />
         </Field>
-        <Field label={t.security.flows.changePhone.newPhoneLabel}>
+        <Field label={tt.newPhoneLabel}>
           <div className="flex">
             <span className="h-11 px-3 flex items-center rounded-l-xl border border-r-0 border-border bg-muted text-sm font-semibold text-muted-foreground select-none">+998</span>
             <input type="tel" value={newPhone} onChange={(e) => setNewPhone(e.target.value.replace(/\D/g, "").slice(0, 9))} placeholder="901234567" className="flex-1 h-11 px-3 rounded-r-xl border border-border bg-background text-sm focus:outline-none focus:ring-2 focus:ring-primary/40 focus:border-primary" />
           </div>
         </Field>
-        <PrimaryButton loading={loading} onClick={send}>{t.security.flows.changePhone.sendCode}</PrimaryButton>
+        <PrimaryButton loading={loading} onClick={send}>{tt.sendEmailCode}</PrimaryButton>
+      </div>
+    );
+  }
+  if (step === "verify-email") {
+    return (
+      <div className="space-y-3">
+        <p className="text-xs text-muted-foreground">{tFormat(tt.verifyEmailSubtitleTpl, { email: maskedEmail })}</p>
+        <DevCodeBanner code={devCode} />
+        <ErrorBanner msg={error} />
+        <OtpInput value={emailOtp} onChange={setEmailOtp} onEnter={verifyEmail} />
+        <PrimaryButton loading={loading} disabled={emailOtp.length < 6} onClick={verifyEmail}>{tt.confirmEmail}</PrimaryButton>
+        <div className="flex justify-end"><ResendButton onResend={resendEmail} /></div>
       </div>
     );
   }
   return (
     <div className="space-y-3">
-      <p className="text-xs text-muted-foreground">{tFormat(t.security.flows.changePhone.verifySubtitleTpl, { phone: fullPhone() })}</p>
+      <p className="text-xs text-muted-foreground">{tFormat(tt.verifySubtitleTpl, { phone: fullPhone() })}</p>
       <DevCodeBanner code={devCode} />
       <ErrorBanner msg={error} />
-      <OtpInput value={otp} onChange={setOtp} onEnter={verify} />
-      <PrimaryButton loading={loading} disabled={otp.length < 6} onClick={verify}>{t.security.flows.changePhone.confirm}</PrimaryButton>
-      <div className="flex justify-end"><ResendButton onResend={resend} /></div>
+      <OtpInput value={smsOtp} onChange={setSmsOtp} onEnter={verifySms} />
+      <PrimaryButton loading={loading} disabled={smsOtp.length < 6} onClick={verifySms}>{tt.confirm}</PrimaryButton>
+      <div className="flex justify-end"><ResendButton onResend={resendSms} /></div>
     </div>
   );
 }

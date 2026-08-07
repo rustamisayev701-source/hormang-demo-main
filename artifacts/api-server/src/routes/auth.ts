@@ -734,6 +734,153 @@ router.put("/email/verify", requireAuth, async (req: AuthRequest, res) => {
   }
 });
 
+// ─── Change phone number — password, then an email code (proves account
+// ownership), then an SMS code to the new number itself (proves control of
+// that number) — three factors before the phone on file ever changes. ──────
+
+// POST /change-phone/start — verify password, email the account's own
+// (already-verified) address a code.
+router.post("/change-phone/start", requireAuth, async (req: AuthRequest, res) => {
+  try {
+    const { currentPassword, newPhone } = req.body as { currentPassword?: string; newPhone?: string };
+    if (!currentPassword || !newPhone) {
+      res.status(400).json({ error: "Joriy parol va yangi raqam talab qilinadi" });
+      return;
+    }
+
+    const [user] = await db.select().from(usersTable).where(eq(usersTable.id, req.user!.id)).limit(1);
+    if (!user) {
+      res.status(404).json({ error: "Foydalanuvchi topilmadi" });
+      return;
+    }
+    if (!(await comparePassword(currentPassword, user.passwordHash))) {
+      res.status(401).json({ error: "Parol noto'g'ri" });
+      return;
+    }
+    if (!user.email || !user.emailVerified) {
+      res.status(400).json({ error: "Email tasdiqlanmagan — avval tasdiqlangan email qo'shing" });
+      return;
+    }
+
+    const normalized = normalizePhone(newPhone);
+    if (normalized.replace(/\D/g, "").length < 9) {
+      res.status(400).json({ error: "Noto'g'ri telefon raqami" });
+      return;
+    }
+    if (normalized === normalizePhone(user.phone ?? "")) {
+      res.status(400).json({ error: "Yangi raqam joriy raqam bilan bir xil" });
+      return;
+    }
+    const [phoneConflict] = await db.select({ id: usersTable.id }).from(usersTable).where(eq(usersTable.phone, normalized)).limit(1);
+    if (phoneConflict && phoneConflict.id !== user.id) {
+      res.status(409).json({ error: "Bu raqam boshqa hisob bilan bog'liq" });
+      return;
+    }
+
+    if (!isResendConfigured()) {
+      console.error("Resend is not configured — cannot send change-phone email OTP.");
+      res.status(502).json({ error: "Email xizmati sozlanmagan" });
+      return;
+    }
+    const code = storeOtp("email", user.email, "change-phone-email");
+    try {
+      await sendOtpEmail(user.email, code);
+    } catch (emailErr) {
+      console.error("Resend email send error:", emailErr);
+      res.status(502).json({ error: "Email yuborishda xatolik yuz berdi. Qayta urinib ko'ring." });
+      return;
+    }
+
+    res.json({ ok: true, maskedEmail: maskEmail(user.email), ...(env.isProduction ? {} : { devCode: code }) });
+  } catch (err) {
+    console.error("Change phone start error:", err);
+    res.status(500).json({ error: "Xatolik yuz berdi" });
+  }
+});
+
+// POST /change-phone/verify-email — confirms the email code, then sends an
+// SMS code to the NEW number to prove the requester actually controls it.
+router.post("/change-phone/verify-email", requireAuth, async (req: AuthRequest, res) => {
+  try {
+    const { newPhone, otp } = req.body as { newPhone?: string; otp?: string };
+    if (!newPhone || !otp) {
+      res.status(400).json({ error: "Yangi raqam va tasdiqlash kodi talab qilinadi" });
+      return;
+    }
+
+    const [user] = await db.select({ email: usersTable.email }).from(usersTable).where(eq(usersTable.id, req.user!.id)).limit(1);
+    if (!user?.email || !verifyOtp("email", user.email, otp, "change-phone-email")) {
+      res.status(400).json({ error: "Tasdiqlash kodi noto'g'ri yoki muddati o'tgan" });
+      return;
+    }
+
+    const normalized = normalizePhone(newPhone);
+    const [phoneConflict] = await db.select({ id: usersTable.id }).from(usersTable).where(eq(usersTable.phone, normalized)).limit(1);
+    if (phoneConflict && phoneConflict.id !== req.user!.id) {
+      res.status(409).json({ error: "Bu raqam boshqa hisob bilan bog'liq" });
+      return;
+    }
+
+    const code = storeOtp("sms", normalized, "change-phone-sms");
+    if (isEskizConfigured()) {
+      try {
+        await sendOtpSms(normalized, code);
+      } catch (smsErr) {
+        console.error("Eskiz SMS send error:", smsErr);
+        if (env.isProduction) {
+          res.status(502).json({ error: "SMS yuborishda xatolik yuz berdi. Qayta urinib ko'ring." });
+          return;
+        }
+      }
+    } else if (env.isProduction) {
+      console.error("Eskiz SMS is not configured — cannot send change-phone SMS OTP.");
+      res.status(502).json({ error: "SMS xizmati sozlanmagan" });
+      return;
+    }
+
+    res.json({ ok: true, ...(env.isProduction ? {} : { devCode: code }) });
+  } catch (err) {
+    console.error("Change phone verify-email error:", err);
+    res.status(500).json({ error: "Xatolik yuz berdi" });
+  }
+});
+
+// POST /change-phone/verify-sms — final step: confirms the SMS code and
+// applies the new phone number.
+router.post("/change-phone/verify-sms", requireAuth, async (req: AuthRequest, res) => {
+  try {
+    const { newPhone, otp } = req.body as { newPhone?: string; otp?: string };
+    if (!newPhone || !otp) {
+      res.status(400).json({ error: "Yangi raqam va tasdiqlash kodi talab qilinadi" });
+      return;
+    }
+
+    const normalized = normalizePhone(newPhone);
+    if (!verifyOtp("sms", normalized, otp, "change-phone-sms")) {
+      res.status(400).json({ error: "Tasdiqlash kodi noto'g'ri yoki muddati o'tgan" });
+      return;
+    }
+
+    const [phoneConflict] = await db.select({ id: usersTable.id }).from(usersTable).where(eq(usersTable.phone, normalized)).limit(1);
+    if (phoneConflict && phoneConflict.id !== req.user!.id) {
+      res.status(409).json({ error: "Bu raqam boshqa hisob bilan bog'liq" });
+      return;
+    }
+
+    const [user] = await db
+      .update(usersTable)
+      .set({ phone: normalized, updatedAt: new Date() })
+      .where(eq(usersTable.id, req.user!.id))
+      .returning();
+
+    const safeUser = { ...user, passwordHash: undefined };
+    res.json({ user: safeUser });
+  } catch (err) {
+    console.error("Change phone verify-sms error:", err);
+    res.status(500).json({ error: "Xatolik yuz berdi" });
+  }
+});
+
 // ─── PUT /provider-profile ─────────────────────────────────────────────────
 router.put("/provider-profile", requireAuth, async (req: AuthRequest, res) => {
   try {
