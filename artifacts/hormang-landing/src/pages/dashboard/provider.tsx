@@ -89,13 +89,6 @@ export default function ProviderDashboard() {
       badgeColor: "bg-blue-600 text-white",
     },
     {
-      icon: TrendingUp,
-      title: t.dashboard.providerItems.stats.title,
-      desc: t.dashboard.providerItems.stats.desc,
-      action: undefined as (() => void) | undefined,
-      comingSoon: true,
-    },
-    {
       icon: Star,
       title: t.dashboard.providerItems.reviews.title,
       desc: t.dashboard.providerItems.reviews.desc,

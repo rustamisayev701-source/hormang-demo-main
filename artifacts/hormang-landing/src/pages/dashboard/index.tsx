@@ -6,7 +6,7 @@ import { motion, AnimatePresence } from "framer-motion";
 import logoImg from "/hormang-logo.png";
 import {
   Search, ClipboardList, Settings, UserPen, LogOut, ChevronRight,
-  Inbox, TrendingUp, Star, CheckCircle2, MapPin,
+  Inbox, Star, CheckCircle2, MapPin,
   ShoppingBag, Briefcase, Loader2, ArrowRight, X,
   Phone, ShieldCheck, Plus, MessageCircle, LayoutGrid, MessagesSquare,
   IdCard,
@@ -468,12 +468,6 @@ function ProviderContent({ onNavigate }: { onNavigate: (path: string) => void })
       action: () => onNavigate("/provider/history"),
     },
     {
-      icon: TrendingUp,
-      title: t.dashboard.providerItems.stats.title,
-      desc: t.dashboard.providerItems.stats.desc,
-      comingSoon: true,
-    },
-    {
       icon: Star,
       title: t.dashboard.providerItems.reviews.title,
       desc: t.dashboard.providerItems.reviews.desc,
@@ -703,23 +697,18 @@ function ProviderContent({ onNavigate }: { onNavigate: (path: string) => void })
       )}
 
       {/* ── Menu items ── */}
-      {menuItems.map(({ icon: Icon, title, desc, action, badge, badgeColor, comingSoon }, i) => (
+      {menuItems.map(({ icon: Icon, title, desc, action, badge, badgeColor }, i) => (
         <motion.button
           key={title}
           initial={{ opacity: 0, y: 10 }}
           animate={{ opacity: 1, y: 0 }}
           transition={{ delay: 0.08 + i * 0.055, duration: 0.35 }}
-          whileHover={action ? { scale: 1.01, y: -1 } : {}}
-          whileTap={action ? { scale: 0.99 } : {}}
+          whileHover={{ scale: 1.01, y: -1 }}
+          whileTap={{ scale: 0.99 }}
           onClick={action}
-          disabled={!action}
-          className={`w-full text-left p-4 rounded-2xl border transition-all flex items-center gap-4 group card-shadow ${
-            action
-              ? "bg-white border-gray-100 hover:border-violet-200 hover:shadow-md"
-              : "bg-white border-gray-100 opacity-55 cursor-not-allowed"
-          }`}
+          className="w-full text-left p-4 rounded-2xl border transition-all flex items-center gap-4 group card-shadow bg-white border-gray-100 hover:border-violet-200 hover:shadow-md"
         >
-          <div className={`w-10 h-10 rounded-xl bg-violet-50 flex items-center justify-center flex-shrink-0 transition-transform ${action ? "group-hover:scale-110" : ""}`}>
+          <div className="w-10 h-10 rounded-xl bg-violet-50 flex items-center justify-center flex-shrink-0 transition-transform group-hover:scale-110">
             <Icon className="w-5 h-5 text-violet-600" />
           </div>
           <div className="flex-1 min-w-0">
@@ -728,11 +717,9 @@ function ProviderContent({ onNavigate }: { onNavigate: (path: string) => void })
           </div>
           {badge ? (
             <span className={`text-[10px] font-bold px-2 py-0.5 rounded-full ${badgeColor}`}>{badge}</span>
-          ) : comingSoon ? (
-            <span className="text-[10px] font-bold px-2 py-0.5 rounded-full bg-gray-100 text-gray-400">{t.dashboard.soon}</span>
-          ) : action ? (
+          ) : (
             <ChevronRight className="w-4 h-4 text-gray-400 group-hover:text-violet-500 flex-shrink-0" />
-          ) : null}
+          )}
         </motion.button>
       ))}
     </div>
