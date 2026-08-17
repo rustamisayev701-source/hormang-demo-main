@@ -6,10 +6,8 @@ import { DropdownMenu, DropdownMenuTrigger, DropdownMenuContent, DropdownMenuIte
 import { motion, AnimatePresence } from "framer-motion";
 import { useAuth } from "@/contexts/auth-context";
 import { useI18n } from "@/contexts/i18n-context";
-import { LOCALES, type Locale } from "@/lib/i18n";
+import { LOCALES } from "@/lib/i18n";
 import logoImg from "/hormang-logo.png";
-
-const LOCALE_FLAGS: Record<Locale, string> = { uz: "🇺🇿", ru: "🇷🇺", en: "🇬🇧" };
 
 function LanguageSwitcher({ variant = "desktop" }: { variant?: "desktop" | "mobile" }) {
   const { locale, setLocale } = useI18n();
@@ -24,7 +22,6 @@ function LanguageSwitcher({ variant = "desktop" }: { variant?: "desktop" | "mobi
               locale === l.code ? "bg-blue-50 text-blue-700 border border-blue-200" : "bg-gray-50 text-gray-500 border border-gray-100 hover:bg-gray-100"
             }`}
           >
-            <span>{LOCALE_FLAGS[l.code]}</span>
             <span className="uppercase">{l.code}</span>
           </button>
         ))}
@@ -42,7 +39,7 @@ function LanguageSwitcher({ variant = "desktop" }: { variant?: "desktop" | "mobi
       <DropdownMenuContent align="end" className="min-w-36">
         {LOCALES.map((l) => (
           <DropdownMenuItem key={l.code} onClick={() => setLocale(l.code)} className="gap-2 cursor-pointer">
-            <span>{LOCALE_FLAGS[l.code]}</span>
+            <span className="uppercase text-xs font-bold text-gray-400 w-5">{l.code}</span>
             <span className="flex-1">{l.name}</span>
             {locale === l.code && <Check className="w-3.5 h-3.5 text-blue-600" />}
           </DropdownMenuItem>
@@ -110,7 +107,7 @@ export function Navbar() {
           </Link>
 
           {/* Desktop nav */}
-          <nav className="hidden md:flex items-center gap-3">
+          <nav className="hidden md:flex items-center gap-6">
             <ul className="flex items-center gap-5">
               {navLinks.map((link, i) => (
                 <motion.li
