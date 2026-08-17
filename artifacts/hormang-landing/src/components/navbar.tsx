@@ -1,11 +1,56 @@
 import { useState, useEffect } from "react";
 import { Link, useLocation } from "wouter";
-import { Menu, X, LogOut, User } from "lucide-react";
+import { Menu, X, LogOut, User, Globe, Check } from "lucide-react";
 import { Button } from "./ui/button";
+import { DropdownMenu, DropdownMenuTrigger, DropdownMenuContent, DropdownMenuItem } from "./ui/dropdown-menu";
 import { motion, AnimatePresence } from "framer-motion";
 import { useAuth } from "@/contexts/auth-context";
 import { useI18n } from "@/contexts/i18n-context";
+import { LOCALES, type Locale } from "@/lib/i18n";
 import logoImg from "/hormang-logo.png";
+
+const LOCALE_FLAGS: Record<Locale, string> = { uz: "🇺🇿", ru: "🇷🇺", en: "🇬🇧" };
+
+function LanguageSwitcher({ variant = "desktop" }: { variant?: "desktop" | "mobile" }) {
+  const { locale, setLocale } = useI18n();
+  if (variant === "mobile") {
+    return (
+      <div className="flex items-center gap-1.5">
+        {LOCALES.map((l) => (
+          <button
+            key={l.code}
+            onClick={() => setLocale(l.code)}
+            className={`flex-1 flex items-center justify-center gap-1.5 px-2 py-2 rounded-xl text-xs font-bold transition-colors ${
+              locale === l.code ? "bg-blue-50 text-blue-700 border border-blue-200" : "bg-gray-50 text-gray-500 border border-gray-100 hover:bg-gray-100"
+            }`}
+          >
+            <span>{LOCALE_FLAGS[l.code]}</span>
+            <span className="uppercase">{l.code}</span>
+          </button>
+        ))}
+      </div>
+    );
+  }
+  return (
+    <DropdownMenu>
+      <DropdownMenuTrigger asChild>
+        <button className="flex items-center gap-1.5 px-2.5 py-1.5 rounded-xl text-sm font-semibold text-gray-500 hover:text-gray-900 hover:bg-gray-100 transition-colors">
+          <Globe className="w-4 h-4" />
+          <span className="uppercase">{locale}</span>
+        </button>
+      </DropdownMenuTrigger>
+      <DropdownMenuContent align="end" className="min-w-36">
+        {LOCALES.map((l) => (
+          <DropdownMenuItem key={l.code} onClick={() => setLocale(l.code)} className="gap-2 cursor-pointer">
+            <span>{LOCALE_FLAGS[l.code]}</span>
+            <span className="flex-1">{l.name}</span>
+            {locale === l.code && <Check className="w-3.5 h-3.5 text-blue-600" />}
+          </DropdownMenuItem>
+        ))}
+      </DropdownMenuContent>
+    </DropdownMenu>
+  );
+}
 
 export function Navbar() {
   const [isScrolled, setIsScrolled] = useState(false);
@@ -84,6 +129,8 @@ export function Navbar() {
               ))}
             </ul>
 
+            <LanguageSwitcher />
+
             <div className="flex items-center gap-3 border-l border-gray-200 pl-3">
               {user ? (
                 <>
@@ -161,6 +208,9 @@ export function Navbar() {
             className="md:hidden overflow-hidden bg-white border-b border-gray-100 shadow-sm"
           >
             <div className="p-4 flex flex-col gap-1">
+              <div className="pb-3 mb-2 border-b border-gray-100">
+                <LanguageSwitcher variant="mobile" />
+              </div>
               {navLinks.map((link, i) => (
                 <motion.a
                   key={link.name}
