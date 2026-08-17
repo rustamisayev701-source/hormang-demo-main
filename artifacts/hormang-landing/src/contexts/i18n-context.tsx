@@ -14,11 +14,12 @@ const I18nContext = createContext<I18nState | null>(null);
 function readStoredLocale(): Locale {
   try {
     const raw = localStorage.getItem(LOCALE_KEY);
-    if (raw === "uz" || raw === "ru") return raw;
+    if (raw === "uz" || raw === "ru" || raw === "en") return raw;
   } catch { /* noop */ }
   if (typeof navigator !== "undefined") {
     const lang = navigator.language.toLowerCase();
     if (lang.startsWith("ru")) return "ru";
+    if (lang.startsWith("en")) return "en";
   }
   return "uz";
 }

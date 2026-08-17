@@ -26,6 +26,7 @@ import {
   type Question,
 } from "./questionnaire-store";
 import { getLocalizedText } from "./localization";
+import type { Locale } from "@/lib/i18n";
 
 /* ─── Types ──────────────────────────────────────────────────────── */
 
@@ -263,14 +264,14 @@ export function getLocalizedDescription(request: ProviderRequest, locale: string
         const otherOpt = q.options?.find((o) => o.type === "other");
         if (otherOpt && value === otherOpt.value) {
           const customText = answers[q.id + "_other"] as string | undefined;
-          return customText?.trim() || getLocalizedText(otherOpt.labelLocalized ?? otherOpt.label, locale as "uz" | "ru");
+          return customText?.trim() || getLocalizedText(otherOpt.labelLocalized ?? otherOpt.label, locale as Locale);
         }
         const opt = q.options?.find((o) => o.value === value);
-        return opt ? getLocalizedText(opt.labelLocalized ?? opt.label, locale as "uz" | "ru") : value;
+        return opt ? getLocalizedText(opt.labelLocalized ?? opt.label, locale as Locale) : value;
       };
 
       let formatted: string | null = null;
-      if (typeof v === "boolean") formatted = v ? (locale === "ru" ? "Да" : "Ha") : (locale === "ru" ? "Нет" : "Yo'q");
+      if (typeof v === "boolean") formatted = v ? (locale === "ru" ? "Да" : locale === "en" ? "Yes" : "Ha") : (locale === "ru" ? "Нет" : locale === "en" ? "No" : "Yo'q");
       else if (typeof v === "number") formatted = String(v);
       else if (typeof v === "string") formatted = optLabel(v);
       else if (Array.isArray(v)) formatted = (v as string[]).map(optLabel).join(", ");

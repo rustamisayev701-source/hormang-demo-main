@@ -35,7 +35,7 @@ import { calculateOfferCost } from "@/lib/offer-cost";
 import { SUSPENDED_MESSAGE } from "@/lib/safety-store";
 import { useLocation } from "wouter";
 import { useI18n } from "@/contexts/i18n-context";
-import { tFormat, getBudgetLabel } from "@/lib/i18n";
+import { tFormat, getBudgetLabel, type Locale } from "@/lib/i18n";
 import type { Dict } from "@/lib/i18n/locales/uz";
 import { getCategoryDisplayName } from "@/lib/categories";
 import { CategoryIcon } from "@/components/category-icon";
@@ -67,7 +67,7 @@ function formatAnswerValue(
   otherText?: string,
   locale?: string,
 ): string {
-  const optLabel = (o: QuestionOption) => getLocalizedText(o.labelLocalized ?? o.label, (locale ?? "uz") as "uz" | "ru");
+  const optLabel = (o: QuestionOption) => getLocalizedText(o.labelLocalized ?? o.label, (locale ?? "uz") as Locale);
   if (value === null || value === undefined || value === "") return t.offerForm.answer.dash;
   if (typeof value === "string" && value.startsWith("data:")) return "__IMAGE__";
   if (typeof value === "boolean") return value ? t.offerForm.answer.yes : t.offerForm.answer.no;
@@ -157,7 +157,7 @@ export function OfferForm({ request, onClose, onSubmitted }: Props) {
       const otherText = request.answers?.[q.id + "_other"] as string | undefined;
       const formatted = formatAnswerValue(raw, t, q.options, otherText, locale);
       if (formatted === "__IMAGE__") return null;
-      return { label: getLocalizedText(q.labelLocalized ?? q.label, locale as "uz" | "ru"), value: formatted };
+      return { label: getLocalizedText(q.labelLocalized ?? q.label, locale as Locale), value: formatted };
     })
     .filter(Boolean) as { label: string; value: string }[];
 

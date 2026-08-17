@@ -8,10 +8,14 @@ const router: IRouter = Router();
 function toCategoryJson(row: CategoryRow, questionCount: number) {
   return {
     id: row.id,
-    nameLocalized: { uz: row.nameUz, ...(row.nameRu ? { ru: row.nameRu } : {}) },
+    nameLocalized: { uz: row.nameUz, ...(row.nameRu ? { ru: row.nameRu } : {}), ...(row.nameEn ? { en: row.nameEn } : {}) },
     descriptionLocalized:
-      row.descriptionUz || row.descriptionRu
-        ? { ...(row.descriptionUz ? { uz: row.descriptionUz } : {}), ...(row.descriptionRu ? { ru: row.descriptionRu } : {}) }
+      row.descriptionUz || row.descriptionRu || row.descriptionEn
+        ? {
+            ...(row.descriptionUz ? { uz: row.descriptionUz } : {}),
+            ...(row.descriptionRu ? { ru: row.descriptionRu } : {}),
+            ...(row.descriptionEn ? { en: row.descriptionEn } : {}),
+          }
         : undefined,
     emoji: row.emoji,
     icon: row.icon ?? undefined,
@@ -135,8 +139,8 @@ router.put("/:id", requireAdminKey, async (req, res) => {
   try {
     const id: string = String(req.params.id);
     const body = req.body as {
-      nameLocalized?: { uz?: string; ru?: string };
-      descriptionLocalized?: { uz?: string; ru?: string };
+      nameLocalized?: { uz?: string; ru?: string; en?: string };
+      descriptionLocalized?: { uz?: string; ru?: string; en?: string };
       emoji?: string;
       icon?: string | null;
       iconFamily?: string | null;
@@ -157,8 +161,10 @@ router.put("/:id", requireAdminKey, async (req, res) => {
     const values = {
       nameUz: body.nameLocalized.uz.trim(),
       nameRu: body.nameLocalized.ru?.trim() || null,
+      nameEn: body.nameLocalized.en?.trim() || null,
       descriptionUz: body.descriptionLocalized?.uz?.trim() || null,
       descriptionRu: body.descriptionLocalized?.ru?.trim() || null,
+      descriptionEn: body.descriptionLocalized?.en?.trim() || null,
       emoji: body.emoji ?? "📋",
       icon: body.icon ?? null,
       iconFamily: body.iconFamily ?? null,

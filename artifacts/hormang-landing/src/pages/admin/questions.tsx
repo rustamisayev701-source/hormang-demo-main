@@ -51,6 +51,7 @@ interface EditorOption {
   _key: string;
   label: string;    /** UZ label — primary */
   labelRu: string;  /** RU label */
+  labelEn: string;  /** EN label */
   value: string;
   type: "fixed" | "other";
   tangaCost: string;
@@ -60,13 +61,16 @@ interface EditorState {
   id: string;
   label: string;        /** UZ question text — primary */
   labelRu: string;      /** RU question text */
+  labelEn: string;      /** EN question text */
   type: QuestionType;
   required: boolean;
   isCore: boolean;
   helpText: string;        /** UZ help text */
   helpTextRu: string;      /** RU help text */
+  helpTextEn: string;      /** EN help text */
   placeholder: string;     /** UZ placeholder */
   placeholderRu: string;   /** RU placeholder */
+  placeholderEn: string;   /** EN placeholder */
   min: string;
   max: string;
   step: string;
@@ -81,7 +85,7 @@ interface EditorState {
 function mkKey() { return `_${Math.random().toString(36).slice(2, 8)}`; }
 
 function blankOption(): EditorOption {
-  return { _key: mkKey(), label: "", labelRu: "", value: "", type: "fixed" as const, tangaCost: "0" };
+  return { _key: mkKey(), label: "", labelRu: "", labelEn: "", value: "", type: "fixed" as const, tangaCost: "0" };
 }
 
 function blankEditor(): EditorState {
@@ -89,13 +93,16 @@ function blankEditor(): EditorState {
     id: `q_${Date.now()}`,
     label: "",
     labelRu: "",
+    labelEn: "",
     type: "single-select",
     required: false,
     isCore: false,
     helpText: "",
     helpTextRu: "",
+    helpTextEn: "",
     placeholder: "",
     placeholderRu: "",
+    placeholderEn: "",
     min: "",
     max: "",
     step: "",
@@ -113,13 +120,16 @@ function editorFromQuestion(q: Question): EditorState {
     id: q.id,
     label: q.labelLocalized?.uz ?? q.label,
     labelRu: q.labelLocalized?.ru ?? "",
+    labelEn: q.labelLocalized?.en ?? "",
     type: q.type,
     required: !!q.required,
     isCore: !!q.isCore,
     helpText: q.helpTextLocalized?.uz ?? q.helpText ?? "",
     helpTextRu: q.helpTextLocalized?.ru ?? "",
+    helpTextEn: q.helpTextLocalized?.en ?? "",
     placeholder: q.placeholderLocalized?.uz ?? q.placeholder ?? "",
     placeholderRu: q.placeholderLocalized?.ru ?? "",
+    placeholderEn: q.placeholderLocalized?.en ?? "",
     min: q.min != null ? String(q.min) : "",
     max: q.max != null ? String(q.max) : "",
     step: q.step != null ? String(q.step) : "",
@@ -128,6 +138,7 @@ function editorFromQuestion(q: Question): EditorState {
           _key: mkKey(),
           label: o.labelLocalized?.uz ?? o.label,
           labelRu: o.labelLocalized?.ru ?? "",
+          labelEn: o.labelLocalized?.en ?? "",
           value: o.value,
           type: (o.type === "other" ? "other" : "fixed") as "fixed" | "other",
           tangaCost: o.tangaCost != null ? String(o.tangaCost) : "0",
@@ -144,40 +155,46 @@ function editorFromQuestion(q: Question): EditorState {
 function editorToQuestion(e: EditorState): Question {
   const uzLabel = e.label.trim();
   const ruLabel = e.labelRu.trim();
+  const enLabel = e.labelEn.trim();
   const uzPlaceholder = e.placeholder.trim();
   const ruPlaceholder = e.placeholderRu.trim();
+  const enPlaceholder = e.placeholderEn.trim();
   const uzHelp = e.helpText.trim();
   const ruHelp = e.helpTextRu.trim();
+  const enHelp = e.helpTextEn.trim();
 
   const q: Question = {
     id: e.id,
-    label: uzLabel || ruLabel,   // UZ primary, RU fallback
+    label: uzLabel || ruLabel || enLabel,   // UZ primary, RU then EN fallback
     type: e.type,
   };
 
-  if (uzLabel || ruLabel) {
+  if (uzLabel || ruLabel || enLabel) {
     q.labelLocalized = {
       ...(uzLabel ? { uz: uzLabel } : {}),
       ...(ruLabel ? { ru: ruLabel } : {}),
+      ...(enLabel ? { en: enLabel } : {}),
     };
   }
 
   if (e.required) q.required = true;
   if (e.isCore) q.isCore = true;
 
-  if (uzPlaceholder || ruPlaceholder) {
-    q.placeholder = uzPlaceholder || ruPlaceholder;
+  if (uzPlaceholder || ruPlaceholder || enPlaceholder) {
+    q.placeholder = uzPlaceholder || ruPlaceholder || enPlaceholder;
     q.placeholderLocalized = {
       ...(uzPlaceholder ? { uz: uzPlaceholder } : {}),
       ...(ruPlaceholder ? { ru: ruPlaceholder } : {}),
+      ...(enPlaceholder ? { en: enPlaceholder } : {}),
     };
   }
 
-  if (uzHelp || ruHelp) {
-    q.helpText = uzHelp || ruHelp;
+  if (uzHelp || ruHelp || enHelp) {
+    q.helpText = uzHelp || ruHelp || enHelp;
     q.helpTextLocalized = {
       ...(uzHelp ? { uz: uzHelp } : {}),
       ...(ruHelp ? { ru: ruHelp } : {}),
+      ...(enHelp ? { en: enHelp } : {}),
     };
   }
 
@@ -188,21 +205,23 @@ function editorToQuestion(e: EditorState): Question {
   const needsOptions = e.type === "single-select" || e.type === "multi-select";
   if (needsOptions) {
     q.options = e.options
-      .filter((o) => o.label.trim() || o.labelRu.trim())
+      .filter((o) => o.label.trim() || o.labelRu.trim() || o.labelEn.trim())
       .map((o): QuestionOption => {
         const uz = o.label.trim();
         const ru = o.labelRu.trim();
+        const en = o.labelEn.trim();
         const cost = parseInt(o.tangaCost, 10);
         const opt: QuestionOption = {
-          label: uz || ru,
-          value: o.value.trim() || (uz || ru).toLowerCase().replace(/\s+/g, "_"),
+          label: uz || ru || en,
+          value: o.value.trim() || (uz || ru || en).toLowerCase().replace(/\s+/g, "_"),
           ...(o.type === "other" ? { type: "other" as const } : {}),
           ...(cost > 0 ? { tangaCost: cost } : {}),
         };
-        if (uz || ru) {
+        if (uz || ru || en) {
           opt.labelLocalized = {
             ...(uz ? { uz } : {}),
             ...(ru ? { ru } : {}),
+            ...(en ? { en } : {}),
           };
         }
         return opt;
@@ -282,12 +301,13 @@ function Toggle({ checked, onChange, size = "sm" }: { checked: boolean; onChange
 /* ─── Language Tab Bar (reusable mini component) ─────────────────── */
 function LangTabs({
   lang, onChange,
-  uzFilled, ruFilled,
+  uzFilled, ruFilled, enFilled,
 }: {
-  lang: "uz" | "ru";
-  onChange: (l: "uz" | "ru") => void;
+  lang: "uz" | "ru" | "en";
+  onChange: (l: "uz" | "ru" | "en") => void;
   uzFilled: boolean;
   ruFilled: boolean;
+  enFilled: boolean;
 }) {
   return (
     <div className="flex items-center gap-1 p-1 bg-gray-100 rounded-xl w-fit">
@@ -311,21 +331,33 @@ function LangTabs({
           ? <span className="text-[10px] text-emerald-600 font-black">✅</span>
           : <span className="text-[10px] text-amber-500 font-black">⚠️</span>}
       </button>
+      <button
+        onClick={() => onChange("en")}
+        className={`flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-xs font-bold transition-all ${lang === "en" ? "bg-white shadow-sm text-gray-900" : "text-gray-500 hover:text-gray-700"}`}
+      >
+        <span className="text-sm">🇬🇧</span>
+        <span>EN</span>
+        {enFilled
+          ? <span className="text-[10px] text-emerald-600 font-black">✅</span>
+          : <span className="text-[10px] text-amber-500 font-black">⚠️</span>}
+      </button>
     </div>
   );
 }
 
 /* ─── Live Question Preview ──────────────────────────────────────── */
-function QuestionPreview({ q, lang = "uz" }: { q: EditorState; lang?: "uz" | "ru" }) {
+function QuestionPreview({ q, lang = "uz" }: { q: EditorState; lang?: "uz" | "ru" | "en" }) {
   const [selectedSingle, setSelectedSingle] = useState<string>("");
   const [selectedMulti, setSelectedMulti] = useState<string[]>([]);
   const [showOther, setShowOther] = useState(false);
   const [rangeVal, setRangeVal] = useState(q.min || "0");
 
-  const resolvedLabel = lang === "ru" ? (q.labelRu || q.label) : q.label;
-  const resolvedPlaceholder = lang === "ru" ? (q.placeholderRu || q.placeholder) : q.placeholder;
-  const resolvedHelp = lang === "ru" ? (q.helpTextRu || q.helpText) : q.helpText;
-  function optLabel(o: EditorOption) { return lang === "ru" ? (o.labelRu || o.label) : o.label; }
+  const resolvedLabel = lang === "ru" ? (q.labelRu || q.label) : lang === "en" ? (q.labelEn || q.label) : q.label;
+  const resolvedPlaceholder = lang === "ru" ? (q.placeholderRu || q.placeholder) : lang === "en" ? (q.placeholderEn || q.placeholder) : q.placeholder;
+  const resolvedHelp = lang === "ru" ? (q.helpTextRu || q.helpText) : lang === "en" ? (q.helpTextEn || q.helpText) : q.helpText;
+  function optLabel(o: EditorOption) { return lang === "ru" ? (o.labelRu || o.label) : lang === "en" ? (o.labelEn || o.label) : o.label; }
+  /** Picks a UI copy string for the preview's static chrome text (not editable content). */
+  function tri(uz: string, ru: string, en: string) { return lang === "ru" ? ru : lang === "en" ? en : uz; }
 
   if (q.type === "section-header") {
     return (
@@ -354,7 +386,7 @@ function QuestionPreview({ q, lang = "uz" }: { q: EditorState; lang?: "uz" | "ru
               {optLabel(o)}
             </button>
           ))}
-          {showOther && <input placeholder={lang === "ru" ? "Введите вариант..." : "Boshqa variantni kiriting..."} className="mt-1 w-full px-3 py-1.5 rounded-lg border border-blue-300 text-xs focus:outline-none" />}
+          {showOther && <input placeholder={tri("Boshqa variantni kiriting...", "Введите вариант...", "Enter an option...")} className="mt-1 w-full px-3 py-1.5 rounded-lg border border-blue-300 text-xs focus:outline-none" />}
         </div>
       )}
 
@@ -373,7 +405,7 @@ function QuestionPreview({ q, lang = "uz" }: { q: EditorState; lang?: "uz" | "ru
               </button>
             );
           })}
-          {showOther && <input placeholder={lang === "ru" ? "Введите вариант..." : "Boshqa variantni kiriting..."} className="mt-1 w-full px-3 py-1.5 rounded-lg border border-blue-300 text-xs focus:outline-none" />}
+          {showOther && <input placeholder={tri("Boshqa variantni kiriting...", "Введите вариант...", "Enter an option...")} className="mt-1 w-full px-3 py-1.5 rounded-lg border border-blue-300 text-xs focus:outline-none" />}
         </div>
       )}
 
@@ -385,13 +417,13 @@ function QuestionPreview({ q, lang = "uz" }: { q: EditorState; lang?: "uz" | "ru
             </div>
             <MapPin className="w-3.5 h-3.5 text-blue-500" />
             <p className="text-xs font-semibold text-blue-700">
-              {lang === "ru" ? "📍 Мой адрес (из профиля)" : "📍 Mening manzilim (profildan)"}
+              {tri("📍 Mening manzilim (profildan)", "📍 Мой адрес (из профиля)", "📍 My address (from profile)")}
             </p>
           </div>
           <div className="flex items-center gap-2 p-3 rounded-xl border border-gray-200 bg-white">
             <div className="w-4 h-4 rounded-full border-2 border-gray-300 flex-shrink-0" />
             <p className="text-xs font-semibold text-gray-600">
-              {lang === "ru" ? "Другой адрес" : "Boshqa manzil"}
+              {tri("Boshqa manzil", "Другой адрес", "Other address")}
             </p>
           </div>
         </div>
@@ -399,7 +431,7 @@ function QuestionPreview({ q, lang = "uz" }: { q: EditorState; lang?: "uz" | "ru
 
       {q.type === "text" && (
         <div className="space-y-2">
-          <input placeholder={resolvedPlaceholder || (lang === "ru" ? "Введите текст…" : "Matn kiriting…")} className="w-full px-3 py-2 rounded-lg border border-gray-200 text-xs focus:outline-none focus:border-blue-300" />
+          <input placeholder={resolvedPlaceholder || tri("Matn kiriting…", "Введите текст…", "Enter text…")} className="w-full px-3 py-2 rounded-lg border border-gray-200 text-xs focus:outline-none focus:border-blue-300" />
           {q.autofillExamples && q.autofillExamples.filter(Boolean).length > 0 && (
             <div className="flex flex-wrap gap-1.5">
               {q.autofillExamples.filter(Boolean).map((ex, i) => (
@@ -411,7 +443,7 @@ function QuestionPreview({ q, lang = "uz" }: { q: EditorState; lang?: "uz" | "ru
       )}
       {q.type === "textarea" && (
         <div className="space-y-2">
-          <textarea rows={2} placeholder={resolvedPlaceholder || (lang === "ru" ? "Введите текст…" : "Matn kiriting…")} className="w-full px-3 py-2 rounded-lg border border-gray-200 text-xs focus:outline-none focus:border-blue-300 resize-none" />
+          <textarea rows={2} placeholder={resolvedPlaceholder || tri("Matn kiriting…", "Введите текст…", "Enter text…")} className="w-full px-3 py-2 rounded-lg border border-gray-200 text-xs focus:outline-none focus:border-blue-300 resize-none" />
           {q.autofillExamples && q.autofillExamples.filter(Boolean).length > 0 && (
             <div className="flex flex-wrap gap-1.5">
               {q.autofillExamples.filter(Boolean).map((ex, i) => (
@@ -439,10 +471,10 @@ function QuestionPreview({ q, lang = "uz" }: { q: EditorState; lang?: "uz" | "ru
       {q.type === "yes-no" && (
         <div className="flex gap-2">
           <button className="px-4 py-2 rounded-lg border border-emerald-200 bg-emerald-50 text-emerald-700 text-xs font-semibold">
-            {lang === "ru" ? "✓ Да" : "✓ Ha"}
+            {tri("✓ Ha", "✓ Да", "✓ Yes")}
           </button>
           <button className="px-4 py-2 rounded-lg border border-red-200 bg-red-50 text-red-600 text-xs font-semibold">
-            {lang === "ru" ? "✗ Нет" : "✗ Yo'q"}
+            {tri("✗ Yo'q", "✗ Нет", "✗ No")}
           </button>
         </div>
       )}
@@ -450,7 +482,7 @@ function QuestionPreview({ q, lang = "uz" }: { q: EditorState; lang?: "uz" | "ru
       {q.type === "file" && (
         <div className="border-2 border-dashed border-gray-200 rounded-lg p-3 text-center">
           <FileUp className="w-5 h-5 text-gray-300 mx-auto mb-1" />
-          <p className="text-xs text-gray-400">{lang === "ru" ? "Загрузить файл" : "Fayl yuklash"}</p>
+          <p className="text-xs text-gray-400">{tri("Fayl yuklash", "Загрузить файл", "Upload file")}</p>
         </div>
       )}
     </div>
@@ -465,7 +497,7 @@ function OptionRow({
   otherExists,
 }: {
   opt: EditorOption; index: number; total: number;
-  lang: "uz" | "ru";
+  lang: "uz" | "ru" | "en";
   onChange: (f: keyof EditorOption, v: string) => void;
   onDelete: () => void; onMove: (dir: -1 | 1) => void;
   isDragging: boolean;
@@ -475,11 +507,11 @@ function OptionRow({
   const isOther = opt.type === "other";
   const canSetOther = isOther || !otherExists;
 
-  const labelField = lang === "ru" ? "labelRu" : "label";
-  const labelVal = lang === "ru" ? opt.labelRu : opt.label;
+  const labelField = lang === "ru" ? "labelRu" : lang === "en" ? "labelEn" : "label";
+  const labelVal = lang === "ru" ? opt.labelRu : lang === "en" ? opt.labelEn : opt.label;
   const labelPlaceholder = isOther
-    ? (lang === "ru" ? "Другое" : "Boshqa")
-    : (lang === "ru" ? `Вариант ${index + 1}` : `Variant ${index + 1}`);
+    ? (lang === "ru" ? "Другое" : lang === "en" ? "Other" : "Boshqa")
+    : (lang === "ru" ? `Вариант ${index + 1}` : lang === "en" ? `Option ${index + 1}` : `Variant ${index + 1}`);
 
   function setType(t: "fixed" | "other") {
     onChange("type", t);
@@ -488,6 +520,8 @@ function OptionRow({
 
   const uzFilled = !!opt.label.trim();
   const ruFilled = !!opt.labelRu.trim();
+  const enFilled = !!opt.labelEn.trim();
+  const otherLangFilled = lang === "uz" ? (ruFilled || enFilled) : lang === "ru" ? (uzFilled || enFilled) : (uzFilled || ruFilled);
 
   return (
     <div
@@ -510,12 +544,12 @@ function OptionRow({
             placeholder={labelPlaceholder}
             className={`w-full px-2.5 py-1.5 rounded-lg border text-xs focus:outline-none focus:ring-1 transition-all ${isOther ? "border-violet-200 bg-white focus:ring-violet-300 focus:border-violet-400 text-violet-800 font-semibold" : "border-gray-200 bg-white focus:ring-blue-300 focus:border-blue-400"}`}
           />
-          {/* Completeness dots — only shown when both UZ and RU are being edited */}
-          {lang === "uz" && ruFilled && (
-            <span className="absolute right-2 top-1/2 -translate-y-1/2 text-[9px] text-emerald-500 font-black" title="RU ham to'ldirilgan">🇷🇺✅</span>
+          {/* Completeness indicator — warns when the other two languages aren't both filled yet */}
+          {labelVal.trim() && !otherLangFilled && (
+            <span className="absolute right-2 top-1/2 -translate-y-1/2 text-[9px] text-gray-300 font-black" title="Boshqa tillar hali to'ldirilmagan">○</span>
           )}
-          {lang === "ru" && !ruFilled && uzFilled && (
-            <span className="absolute right-2 top-1/2 -translate-y-1/2 text-[9px] text-amber-400 font-black" title="RU tarjima yo'q">⚠️</span>
+          {lang !== "uz" && !labelVal.trim() && uzFilled && (
+            <span className="absolute right-2 top-1/2 -translate-y-1/2 text-[9px] text-amber-400 font-black" title="Tarjima yo'q">⚠️</span>
           )}
         </div>
 
@@ -565,7 +599,7 @@ function OptionRow({
       {isOther && (
         <div className="px-3 pb-2.5 flex items-center gap-1.5 text-[11px] text-violet-500 font-medium">
           <span className="w-1.5 h-1.5 rounded-full bg-violet-400 inline-block" />
-          {lang === "ru" ? "При выборе появится поле для ввода текста" : "Tanlanganda matn kiritish maydoni paydo bo'ladi"}
+          {lang === "ru" ? "При выборе появится поле для ввода текста" : lang === "en" ? "A text field appears when this is selected" : "Tanlanganda matn kiritish maydoni paydo bo'ladi"}
         </div>
       )}
     </div>
@@ -670,7 +704,7 @@ function QuestionEditorModal({
     const base = initial ?? blankEditor();
     return { ...base, conditionalBranches: base.conditionalBranches ?? {} };
   });
-  const [editorLang, setEditorLang] = useState<"uz" | "ru">("uz");
+  const [editorLang, setEditorLang] = useState<"uz" | "ru" | "en">("uz");
   const [showPreview, setShowPreview] = useState(true);
   const [branchEditorFor, setBranchEditorFor] = useState<string | null>(null);
   const dragIdx = useRef<number | null>(null);
@@ -685,27 +719,36 @@ function QuestionEditorModal({
   /* Completeness */
   const uzFilled = !!s.label.trim();
   const ruFilled = !!s.labelRu.trim();
+  const enFilled = !!s.labelEn.trim();
 
   /* Active-lang field bindings */
-  const activeLabelVal = editorLang === "uz" ? s.label : s.labelRu;
-  const activeLabelKey: keyof EditorState = editorLang === "uz" ? "label" : "labelRu";
-  const activePlaceholderVal = editorLang === "uz" ? s.placeholder : s.placeholderRu;
-  const activePlaceholderKey: keyof EditorState = editorLang === "uz" ? "placeholder" : "placeholderRu";
-  const activeHelpVal = editorLang === "uz" ? s.helpText : s.helpTextRu;
-  const activeHelpKey: keyof EditorState = editorLang === "uz" ? "helpText" : "helpTextRu";
+  const activeLabelVal = editorLang === "uz" ? s.label : editorLang === "ru" ? s.labelRu : s.labelEn;
+  const activeLabelKey: keyof EditorState = editorLang === "uz" ? "label" : editorLang === "ru" ? "labelRu" : "labelEn";
+  const activePlaceholderVal = editorLang === "uz" ? s.placeholder : editorLang === "ru" ? s.placeholderRu : s.placeholderEn;
+  const activePlaceholderKey: keyof EditorState = editorLang === "uz" ? "placeholder" : editorLang === "ru" ? "placeholderRu" : "placeholderEn";
+  const activeHelpVal = editorLang === "uz" ? s.helpText : editorLang === "ru" ? s.helpTextRu : s.helpTextEn;
+  const activeHelpKey: keyof EditorState = editorLang === "uz" ? "helpText" : editorLang === "ru" ? "helpTextRu" : "helpTextEn";
 
-  /* Copy from Uzbek → Russian */
+  /* Copy from Uzbek → the currently active non-UZ tab */
   function copyFromUz() {
-    setS((prev) => ({
-      ...prev,
-      labelRu: prev.labelRu || prev.label,
-      placeholderRu: prev.placeholderRu || prev.placeholder,
-      helpTextRu: prev.helpTextRu || prev.helpText,
-      options: prev.options.map((o) => ({
-        ...o,
-        labelRu: o.labelRu || o.label,
-      })),
-    }));
+    setS((prev) => {
+      if (editorLang === "ru") {
+        return {
+          ...prev,
+          labelRu: prev.labelRu || prev.label,
+          placeholderRu: prev.placeholderRu || prev.placeholder,
+          helpTextRu: prev.helpTextRu || prev.helpText,
+          options: prev.options.map((o) => ({ ...o, labelRu: o.labelRu || o.label })),
+        };
+      }
+      return {
+        ...prev,
+        labelEn: prev.labelEn || prev.label,
+        placeholderEn: prev.placeholderEn || prev.placeholder,
+        helpTextEn: prev.helpTextEn || prev.helpText,
+        options: prev.options.map((o) => ({ ...o, labelEn: o.labelEn || o.label })),
+      };
+    });
   }
 
   function addOption() {
@@ -726,7 +769,7 @@ function QuestionEditorModal({
   }
 
   function handleSave() {
-    if (!s.label.trim() && !s.labelRu.trim() && s.type !== "section-header") return;
+    if (!s.label.trim() && !s.labelRu.trim() && !s.labelEn.trim() && s.type !== "section-header") return;
     onSave(editorToQuestion(s));
   }
 
@@ -780,8 +823,8 @@ function QuestionEditorModal({
 
             {/* ── Language tabs ── */}
             <div className="flex items-center justify-between">
-              <LangTabs lang={editorLang} onChange={setEditorLang} uzFilled={uzFilled} ruFilled={ruFilled} />
-              {editorLang === "ru" && (
+              <LangTabs lang={editorLang} onChange={setEditorLang} uzFilled={uzFilled} ruFilled={ruFilled} enFilled={enFilled} />
+              {editorLang !== "uz" && (
                 <button onClick={copyFromUz}
                   className="flex items-center gap-1.5 px-3 py-1.5 rounded-xl border border-blue-200 bg-blue-50 text-blue-700 text-xs font-bold hover:bg-blue-100 transition-colors">
                   <Copy className="w-3 h-3" />
@@ -793,7 +836,7 @@ function QuestionEditorModal({
             {/* Savol matni */}
             <div>
               <label className="block text-[11px] font-black uppercase tracking-wide text-gray-400 mb-1.5">
-                {editorLang === "uz" ? "Savol matni (O'zbek)" : "Savol matni (Русский)"}
+                {editorLang === "uz" ? "Savol matni (O'zbek)" : editorLang === "ru" ? "Savol matni (Русский)" : "Savol matni (English)"}
                 {s.type !== "section-header" && editorLang === "uz" && <span className="text-red-400 ml-1">*</span>}
               </label>
               <textarea rows={2} value={activeLabelVal}
@@ -801,12 +844,14 @@ function QuestionEditorModal({
                 placeholder={
                   editorLang === "uz"
                     ? (s.type === "section-header" ? "Bo'lim nomi…" : "Savol matnini yozing...")
-                    : (s.type === "section-header" ? "Название раздела…" : "Введите текст вопроса...")
+                    : editorLang === "ru"
+                      ? (s.type === "section-header" ? "Название раздела…" : "Введите текст вопроса...")
+                      : (s.type === "section-header" ? "Section title…" : "Type the question text...")
                 }
                 className="w-full px-4 py-3 rounded-xl border border-gray-200 bg-gray-50 text-sm focus:outline-none focus:ring-2 focus:ring-blue-300 focus:border-blue-400 resize-none transition-all" />
-              {editorLang === "ru" && !ruFilled && uzFilled && (
+              {editorLang !== "uz" && !activeLabelVal.trim() && uzFilled && (
                 <p className="text-[11px] text-amber-600 mt-1 flex items-center gap-1">
-                  <span>⚠️</span> Rus tilidagi tarjima yo'q — UZ matni zaxira sifatida ishlatiladi
+                  <span>⚠️</span> {editorLang === "ru" ? "Rus tilidagi tarjima yo'q — UZ matni zaxira sifatida ishlatiladi" : "Inglizcha tarjima yo'q — UZ matni zaxira sifatida ishlatiladi"}
                 </p>
               )}
             </div>
@@ -837,6 +882,9 @@ function QuestionEditorModal({
                   </label>
                   {editorLang === "ru" && (
                     <span className="text-[10px] text-gray-400 bg-gray-100 px-2 py-0.5 rounded-full font-semibold">РУС variantlarini kiriting</span>
+                  )}
+                  {editorLang === "en" && (
+                    <span className="text-[10px] text-gray-400 bg-gray-100 px-2 py-0.5 rounded-full font-semibold">EN variantlarini kiriting</span>
                   )}
                 </div>
                 <div className="space-y-2">
@@ -880,12 +928,12 @@ function QuestionEditorModal({
                   )}
                 </div>
                 <div className="divide-y divide-violet-100">
-                  {s.options.filter((o) => o.label.trim() || o.labelRu.trim()).length === 0 && (
+                  {s.options.filter((o) => o.label.trim() || o.labelRu.trim() || o.labelEn.trim()).length === 0 && (
                     <p className="px-4 py-3 text-xs text-gray-400 italic">Avval variantlar qo'shing</p>
                   )}
-                  {s.options.filter((o) => o.label.trim() || o.labelRu.trim()).map((opt) => {
-                    const optVal = opt.value.trim() || (opt.label || opt.labelRu).trim().toLowerCase().replace(/\s+/g, "_");
-                    const displayLabel = editorLang === "ru" ? (opt.labelRu || opt.label) : opt.label;
+                  {s.options.filter((o) => o.label.trim() || o.labelRu.trim() || o.labelEn.trim()).map((opt) => {
+                    const optVal = opt.value.trim() || (opt.label || opt.labelRu || opt.labelEn).trim().toLowerCase().replace(/\s+/g, "_");
+                    const displayLabel = editorLang === "ru" ? (opt.labelRu || opt.label) : editorLang === "en" ? (opt.labelEn || opt.label) : opt.label;
                     const branches = s.conditionalBranches[optVal] ?? [];
                     return (
                       <div key={opt._key} className="flex items-center gap-3 px-4 py-2.5">
@@ -920,11 +968,11 @@ function QuestionEditorModal({
             {needsPlaceholder && (
               <div>
                 <label className="block text-[11px] font-black uppercase tracking-wide text-gray-400 mb-1.5">
-                  {editorLang === "uz" ? "Placeholder (O'zbek)" : "Placeholder (Русский)"}
+                  {editorLang === "uz" ? "Placeholder (O'zbek)" : editorLang === "ru" ? "Placeholder (Русский)" : "Placeholder (English)"}
                 </label>
                 <input value={activePlaceholderVal}
                   onChange={(e) => set(activePlaceholderKey, e.target.value)}
-                  placeholder={editorLang === "uz" ? "Foydalanuvchi uchun misol matn…" : "Пример текста для пользователя…"}
+                  placeholder={editorLang === "uz" ? "Foydalanuvchi uchun misol matn…" : editorLang === "ru" ? "Пример текста для пользователя…" : "Example text for the user…"}
                   className="w-full px-4 py-3 rounded-xl border border-gray-200 bg-gray-50 text-sm focus:outline-none focus:ring-2 focus:ring-blue-300 transition-all" />
               </div>
             )}
@@ -984,11 +1032,11 @@ function QuestionEditorModal({
             {/* Help text */}
             <div>
               <label className="block text-[11px] font-black uppercase tracking-wide text-gray-400 mb-1.5">
-                {editorLang === "uz" ? "Yordam matni (O'zbek)" : "Yordam matni (Русский)"}
+                {editorLang === "uz" ? "Yordam matni (O'zbek)" : editorLang === "ru" ? "Yordam matni (Русский)" : "Yordam matni (English)"}
               </label>
               <input value={activeHelpVal}
                 onChange={(e) => set(activeHelpKey, e.target.value)}
-                placeholder={editorLang === "uz" ? "Foydalanuvchiga qo'shimcha izoh…" : "Дополнительное пояснение для пользователя…"}
+                placeholder={editorLang === "uz" ? "Foydalanuvchiga qo'shimcha izoh…" : editorLang === "ru" ? "Дополнительное пояснение для пользователя…" : "Additional hint for the user…"}
                 className="w-full px-4 py-3 rounded-xl border border-gray-200 bg-gray-50 text-sm focus:outline-none focus:ring-2 focus:ring-blue-300 transition-all" />
             </div>
 
@@ -1071,10 +1119,10 @@ function QuestionEditorModal({
                 </div>
                 {/* Preview language toggle */}
                 <div className="flex gap-1">
-                  {(["uz", "ru"] as const).map((l) => (
+                  {(["uz", "ru", "en"] as const).map((l) => (
                     <button key={l} onClick={() => setEditorLang(l)}
                       className={`text-[10px] font-bold px-1.5 py-0.5 rounded transition-colors ${editorLang === l ? "bg-blue-600 text-white" : "text-gray-400 hover:text-gray-600"}`}>
-                      {l === "uz" ? "🇺🇿" : "🇷🇺"}
+                      {l === "uz" ? "🇺🇿" : l === "ru" ? "🇷🇺" : "🇬🇧"}
                     </button>
                   ))}
                 </div>
@@ -1083,10 +1131,12 @@ function QuestionEditorModal({
                 <div className="bg-white rounded-2xl border border-gray-200 p-4 shadow-sm">
                   <QuestionPreview q={s} lang={editorLang} />
                 </div>
-                {!ruFilled && (
+                {(!ruFilled || !enFilled) && (
                   <div className="mt-3 flex items-start gap-2 bg-amber-50 border border-amber-200 rounded-xl p-3">
                     <AlertTriangle className="w-3.5 h-3.5 text-amber-500 flex-shrink-0 mt-0.5" />
-                    <p className="text-xs text-amber-700 font-medium">Rus tilidagi tarjima yo'q</p>
+                    <p className="text-xs text-amber-700 font-medium">
+                      {!ruFilled && !enFilled ? "Rus va ingliz tilidagi tarjima yo'q" : !ruFilled ? "Rus tilidagi tarjima yo'q" : "Ingliz tilidagi tarjima yo'q"}
+                    </p>
                   </div>
                 )}
                 {s.condEnabled && s.condQuestionId && (
@@ -1110,7 +1160,7 @@ function QuestionEditorModal({
         <div className="border-t border-gray-100 px-5 py-4 flex gap-3 flex-shrink-0">
           <Button variant="outline" onClick={onClose} className="flex-1 font-semibold border-gray-200">Bekor qilish</Button>
           <Button onClick={handleSave}
-            disabled={!s.label.trim() && !s.labelRu.trim() && s.type !== "section-header"}
+            disabled={!s.label.trim() && !s.labelRu.trim() && !s.labelEn.trim() && s.type !== "section-header"}
             className="flex-1 font-bold bg-blue-600 hover:bg-blue-700 gap-2 disabled:opacity-40">
             <Save className="w-4 h-4" /> {initial ? "Saqlash" : "Qo'shish"}
           </Button>
@@ -1121,7 +1171,7 @@ function QuestionEditorModal({
           {branchEditorFor && (
             <BranchPanelModal
               optionLabel={
-                s.options.find((o) => (o.value.trim() || (o.label || o.labelRu).trim().toLowerCase().replace(/\s+/g, "_")) === branchEditorFor)?.label ?? branchEditorFor
+                s.options.find((o) => (o.value.trim() || (o.label || o.labelRu || o.labelEn).trim().toLowerCase().replace(/\s+/g, "_")) === branchEditorFor)?.label ?? branchEditorFor
               }
               optionValue={branchEditorFor}
               questions={s.conditionalBranches[branchEditorFor] ?? []}
@@ -1141,20 +1191,21 @@ function QuestionEditorModal({
 
 /* ─── Translation Completeness Badge ─────────────────────────────── */
 function TranslationBadge({ q }: { q: Question }) {
-  const hasUz = !!(q.labelLocalized?.uz?.trim() ?? q.label?.trim());
   const hasRu = !!(q.labelLocalized?.ru?.trim());
-  if (!hasRu) {
+  const hasEn = !!(q.labelLocalized?.en?.trim());
+  if (!hasRu || !hasEn) {
+    const missing = !hasRu && !hasEn ? "RU + EN" : !hasRu ? "RU" : "EN";
     return (
       <span className="flex items-center gap-0.5 text-[9px] font-bold text-amber-500 bg-amber-50 border border-amber-200 px-1.5 py-0.5 rounded-full flex-shrink-0"
-        title="Rus tilidagi tarjima yo'q">
-        🇷🇺 ⚠️
+        title={`Tarjima yo'q: ${missing}`}>
+        {!hasRu && "🇷🇺"}{!hasEn && "🇬🇧"} ⚠️
       </span>
     );
   }
   return (
     <span className="flex items-center gap-0.5 text-[9px] font-bold text-emerald-600 bg-emerald-50 border border-emerald-200 px-1.5 py-0.5 rounded-full flex-shrink-0"
-      title="Ikkala tilda ham to'ldirilgan">
-      🇺🇿🇷🇺 ✅
+      title="Barcha tillarda to'ldirilgan">
+      🇺🇿🇷🇺🇬🇧 ✅
     </span>
   );
 }

@@ -6127,6 +6127,8 @@ function CategoryManagementPanel() {
               <p className="text-xs text-gray-500 mt-0.5 truncate flex items-center gap-2 flex-wrap">
                 <span><span className="font-semibold">RU:</span> {row.nameRu || <span className="text-amber-600">tarjima yo'q ⚠️</span>}</span>
                 <span className="text-gray-300">·</span>
+                <span><span className="font-semibold">EN:</span> {row.nameEn || <span className="text-amber-600">tarjima yo'q ⚠️</span>}</span>
+                <span className="text-gray-300">·</span>
                 <span className="font-semibold text-violet-600">{row.questionCount} savol</span>
                 {row.baseCost > 0 && (
                   <>
@@ -6210,8 +6212,10 @@ function CategoryEditorModal({
   const isNew = !initial;
   const [nameUz, setNameUz] = useState(initial?.nameUz ?? "");
   const [nameRu, setNameRu] = useState(initial?.nameRu ?? "");
+  const [nameEn, setNameEn] = useState(initial?.nameEn ?? "");
   const [descUz, setDescUz] = useState(initial?.descriptionUz ?? "");
   const [descRu, setDescRu] = useState(initial?.descriptionRu ?? "");
+  const [descEn, setDescEn] = useState(initial?.descriptionEn ?? "");
   const [parentCategoryId, setParentCategoryId] = useState<string>(initial?.parentCategoryId ?? "");
   const [emoji, setEmoji] = useState(initial?.emoji ?? "📋");
   // Auto-suggest a curated icon for legacy emoji-only categories so admins
@@ -6246,10 +6250,11 @@ function CategoryEditorModal({
     }
 
     const cost = parseInt(baseCost, 10);
-    const descriptionLocalized = (descUz.trim() || descRu.trim())
+    const descriptionLocalized = (descUz.trim() || descRu.trim() || descEn.trim())
       ? {
           ...(descUz.trim() ? { uz: descUz.trim() } : {}),
           ...(descRu.trim() ? { ru: descRu.trim() } : {}),
+          ...(descEn.trim() ? { en: descEn.trim() } : {}),
         }
       : undefined;
     try {
@@ -6258,6 +6263,7 @@ function CategoryEditorModal({
         nameLocalized: {
           uz: nameUz.trim(),
           ...(nameRu.trim() ? { ru: nameRu.trim() } : {}),
+          ...(nameEn.trim() ? { en: nameEn.trim() } : {}),
         },
         ...(descriptionLocalized ? { descriptionLocalized } : {}),
         emoji, // kept as legacy fallback
@@ -6325,7 +6331,7 @@ function CategoryEditorModal({
               />
             </div>
 
-            <div className="grid grid-cols-2 gap-3">
+            <div className="grid grid-cols-1 sm:grid-cols-3 gap-3">
               <div>
                 <label className="block text-[11px] font-black uppercase tracking-wide text-gray-400 mb-1.5">
                   O'zbekcha nom <span className="text-rose-500">*</span>
@@ -6342,9 +6348,17 @@ function CategoryEditorModal({
                   placeholder="Уборка"
                   className="w-full px-4 py-3 rounded-xl border border-gray-200 bg-gray-50 text-sm text-gray-900 focus:outline-none focus:ring-2 focus:ring-blue-300 focus:border-blue-400" />
               </div>
+              <div>
+                <label className="block text-[11px] font-black uppercase tracking-wide text-gray-400 mb-1.5">
+                  Inglizcha nom
+                </label>
+                <input value={nameEn} onChange={(e) => setNameEn(e.target.value)}
+                  placeholder="Cleaning"
+                  className="w-full px-4 py-3 rounded-xl border border-gray-200 bg-gray-50 text-sm text-gray-900 focus:outline-none focus:ring-2 focus:ring-blue-300 focus:border-blue-400" />
+              </div>
             </div>
 
-            <div className="grid grid-cols-2 gap-3">
+            <div className="grid grid-cols-1 sm:grid-cols-3 gap-3">
               <div>
                 <label className="block text-[11px] font-black uppercase tracking-wide text-gray-400 mb-1.5">
                   O'zbekcha tavsif
@@ -6361,6 +6375,15 @@ function CategoryEditorModal({
                 <textarea value={descRu} onChange={(e) => setDescRu(e.target.value)}
                   rows={2}
                   placeholder="Краткое описание (необязательно)"
+                  className="w-full px-4 py-3 rounded-xl border border-gray-200 bg-gray-50 text-sm text-gray-900 focus:outline-none focus:ring-2 focus:ring-blue-300 focus:border-blue-400 resize-none" />
+              </div>
+              <div>
+                <label className="block text-[11px] font-black uppercase tracking-wide text-gray-400 mb-1.5">
+                  Inglizcha tavsif
+                </label>
+                <textarea value={descEn} onChange={(e) => setDescEn(e.target.value)}
+                  rows={2}
+                  placeholder="Short description (optional)"
                   className="w-full px-4 py-3 rounded-xl border border-gray-200 bg-gray-50 text-sm text-gray-900 focus:outline-none focus:ring-2 focus:ring-blue-300 focus:border-blue-400 resize-none" />
               </div>
             </div>
@@ -6559,8 +6582,10 @@ interface AdminCategoryRow {
   id: string;
   nameUz: string;
   nameRu: string;
+  nameEn: string;
   descriptionUz: string;
   descriptionRu: string;
+  descriptionEn: string;
   parentCategoryId: string | null;
   emoji: string;
   icon?: string;
@@ -6581,8 +6606,10 @@ function getAllAdminCategories(): AdminCategoryRow[] {
       id: c.id,
       nameUz: c.nameLocalized.uz ?? "",
       nameRu: c.nameLocalized.ru ?? "",
+      nameEn: c.nameLocalized.en ?? "",
       descriptionUz: c.descriptionLocalized?.uz ?? "",
       descriptionRu: c.descriptionLocalized?.ru ?? "",
+      descriptionEn: c.descriptionLocalized?.en ?? "",
       parentCategoryId: c.parentCategoryId ?? null,
       emoji: c.emoji,
       icon: c.icon,
