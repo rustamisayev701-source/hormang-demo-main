@@ -1,7 +1,7 @@
 import { useState, useEffect } from "react";
 import { useLocation } from "wouter";
 import { motion, AnimatePresence } from "framer-motion";
-import { Sparkles, Check, Zap, X } from "lucide-react";
+import { Sparkles, Check, Zap, X, Timer } from "lucide-react";
 import { useStoreRefresh } from "@/hooks/use-store-refresh";
 import { BottomNav } from "@/components/bottom-nav";
 import { useAuth } from "@/contexts/auth-context";
@@ -14,6 +14,7 @@ import { ReferralCard } from "@/components/referral-card";
 import { SUSPENDED_MESSAGE } from "@/lib/safety-store";
 import { useI18n } from "@/contexts/i18n-context";
 import { tFormat } from "@/lib/i18n";
+import { getLocalizedText } from "@/lib/localization";
 
 const GOLD_GRAD = "linear-gradient(135deg, #f59e0b 0%, #d97706 100%)";
 const GOLD_DARK = "linear-gradient(135deg, #f59e0b 0%, #92400e 100%)";
@@ -54,6 +55,38 @@ export function TangaChip({ userId, onClick }: { userId: string; onClick?: () =>
   );
 }
 
+/* ─── Countdown ──────────────────────────────────────────────────── */
+function useCountdown(target?: string | null): string | null {
+  const { t } = useI18n();
+  const tt = t.plansPage;
+  const [label, setLabel] = useState<string | null>(null);
+
+  useEffect(() => {
+    if (!target) { setLabel(null); return; }
+    const targetMs = new Date(target).getTime();
+
+    function tick() {
+      const diff = targetMs - Date.now();
+      if (diff <= 0) { setLabel(null); return; }
+      const totalSeconds = Math.floor(diff / 1000);
+      const days = Math.floor(totalSeconds / 86400);
+      const hours = Math.floor((totalSeconds % 86400) / 3600);
+      const minutes = Math.floor((totalSeconds % 3600) / 60);
+      const seconds = totalSeconds % 60;
+      if (days > 0) setLabel(tFormat(tt.days, { n: days }));
+      else if (hours > 0) setLabel(tFormat(tt.hoursMinutes, { h: hours, m: minutes }));
+      else if (minutes > 0) setLabel(tFormat(tt.minutesSeconds, { m: minutes, s: seconds }));
+      else setLabel(tFormat(tt.seconds, { s: seconds }));
+    }
+
+    tick();
+    const id = setInterval(tick, 1000);
+    return () => clearInterval(id);
+  }, [target, tt]);
+
+  return label;
+}
+
 /* ─── Plan Card ──────────────────────────────────────────────────── */
 function PlanCard({
   tier, buying, bought, onBuy,
@@ -65,7 +98,11 @@ function PlanCard({
 }) {
   const { t, locale } = useI18n();
   const tt = t.plansPage;
-  const tierName = locale === "ru" ? tier.nameRu : tier.nameUz;
+  const countdown = useCountdown(tier.validUntil);
+  const tierName = getLocalizedText({ uz: tier.nameUz, ru: tier.nameRu }, locale);
+  const tierDesc = getLocalizedText({ uz: tier.descUz ?? undefined, ru: tier.descRu ?? undefined }, locale);
+  const tierBadge = getLocalizedText({ uz: tier.badgeUz ?? undefined, ru: tier.badgeRu ?? undefined }, locale);
+  const isExpired = tier.validUntil ? new Date(tier.validUntil) <= new Date() : false;
   const totalTokens = tier.credits + tier.bonusTokens;
 
   // Mirrors the admin panel's own sale-eligibility check (see admin/index.tsx's
@@ -80,10 +117,18 @@ function PlanCard({
     (tier.saleLimit == null || tier.salePurchaseCount < tier.saleLimit);
   const displayPrice = saleActive ? tier.salePrice! : tier.priceSom;
   const savingsPercent = saleActive ? Math.round((1 - tier.salePrice! / tier.priceSom) * 100) : 0;
+  const slotsLeft = saleActive && tier.saleLimit != null ? Math.max(0, tier.saleLimit - tier.salePurchaseCount) : null;
+
+  const perUserLimit = tier.perUserLimit ?? 0;
+  const userCount = tier.userPurchaseCount ?? 0;
+  const userLimitHit = perUserLimit > 0 && userCount >= perUserLimit;
+  const userRemaining = perUserLimit > 0 ? perUserLimit - userCount : null;
+
+  const disabled = isExpired || userLimitHit;
 
   if (bought) {
     return (
-      <div className="bg-emerald-50 border-2 border-emerald-200 rounded-2xl p-5 flex flex-col items-center justify-center min-h-[220px] gap-2">
+      <div className="bg-emerald-50 border-2 border-emerald-200 rounded-2xl p-5 flex flex-col items-center justify-center min-h-55 gap-2">
         <div className="w-12 h-12 rounded-full bg-emerald-100 flex items-center justify-center">
           <Check className="w-6 h-6 text-emerald-600" />
         </div>
@@ -95,7 +140,7 @@ function PlanCard({
 
   if (buying) {
     return (
-      <div className="bg-white border border-gray-100 rounded-2xl p-5 flex flex-col items-center justify-center min-h-[220px] gap-3">
+      <div className="bg-white border border-gray-100 rounded-2xl p-5 flex flex-col items-center justify-center min-h-55 gap-3">
         <div className="w-10 h-10 rounded-full border-[3px] border-amber-400 border-t-transparent animate-spin" />
         <p className="text-xs font-semibold text-gray-400">{tt.buying}</p>
       </div>
@@ -103,18 +148,33 @@ function PlanCard({
   }
 
   return (
-    <div className="bg-white rounded-2xl border border-amber-100 overflow-hidden shadow-sm">
+    <div className={`bg-white rounded-2xl border overflow-hidden shadow-sm transition-opacity ${disabled ? "opacity-60" : "border-amber-100"}`}>
       <div className="h-1.5 w-full" style={{ background: GOLD_GRAD }} />
       <div className="p-4">
+        {/* Highlighting badges */}
+        {(tier.featured || tier.hotOffer || tier.bonusPlan || tierBadge) && (
+          <div className="flex flex-wrap gap-1.5 mb-2.5">
+            {tierBadge && <span className="text-[10px] font-bold px-2 py-0.5 rounded-full bg-violet-100 text-violet-700">{tierBadge}</span>}
+            {tier.featured && <span className="text-[10px] font-bold px-2 py-0.5 rounded-full bg-amber-100 text-amber-700">{tt.badgeFeatured}</span>}
+            {tier.hotOffer && <span className="text-[10px] font-bold px-2 py-0.5 rounded-full bg-red-100 text-red-600">{tt.badgeHot}</span>}
+            {tier.bonusPlan && <span className="text-[10px] font-bold px-2 py-0.5 rounded-full bg-emerald-100 text-emerald-700">{tt.badgeBonus}</span>}
+          </div>
+        )}
+
+        {/* Header */}
         <div className="flex items-start justify-between gap-2 mb-3">
-          <p className="font-extrabold text-sm text-gray-900">{tierName}</p>
+          <div>
+            <p className="font-extrabold text-sm text-gray-900">{tierName}</p>
+            {tierDesc && <p className="text-[11px] text-gray-400 mt-0.5 leading-relaxed">{tierDesc}</p>}
+          </div>
           {tier.bonusTokens > 0 && (
-            <span className="flex-shrink-0 flex items-center gap-0.5 text-[10px] font-bold text-white bg-emerald-500 px-2 py-0.5 rounded-full whitespace-nowrap">
+            <span className="shrink-0 flex items-center gap-0.5 text-[10px] font-bold text-white bg-emerald-500 px-2 py-0.5 rounded-full whitespace-nowrap">
               <Zap className="w-2.5 h-2.5" />+{tier.bonusTokens}
             </span>
           )}
         </div>
 
+        {/* Token amount */}
         <div className="flex items-center gap-2.5 mb-3">
           <CoinIcon size={32} />
           <div>
@@ -127,28 +187,68 @@ function PlanCard({
           </div>
         </div>
 
-        <div className="flex items-baseline gap-2 mb-3 flex-wrap">
+        {/* Price */}
+        <div className="flex items-baseline gap-2 mb-2 flex-wrap">
           <span className="text-lg font-extrabold text-gray-900">
-            {displayPrice.toLocaleString()} {tt.sumSuffix}
+            {displayPrice === 0 ? tt.free : `${displayPrice.toLocaleString()} ${tt.sumSuffix}`}
           </span>
           {saleActive && (
             <>
               <span className="text-xs text-gray-400 line-through">
                 {tier.priceSom.toLocaleString()} {tt.sumSuffix}
               </span>
-              <span className="text-[10px] font-bold text-orange-600">
+              <span className="text-[10px] font-black text-white bg-orange-500 px-1.5 py-0.5 rounded-full">
                 {tFormat(tt.saveTpl, { n: savingsPercent })}
               </span>
             </>
           )}
+          {!saleActive && tier.salePrice != null && (
+            <span className="text-[10px] font-bold text-gray-400 bg-gray-100 px-1.5 py-0.5 rounded-full">{tt.saleEnded}</span>
+          )}
         </div>
 
+        {/* Campaign remaining slots */}
+        {saleActive && slotsLeft !== null && (
+          <div className="flex items-center gap-1.5 mb-2 px-2.5 py-1.5 bg-orange-50 rounded-xl border border-orange-100">
+            <span className="text-[10px] font-black text-orange-600">🔥</span>
+            <span className="text-[11px] font-bold text-orange-700">{tFormat(tt.slotsLeftTpl, { n: slotsLeft })}</span>
+          </div>
+        )}
+
+        {/* Per-user limit info */}
+        {perUserLimit > 0 && !userLimitHit && userRemaining !== null && (
+          <div className="flex items-center gap-1.5 mb-2 px-2.5 py-1.5 bg-blue-50 rounded-xl border border-blue-100">
+            <span className="text-[10px] font-black text-blue-600">👤</span>
+            <span className="text-[11px] font-bold text-blue-700">{tFormat(tt.userQuotaTpl, { n: userRemaining })}</span>
+          </div>
+        )}
+        {userLimitHit && (
+          <div className="mb-2 px-2.5 py-1.5 bg-gray-50 rounded-xl border border-gray-100 text-[11px] font-bold text-gray-500 text-center">
+            {tt.userLimitReached}
+          </div>
+        )}
+
+        {/* Countdown */}
+        {countdown && !isExpired && (
+          <div className="flex items-center gap-1.5 mb-2 px-2.5 py-1.5 bg-amber-50 rounded-xl border border-amber-100">
+            <Timer className="w-3 h-3 text-amber-500 shrink-0" />
+            <span className="text-[11px] font-bold text-amber-700">{tFormat(tt.countdownLeft, { label: countdown })}</span>
+          </div>
+        )}
+        {isExpired && tier.validUntil && (
+          <div className="mb-2 px-2.5 py-1.5 bg-gray-50 rounded-xl border border-gray-100 text-[11px] font-bold text-gray-400 text-center">
+            {tt.expired}
+          </div>
+        )}
+
+        {/* Buy button */}
         <button
           onClick={onBuy}
-          className="w-full h-10 rounded-xl font-bold text-sm text-white transition-all active:scale-[.98] shadow-sm mt-1"
-          style={{ background: GOLD_DARK }}
+          disabled={disabled}
+          className="w-full h-10 rounded-xl font-bold text-sm text-white transition-all active:scale-[.98] disabled:opacity-40 disabled:cursor-not-allowed shadow-sm mt-1"
+          style={{ background: disabled ? "#d1d5db" : GOLD_DARK }}
         >
-          {tt.buyBtn}
+          {userLimitHit ? tt.limitReachedBtn : tt.buyBtn}
         </button>
       </div>
     </div>

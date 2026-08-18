@@ -5,6 +5,8 @@ export interface WalletTier {
   key: string;
   nameUz: string;
   nameRu: string;
+  descUz: string | null;
+  descRu: string | null;
   credits: number;
   bonusTokens: number;
   priceSom: number;
@@ -12,8 +14,17 @@ export interface WalletTier {
   saleLimit: number | null;
   salePurchaseCount: number;
   perUserLimit: number | null;
+  /** This user's paid-purchase count for this tier — only present when perUserLimit is set. */
+  userPurchaseCount?: number;
   startsAt: string | null;
   validUntil: string | null;
+  status: string;
+  featured: boolean;
+  hotOffer: boolean;
+  bonusPlan: boolean;
+  badgeUz: string | null;
+  badgeRu: string | null;
+  color: string | null;
   active: boolean;
   sortOrder: number;
 }

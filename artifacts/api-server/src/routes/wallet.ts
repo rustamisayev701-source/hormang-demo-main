@@ -1,5 +1,5 @@
 import { Router, type IRouter } from "express";
-import { and, eq, desc, isNull, sql } from "drizzle-orm";
+import { and, eq, desc, isNull, sql, inArray } from "drizzle-orm";
 import {
   db,
   usersTable,
@@ -63,7 +63,30 @@ router.get("/", requireAuth, async (req: AuthRequest, res) => {
       .where(eq(pricingTiersTable.active, true))
       .orderBy(pricingTiersTable.sortOrder);
 
-    res.json({ balance: wallet.balance, tiers });
+    // Only tiers with a perUserLimit need this — lets the client show real
+    // "N left for you" / "limit reached" state instead of staying silent
+    // while the server quietly falls back to full price under the hood.
+    const limitedTierIds = tiers.filter((t) => t.perUserLimit != null).map((t) => t.id);
+    const purchaseCounts: Record<string, number> = {};
+    if (limitedTierIds.length > 0) {
+      const rows = await db
+        .select({ tierId: paymentOrdersTable.tierId, count: sql<number>`count(*)::int` })
+        .from(paymentOrdersTable)
+        .where(and(
+          eq(paymentOrdersTable.userId, userId),
+          eq(paymentOrdersTable.status, "paid"),
+          inArray(paymentOrdersTable.tierId, limitedTierIds),
+        ))
+        .groupBy(paymentOrdersTable.tierId);
+      for (const row of rows) purchaseCounts[row.tierId] = row.count;
+    }
+
+    const tiersWithCounts = tiers.map((t) => ({
+      ...t,
+      userPurchaseCount: t.perUserLimit != null ? (purchaseCounts[t.id] ?? 0) : undefined,
+    }));
+
+    res.json({ balance: wallet.balance, tiers: tiersWithCounts });
   } catch (err) {
     console.error("Get wallet error:", err);
     res.status(500).json({ error: "Xatolik yuz berdi" });
