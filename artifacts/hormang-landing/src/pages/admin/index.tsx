@@ -6233,6 +6233,13 @@ function CategoryEditorModal({
   // Auto-generated preview ID (new categories only). On save we ensure uniqueness.
   const previewId = isNew ? slugifyCategoryId(nameUz) : initial!.id;
 
+  /* Auto-fires once when the admin leaves the Uzbek name field, as long as
+   * RU/EN are both still untouched — mirrors the question editor's
+   * fire-once-on-empty-tab behavior without a tab switcher to hang it off. */
+  function handleNameUzBlur() {
+    if (nameUz.trim() && !nameRu.trim() && !nameEn.trim()) void handleAutoTranslate();
+  }
+
   async function handleAutoTranslate() {
     if (!nameUz.trim()) { setError("Avval o'zbekcha nomini kiriting"); return; }
     setError("");
@@ -6367,7 +6374,7 @@ function CategoryEditorModal({
                 <label className="block text-[11px] font-black uppercase tracking-wide text-gray-400 mb-1.5">
                   O'zbekcha nom <span className="text-rose-500">*</span>
                 </label>
-                <input value={nameUz} onChange={(e) => setNameUz(e.target.value)}
+                <input value={nameUz} onChange={(e) => setNameUz(e.target.value)} onBlur={handleNameUzBlur}
                   placeholder="Tozalash"
                   className="w-full px-4 py-3 rounded-xl border border-gray-200 bg-gray-50 text-sm text-gray-900 focus:outline-none focus:ring-2 focus:ring-blue-300 focus:border-blue-400" />
               </div>

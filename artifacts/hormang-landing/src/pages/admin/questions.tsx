@@ -752,12 +752,12 @@ function QuestionEditorModal({
     });
   }
 
-  /* Auto-translate Uzbek → the currently active non-UZ tab (real translation,
-   * unlike copyFromUz which just repeats the UZ text verbatim). Overwrites
-   * the target-language fields since it's an explicit click. */
-  async function autoTranslate() {
-    if (editorLang === "uz" || !s.label.trim()) return;
-    const target = editorLang;
+/* Auto-translate Uzbek → the given non-UZ target (real translation, unlike
+   * copyFromUz which just repeats the UZ text verbatim). Overwrites the
+   * target-language fields — safe to call from a fresh/empty tab, and an
+   * explicit re-click is expected to refresh a stale translation too. */
+  async function autoTranslate(target: "ru" | "en") {
+    if (!s.label.trim()) return;
     setTranslating(true);
     try {
       const texts = [s.label, s.placeholder, s.helpText, ...s.options.map((o) => o.label)];
@@ -778,6 +778,18 @@ function QuestionEditorModal({
     } finally {
       setTranslating(false);
     }
+  }
+
+  /* Switching into an empty RU/EN tab auto-fires the translation once, so
+   * admins don't have to remember to click the button every time — the
+   * button stays for a manual re-translate afterward. */
+  function handleLangChange(lang: "uz" | "ru" | "en") {
+    setEditorLang(lang);
+    if (lang === "uz" || !s.label.trim()) return;
+    const targetFilled = lang === "ru"
+      ? !!(s.labelRu.trim() || s.placeholderRu.trim() || s.helpTextRu.trim())
+      : !!(s.labelEn.trim() || s.placeholderEn.trim() || s.helpTextEn.trim());
+    if (!targetFilled) void autoTranslate(lang);
   }
 
   function addOption() {
@@ -852,10 +864,10 @@ function QuestionEditorModal({
 
             {/* ── Language tabs ── */}
             <div className="flex items-center justify-between flex-wrap gap-2">
-              <LangTabs lang={editorLang} onChange={setEditorLang} uzFilled={uzFilled} ruFilled={ruFilled} enFilled={enFilled} />
+              <LangTabs lang={editorLang} onChange={handleLangChange} uzFilled={uzFilled} ruFilled={ruFilled} enFilled={enFilled} />
               {editorLang !== "uz" && (
                 <div className="flex items-center gap-2">
-                  <button onClick={autoTranslate} disabled={translating || !uzFilled}
+                  <button onClick={() => autoTranslate(editorLang as "ru" | "en")} disabled={translating || !uzFilled}
                     className="flex items-center gap-1.5 px-3 py-1.5 rounded-xl border border-emerald-200 bg-emerald-50 text-emerald-700 text-xs font-bold hover:bg-emerald-100 transition-colors disabled:opacity-40 disabled:cursor-not-allowed">
                     {translating ? <Loader2 className="w-3 h-3 animate-spin" /> : <Languages className="w-3 h-3" />}
                     Avtomatik tarjima
