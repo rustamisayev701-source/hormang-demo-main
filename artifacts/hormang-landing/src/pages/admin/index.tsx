@@ -30,7 +30,7 @@ import {
   Bell, Menu, ChevronLeft, Plus, MapPin, Clock, Wallet,
   Store, LayoutGrid, TriangleAlert, ChevronDown, ChevronUp,
   Flag, Tag, Star, UserCheck, Zap, Activity, StickyNote, Download, Gift,
-  BadgeCheck, Edit3, Save,
+  BadgeCheck, Edit3, Save, Loader2, Languages,
 } from "lucide-react";
 import {
   getAllCategories as getAllCategoriesFromStore,
@@ -38,7 +38,7 @@ import {
   upsertCategory as upsertAdminCategory,
   deleteCategory as deleteAdminCategory,
 } from "@/lib/categories";
-import { markAdminAuthenticated, AdminApiError, adminFetch } from "@/lib/admin-client";
+import { markAdminAuthenticated, AdminApiError, adminFetch, translateTexts } from "@/lib/admin-client";
 import {
   fetchPricingTiers, createPricingTier, updatePricingTier, setPricingTierActive, deletePricingTier,
   fetchAdminWallets, fetchAllWalletTransactions, fetchWalletTransactions, adjustWalletBalance as adjustWalletBalanceBackend,
@@ -6228,9 +6228,30 @@ function CategoryEditorModal({
   const [baseCost, setBaseCost] = useState(String(initial?.baseCost ?? 0));
   const [active, setActive] = useState(initial?.active !== false);
   const [error, setError] = useState("");
+  const [translating, setTranslating] = useState(false);
 
   // Auto-generated preview ID (new categories only). On save we ensure uniqueness.
   const previewId = isNew ? slugifyCategoryId(nameUz) : initial!.id;
+
+  async function handleAutoTranslate() {
+    if (!nameUz.trim()) { setError("Avval o'zbekcha nomini kiriting"); return; }
+    setError("");
+    setTranslating(true);
+    try {
+      const [ru, en] = await Promise.all([
+        translateTexts([nameUz, descUz], "ru"),
+        translateTexts([nameUz, descUz], "en"),
+      ]);
+      setNameRu(ru[0] || nameRu);
+      if (descUz.trim()) setDescRu(ru[1] || descRu);
+      setNameEn(en[0] || nameEn);
+      if (descUz.trim()) setDescEn(en[1] || descEn);
+    } catch (e) {
+      setError(e instanceof Error ? e.message : "Tarjima qilib bo'lmadi");
+    } finally {
+      setTranslating(false);
+    }
+  }
 
   async function handleSave() {
     setError("");
@@ -6331,6 +6352,16 @@ function CategoryEditorModal({
               />
             </div>
 
+            <div className="flex items-center justify-between">
+              <label className="block text-[11px] font-black uppercase tracking-wide text-gray-400">
+                Nomi va tavsifi
+              </label>
+              <button type="button" onClick={handleAutoTranslate} disabled={translating || !nameUz.trim()}
+                className="flex items-center gap-1.5 px-3 py-1.5 rounded-xl border border-blue-200 bg-blue-50 text-blue-700 text-xs font-bold hover:bg-blue-100 transition-colors disabled:opacity-40 disabled:cursor-not-allowed">
+                {translating ? <Loader2 className="w-3 h-3 animate-spin" /> : <Languages className="w-3 h-3" />}
+                Ruscha/Inglizchaga tarjima qilish
+              </button>
+            </div>
             <div className="grid grid-cols-1 sm:grid-cols-3 gap-3">
               <div>
                 <label className="block text-[11px] font-black uppercase tracking-wide text-gray-400 mb-1.5">

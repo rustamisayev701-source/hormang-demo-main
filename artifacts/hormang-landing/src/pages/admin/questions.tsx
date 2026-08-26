@@ -12,7 +12,7 @@ import {
   Save, X, Check, RefreshCw, Eye, EyeOff, GripVertical,
   AlertTriangle, Star, Layers, GitBranch, Hash, ToggleLeft,
   Calendar, FileUp, AlignLeft, List, Type, Sliders,
-  SlidersHorizontal, ChevronRight, Info, MapPin, Copy, Languages,
+  SlidersHorizontal, ChevronRight, Info, MapPin, Copy, Languages, Loader2,
 } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import {
@@ -22,7 +22,7 @@ import {
   type CategoryConfig, type Question, type QuestionType, type QuestionOption,
 } from "@/lib/questionnaire-store";
 import { getCategory, getCategoryDisplayName } from "@/lib/categories";
-import { markAdminAuthenticated } from "@/lib/admin-client";
+import { markAdminAuthenticated, translateTexts } from "@/lib/admin-client";
 import { onStoreChange } from "@/lib/store-events";
 import logoImg from "/hormang-logo.png";
 
@@ -707,6 +707,7 @@ function QuestionEditorModal({
   const [editorLang, setEditorLang] = useState<"uz" | "ru" | "en">("uz");
   const [showPreview, setShowPreview] = useState(true);
   const [branchEditorFor, setBranchEditorFor] = useState<string | null>(null);
+  const [translating, setTranslating] = useState(false);
   const dragIdx = useRef<number | null>(null);
 
   const set = <K extends keyof EditorState>(k: K, v: EditorState[K]) =>
@@ -749,6 +750,34 @@ function QuestionEditorModal({
         options: prev.options.map((o) => ({ ...o, labelEn: o.labelEn || o.label })),
       };
     });
+  }
+
+  /* Auto-translate Uzbek → the currently active non-UZ tab (real translation,
+   * unlike copyFromUz which just repeats the UZ text verbatim). Overwrites
+   * the target-language fields since it's an explicit click. */
+  async function autoTranslate() {
+    if (editorLang === "uz" || !s.label.trim()) return;
+    const target = editorLang;
+    setTranslating(true);
+    try {
+      const texts = [s.label, s.placeholder, s.helpText, ...s.options.map((o) => o.label)];
+      const translations = await translateTexts(texts, target);
+      const [label, placeholder, helpText, ...optionLabels] = translations;
+      setS((prev) => ({
+        ...prev,
+        ...(target === "ru"
+          ? { labelRu: label || prev.labelRu, placeholderRu: placeholder || prev.placeholderRu, helpTextRu: helpText || prev.helpTextRu }
+          : { labelEn: label || prev.labelEn, placeholderEn: placeholder || prev.placeholderEn, helpTextEn: helpText || prev.helpTextEn }),
+        options: prev.options.map((o, i) =>
+          target === "ru"
+            ? { ...o, labelRu: optionLabels[i] || o.labelRu }
+            : { ...o, labelEn: optionLabels[i] || o.labelEn }),
+      }));
+    } catch {
+      // best-effort — admin can still type translations by hand
+    } finally {
+      setTranslating(false);
+    }
   }
 
   function addOption() {
@@ -822,14 +851,21 @@ function QuestionEditorModal({
             </div>
 
             {/* ── Language tabs ── */}
-            <div className="flex items-center justify-between">
+            <div className="flex items-center justify-between flex-wrap gap-2">
               <LangTabs lang={editorLang} onChange={setEditorLang} uzFilled={uzFilled} ruFilled={ruFilled} enFilled={enFilled} />
               {editorLang !== "uz" && (
-                <button onClick={copyFromUz}
-                  className="flex items-center gap-1.5 px-3 py-1.5 rounded-xl border border-blue-200 bg-blue-50 text-blue-700 text-xs font-bold hover:bg-blue-100 transition-colors">
-                  <Copy className="w-3 h-3" />
-                  O'zbekchadan nusxa
-                </button>
+                <div className="flex items-center gap-2">
+                  <button onClick={autoTranslate} disabled={translating || !uzFilled}
+                    className="flex items-center gap-1.5 px-3 py-1.5 rounded-xl border border-emerald-200 bg-emerald-50 text-emerald-700 text-xs font-bold hover:bg-emerald-100 transition-colors disabled:opacity-40 disabled:cursor-not-allowed">
+                    {translating ? <Loader2 className="w-3 h-3 animate-spin" /> : <Languages className="w-3 h-3" />}
+                    Avtomatik tarjima
+                  </button>
+                  <button onClick={copyFromUz}
+                    className="flex items-center gap-1.5 px-3 py-1.5 rounded-xl border border-blue-200 bg-blue-50 text-blue-700 text-xs font-bold hover:bg-blue-100 transition-colors">
+                    <Copy className="w-3 h-3" />
+                    O'zbekchadan nusxa
+                  </button>
+                </div>
               )}
             </div>
 

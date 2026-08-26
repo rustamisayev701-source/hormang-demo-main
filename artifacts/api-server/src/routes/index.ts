@@ -9,6 +9,7 @@ import adminPricingRouter from "./admin-pricing";
 import adminWalletsRouter from "./admin-wallets";
 import adminUsersRouter from "./admin-users";
 import adminAuditLogRouter from "./admin-audit-log";
+import adminTranslateRouter from "./admin-translate";
 import reportsRouter from "./reports";
 import feedbackRouter from "./feedback";
 import badgesRouter from "./badges";
@@ -36,5 +37,6 @@ router.use("/admin/pricing-tiers", adminPricingRouter);
 router.use("/admin/wallets", adminWalletsRouter);
 router.use("/admin/users", adminUsersRouter);
 router.use("/admin/audit-log", adminAuditLogRouter);
+router.use("/admin/translate", adminTranslateRouter);
 
 export default router;

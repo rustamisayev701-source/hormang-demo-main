@@ -54,3 +54,12 @@ export async function adminFetch<T>(path: string, options: AdminFetchOptions = {
 
   return data as T;
 }
+
+/** Batch-translates Uzbek strings to one target language (server-side, no key needed client-side). */
+export async function translateTexts(texts: string[], target: "ru" | "en"): Promise<string[]> {
+  const { translations } = await adminFetch<{ translations: string[] }>("/admin/translate", {
+    method: "POST",
+    body: { texts, target },
+  });
+  return translations;
+}
