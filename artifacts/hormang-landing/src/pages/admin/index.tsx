@@ -6240,6 +6240,17 @@ function CategoryEditorModal({
     if (nameUz.trim() && !nameRu.trim() && !nameEn.trim()) void handleAutoTranslate();
   }
 
+  /* Opening an existing category that already has an Uzbek name but no
+   * RU/EN translates proactively on open — so it's filled in without the
+   * admin needing to touch (blur) the name field at all. */
+  useEffect(() => {
+    if (initial && initial.nameUz.trim() && !initial.nameRu.trim() && !initial.nameEn.trim()) {
+      void handleAutoTranslate();
+    }
+    // Mount-only: translates the as-opened Uzbek name, not live keystrokes.
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []);
+
   async function handleAutoTranslate() {
     if (!nameUz.trim()) { setError("Avval o'zbekcha nomini kiriting"); return; }
     setError("");

@@ -707,6 +707,7 @@ function QuestionEditorModal({
   const [editorLang, setEditorLang] = useState<"uz" | "ru" | "en">("uz");
   const [showPreview, setShowPreview] = useState(true);
   const [branchEditorFor, setBranchEditorFor] = useState<string | null>(null);
+  const autoTranslatedOnOpen = useRef(false);
   const [translating, setTranslating] = useState(false);
   const dragIdx = useRef<number | null>(null);
 
@@ -791,6 +792,26 @@ function QuestionEditorModal({
       : !!(s.labelEn.trim() || s.placeholderEn.trim() || s.helpTextEn.trim());
     if (!targetFilled) void autoTranslate(lang);
   }
+
+  /* Opening an existing question that already has Uzbek text but missing
+   * RU/EN translates both proactively — so they're already filled in even
+   * if the admin never switches to those tabs at all, not just on switch. */
+  useEffect(() => {
+    if (autoTranslatedOnOpen.current || !initial) return;
+    autoTranslatedOnOpen.current = true;
+    if (!initial.label.trim()) return;
+    (async () => {
+      if (!initial.labelRu.trim() && !initial.placeholderRu.trim() && !initial.helpTextRu.trim()) {
+        await autoTranslate("ru");
+      }
+      if (!initial.labelEn.trim() && !initial.placeholderEn.trim() && !initial.helpTextEn.trim()) {
+        await autoTranslate("en");
+      }
+    })();
+    // Runs once when the editor opens for an existing question — deliberately not
+    // re-run on every keystroke, so only the mount-time `initial` snapshot is used.
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []);
 
   function addOption() {
     setS((prev) => ({ ...prev, options: [...prev.options, blankOption()] }));
