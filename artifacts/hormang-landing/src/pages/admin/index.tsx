@@ -30,7 +30,7 @@ import {
   Bell, Menu, ChevronLeft, Plus, MapPin, Clock, Wallet,
   Store, LayoutGrid, TriangleAlert, ChevronDown, ChevronUp,
   Flag, Tag, Star, UserCheck, Zap, Activity, StickyNote, Download, Gift,
-  BadgeCheck, Edit3, Save, Loader2, Languages,
+  BadgeCheck, Edit3, Save, Loader2, Languages, Sparkles,
 } from "lucide-react";
 import {
   getAllCategories as getAllCategoriesFromStore,
@@ -3751,10 +3751,19 @@ function backendTierToLocal(t: BackendPricingTier): PricingTier {
     hotOffer: t.hotOffer || undefined,
     bonusPlan: t.bonusPlan || undefined,
     badge: t.badgeUz ?? undefined,
-    badgeLocalized: t.badgeRu && t.badgeRu !== t.badgeUz ? { ru: t.badgeRu } : undefined,
+    badgeLocalized: {
+      ...(t.badgeRu ? { ru: t.badgeRu } : {}),
+      ...(t.badgeEn ? { en: t.badgeEn } : {}),
+    },
     desc: t.descUz ?? "",
-    descLocalized: t.descRu && t.descRu !== t.descUz ? { ru: t.descRu } : undefined,
-    nameLocalized: t.nameRu && t.nameRu !== t.nameUz ? { ru: t.nameRu } : undefined,
+    descLocalized: {
+      ...(t.descRu ? { ru: t.descRu } : {}),
+      ...(t.descEn ? { en: t.descEn } : {}),
+    },
+    nameLocalized: {
+      ...(t.nameRu ? { ru: t.nameRu } : {}),
+      ...(t.nameEn ? { en: t.nameEn } : {}),
+    },
     color: t.color ?? "bg-amber-50 text-amber-700",
     active: t.active,
   };
@@ -4152,6 +4161,44 @@ function MonoPlans({ tiers, txs, reload }: { tiers: PricingTier[]; txs: TangaTx[
   const [draft, setDraft]         = useState<PlanDraft>(BLANK_DRAFT);
   const [errors, setErrors]       = useState<string[]>([]);
   const [saving, setSaving]       = useState(false);
+  const [translating, setTranslating] = useState(false);
+
+  async function handleAutoTranslate() {
+    if (!draft.name.trim()) {
+      setErrors(["Avval reja nomini kiriting."]);
+      return;
+    }
+    setTranslating(true);
+    try {
+      const texts = [draft.name.trim(), draft.desc.trim(), draft.badge.trim()];
+      const [ruRes, enRes] = await Promise.all([
+        translateTexts(texts, "ru"),
+        translateTexts(texts, "en"),
+      ]);
+      setDraft((prev) => ({
+        ...prev,
+        nameLocalized: {
+          ...prev.nameLocalized,
+          ru: ruRes[0] || prev.nameLocalized.ru || "",
+          en: enRes[0] || prev.nameLocalized.en || "",
+        },
+        descLocalized: {
+          ...prev.descLocalized,
+          ru: draft.desc.trim() ? (ruRes[1] || prev.descLocalized.ru || "") : prev.descLocalized.ru || "",
+          en: draft.desc.trim() ? (enRes[1] || prev.descLocalized.en || "") : prev.descLocalized.en || "",
+        },
+        badgeLocalized: {
+          ...prev.badgeLocalized,
+          ru: draft.badge.trim() ? (ruRes[2] || prev.badgeLocalized.ru || "") : prev.badgeLocalized.ru || "",
+          en: draft.badge.trim() ? (enRes[2] || prev.badgeLocalized.en || "") : prev.badgeLocalized.en || "",
+        },
+      }));
+    } catch (e) {
+      console.error("Auto-translate plan error:", e);
+    } finally {
+      setTranslating(false);
+    }
+  }
 
   const planStats = useMemo(() => {
     const map: Record<string, { count: number; revenue: number }> = {};
@@ -4210,10 +4257,13 @@ function MonoPlans({ tiers, txs, reload }: { tiers: PricingTier[]; txs: TangaTx[
       ...(editingId ? {} : { key: `${slugify(draft.name)}-${Date.now().toString(36)}` }),
       name: draft.name.trim(),
       nameRu: draft.nameLocalized.ru?.trim() || undefined,
+      nameEn: draft.nameLocalized.en?.trim() || undefined,
       desc: draft.desc,
       descRu: draft.descLocalized.ru?.trim() || undefined,
+      descEn: draft.descLocalized.en?.trim() || undefined,
       badge: draft.badge.trim() || undefined,
       badgeRu: draft.badgeLocalized.ru?.trim() || undefined,
+      badgeEn: draft.badgeLocalized.en?.trim() || undefined,
       credits: Number(draft.credits),
       bonusTokens: draft.bonusTokens !== "" ? Number(draft.bonusTokens) : 0,
       priceSom: Number(draft.price),
@@ -4324,6 +4374,8 @@ function MonoPlans({ tiers, txs, reload }: { tiers: PricingTier[]; txs: TangaTx[
                     <div className="flex-1 min-w-0">
                       <div className="flex items-center gap-1.5 flex-wrap mb-0.5">
                         <span className="font-extrabold text-gray-900 text-sm">{t.name}</span>
+                        {t.nameLocalized?.ru && <span className="text-[9px] font-bold px-1 rounded bg-blue-50 text-blue-600 border border-blue-100">RU</span>}
+                        {t.nameLocalized?.en && <span className="text-[9px] font-bold px-1 rounded bg-purple-50 text-purple-600 border border-purple-100">EN</span>}
                         {t.badge && <span className="text-[9px] font-bold px-1.5 py-0.5 rounded-full bg-violet-100 text-violet-700">{t.badge}</span>}
                         {t.featured && <span className="text-[9px]">⭐</span>}
                         {t.hotOffer && <span className="text-[9px]">🔥</span>}
@@ -4433,9 +4485,30 @@ function MonoPlans({ tiers, txs, reload }: { tiers: PricingTier[]; txs: TangaTx[
                     </Field>
                   </div>
 
+                  <Field label="Nishon (ixtiyoriy)">
+                    <input value={draft.badge} onChange={(e) => setDraft({ ...draft, badge: e.target.value })} placeholder="Eng mashhur" className={`${inputCls} w-full`} />
+                  </Field>
+
+                  {/* ── Auto-translate toolbar ───────────────────── */}
+                  <div className="col-span-2 flex items-center justify-between pt-1 border-t border-gray-100 mt-1">
+                    <span className="text-[11px] font-bold text-gray-500 uppercase tracking-wide flex items-center gap-1">
+                      <Languages className="w-3.5 h-3.5 text-violet-600" />
+                      Tarjimalar (RU / EN)
+                    </span>
+                    <button
+                      type="button"
+                      onClick={handleAutoTranslate}
+                      disabled={translating || !draft.name.trim()}
+                      className="flex items-center gap-1.5 px-3 py-1.5 rounded-xl bg-violet-50 text-violet-700 border border-violet-200 text-xs font-bold hover:bg-violet-100 transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
+                    >
+                      <Sparkles className="w-3.5 h-3.5" />
+                      {translating ? "Tarjima qilinmoqda…" : "Avto-tarjima (RU & EN)"}
+                    </button>
+                  </div>
+
                   {/* ── Russian translation ─────────────────────── */}
-                  <div className="col-span-2">
-                    <Field label="🇷🇺 Rus tilidagi tarjima (tavsiya)">
+                  <div className="col-span-2 sm:col-span-1">
+                    <Field label="🇷🇺 Rus tilidagi tarjima">
                       <div className={`rounded-xl border p-3 space-y-2 mt-1 ${(draft.nameLocalized.ru ?? "").trim() ? "border-emerald-200 bg-emerald-50/40" : "border-gray-200 bg-gray-50/60"}`}>
                         <div className="flex items-center gap-1.5 mb-1">
                           <span className="text-sm">🇷🇺</span>
@@ -4466,9 +4539,38 @@ function MonoPlans({ tiers, txs, reload }: { tiers: PricingTier[]; txs: TangaTx[
                     </Field>
                   </div>
 
-                  <Field label="Nishon (ixtiyoriy)">
-                    <input value={draft.badge} onChange={(e) => setDraft({ ...draft, badge: e.target.value })} placeholder="Eng mashhur" className={`${inputCls} w-full`} />
-                  </Field>
+                  {/* ── English translation ─────────────────────── */}
+                  <div className="col-span-2 sm:col-span-1">
+                    <Field label="🇬🇧 Ingliz tilidagi tarjima">
+                      <div className={`rounded-xl border p-3 space-y-2 mt-1 ${(draft.nameLocalized.en ?? "").trim() ? "border-emerald-200 bg-emerald-50/40" : "border-gray-200 bg-gray-50/60"}`}>
+                        <div className="flex items-center gap-1.5 mb-1">
+                          <span className="text-sm">🇬🇧</span>
+                          <span className="text-[10px] font-bold text-gray-500 uppercase">English</span>
+                          <span className={`ml-auto text-[9px] font-bold px-1.5 py-0.5 rounded-full ${(draft.nameLocalized.en ?? "").trim() ? "bg-emerald-100 text-emerald-700" : "bg-gray-200 text-gray-400"}`}>
+                            {(draft.nameLocalized.en ?? "").trim() ? "✅ To'ldirilgan" : "○ Ixtiyoriy"}
+                          </span>
+                        </div>
+                        <input
+                          value={draft.nameLocalized.en ?? ""}
+                          onChange={(e) => setDraft({ ...draft, nameLocalized: { ...draft.nameLocalized, en: e.target.value } })}
+                          placeholder="Plan name (en)"
+                          className={`${inputCls} w-full text-xs`}
+                        />
+                        <input
+                          value={draft.descLocalized.en ?? ""}
+                          onChange={(e) => setDraft({ ...draft, descLocalized: { ...draft.descLocalized, en: e.target.value } })}
+                          placeholder="Description (en)"
+                          className={`${inputCls} w-full text-xs`}
+                        />
+                        <input
+                          value={draft.badgeLocalized.en ?? ""}
+                          onChange={(e) => setDraft({ ...draft, badgeLocalized: { ...draft.badgeLocalized, en: e.target.value } })}
+                          placeholder="Badge (en) — optional"
+                          className={`${inputCls} w-full text-xs`}
+                        />
+                      </div>
+                    </Field>
+                  </div>
                 </div>
               </div>
 

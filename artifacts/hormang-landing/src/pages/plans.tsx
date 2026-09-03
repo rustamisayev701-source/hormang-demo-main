@@ -99,9 +99,9 @@ function PlanCard({
   const { t, locale } = useI18n();
   const tt = t.plansPage;
   const countdown = useCountdown(tier.validUntil);
-  const tierName = getLocalizedText({ uz: tier.nameUz, ru: tier.nameRu }, locale);
-  const tierDesc = getLocalizedText({ uz: tier.descUz ?? undefined, ru: tier.descRu ?? undefined }, locale);
-  const tierBadge = getLocalizedText({ uz: tier.badgeUz ?? undefined, ru: tier.badgeRu ?? undefined }, locale);
+  const tierName = getLocalizedText({ uz: tier.nameUz, ru: tier.nameRu, en: tier.nameEn ?? undefined }, locale);
+  const tierDesc = getLocalizedText({ uz: tier.descUz ?? undefined, ru: tier.descRu ?? undefined, en: tier.descEn ?? undefined }, locale);
+  const tierBadge = getLocalizedText({ uz: tier.badgeUz ?? undefined, ru: tier.badgeRu ?? undefined, en: tier.badgeEn ?? undefined }, locale);
   const isExpired = tier.validUntil ? new Date(tier.validUntil) <= new Date() : false;
   const totalTokens = tier.credits + tier.bonusTokens;
 
