@@ -118,6 +118,10 @@ export async function toggleAnnouncementPinned(id: string): Promise<Announcement
   return res.announcement;
 }
 
+export async function sendAnnouncementNotification(id: string): Promise<void> {
+  await adminFetch(`/announcements/${id}/send-notification`, { method: "POST" });
+}
+
 /* ─── Seen tracking (per-browser, cosmetic only) ─────────────────── */
 function readJSON<T>(key: string, fallback: T): T {
   try {

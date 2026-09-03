@@ -77,9 +77,10 @@ import { getAllOffersAdmin, getAllRequestsAdmin, getAllChatsAdmin, getPhoneRegis
 import { getAvgResponseMinutes, formatAvgResponseTime } from "@/lib/response-time-store";
 import {
   getAllAnnouncements, saveAnnouncement, deleteAnnouncement,
-  toggleAnnouncementPublished, toggleAnnouncementPinned,
+  toggleAnnouncementPublished, toggleAnnouncementPinned, sendAnnouncementNotification,
   type Announcement,
 } from "@/lib/announcements-store";
+import { NotificationBell } from "@/components/notification-bell";
 import ReactMarkdown from "react-markdown";
 import { FeedbackAdminSection } from "./feedback-panel";
 import { getAllFeedbacks, type Feedback as FeedbackEntry } from "@/lib/feedback-store";
@@ -5505,9 +5506,9 @@ function AnnouncementsSection({ refreshKey }: { refreshKey: number }) {
   async function handleSave() {
     if (!validate()) return;
     setSaving(true);
-    const hasTitleLoc = !!(form.titleLocalized?.ru?.trim());
-    const hasContentLoc = !!(form.contentLocalized?.ru?.trim());
-    const hasCtaLoc = !!(form.ctaTextLocalized?.ru?.trim());
+    const hasTitleLoc = !!(form.titleLocalized?.ru?.trim() || form.titleLocalized?.en?.trim());
+    const hasContentLoc = !!(form.contentLocalized?.ru?.trim() || form.contentLocalized?.en?.trim());
+    const hasCtaLoc = !!(form.ctaTextLocalized?.ru?.trim() || form.ctaTextLocalized?.en?.trim());
     const payload = {
       ...form,
       id: editing?.id,
@@ -5518,7 +5519,7 @@ function AnnouncementsSection({ refreshKey }: { refreshKey: number }) {
       publishAt: form.publishAt?.trim() || undefined,
       titleLocalized:   hasTitleLoc   ? { uz: form.title, ...form.titleLocalized }   : undefined,
       contentLocalized: hasContentLoc ? { uz: form.content, ...form.contentLocalized } : undefined,
-      ctaTextLocalized: hasCtaLoc     ? form.ctaTextLocalized : undefined,
+      ctaTextLocalized: hasCtaLoc     ? { uz: form.ctaText, ...form.ctaTextLocalized } : undefined,
     };
     try {
       const saved = await saveAnnouncement(payload as Parameters<typeof saveAnnouncement>[0]);
@@ -5534,6 +5535,21 @@ function AnnouncementsSection({ refreshKey }: { refreshKey: number }) {
       setErrors({ title: err instanceof AdminApiError ? err.message : "Saqlashda xatolik yuz berdi" });
     } finally {
       setSaving(false);
+    }
+  }
+
+  async function handleSendNotification(a: Announcement) {
+    if (!confirm(`"${a.title}" e'lonini foydalanuvchilarga bildirishnoma sifatida yuborasizmi?`)) return;
+    try {
+      await sendAnnouncementNotification(a.id);
+      alert("Bildirishnoma foydalanuvchilarga muvaffaqiyatli yuborildi!");
+      logAction({
+        actorId: ADMIN_USER, actorRole: "admin", action: "ANNOUNCEMENT_UPDATED",
+        category: "admin", targetId: a.id, targetType: "platform",
+        description: `E'londan bildirishnoma yuborildi: ${a.title}`
+      });
+    } catch (err) {
+      alert(err instanceof AdminApiError ? err.message : "Bildirishnoma yuborishda xatolik");
     }
   }
 
@@ -5662,6 +5678,10 @@ function AnnouncementsSection({ refreshKey }: { refreshKey: number }) {
                     </td>
                     <td className="px-4 py-3 whitespace-nowrap">
                       <div className="flex items-center gap-1">
+                        <button onClick={() => handleSendNotification(a)}
+                          className="p-1.5 rounded-lg text-gray-400 hover:text-red-600 hover:bg-red-50 transition-colors" title="Notification qilib jo'natish">
+                          <Bell className="w-3.5 h-3.5" />
+                        </button>
                         <button onClick={() => setPreview(a)}
                           className="p-1.5 rounded-lg text-gray-400 hover:text-blue-600 hover:bg-blue-50 transition-colors" title="Ko'rinish">
                           <Eye className="w-3.5 h-3.5" />
@@ -5742,21 +5762,29 @@ function AnnouncementsSection({ refreshKey }: { refreshKey: number }) {
                         {errors.title && <p className="text-[10px] text-red-500 mt-0.5">⚠ {errors.title}</p>}
                       </div>
 
-                      {/* ── Russian title translation ────────────── */}
-                      <div>
-                        <p className="text-[10px] font-bold text-gray-400 uppercase tracking-widest mb-2">🇷🇺 Sarlavha (Русский, tavsiya)</p>
-                        <div className={`rounded-xl border p-2.5 ${(f.titleLocalized?.ru ?? "").trim() ? "border-emerald-200 bg-emerald-50/40" : "border-gray-200"}`}>
-                          <div className="flex items-center gap-1 mb-1.5">
-                            <span className="text-xs">🇷🇺</span>
-                            <span className="text-[9px] font-bold text-gray-500 uppercase flex-1">Русский</span>
-                            {(f.titleLocalized?.ru ?? "").trim() && <span className="text-[9px] text-emerald-600 font-bold">✅</span>}
+                      {/* ── Translations (RU & EN) ────────────── */}
+                      <div className="grid grid-cols-2 gap-3">
+                        <div>
+                          <p className="text-[10px] font-bold text-gray-400 uppercase tracking-widest mb-1.5">🇷🇺 Sarlavha (Русский)</p>
+                          <div className={`rounded-xl border p-2 ${(f.titleLocalized?.ru ?? "").trim() ? "border-emerald-200 bg-emerald-50/40" : "border-gray-200"}`}>
+                            <input
+                              value={f.titleLocalized?.ru ?? ""}
+                              onChange={(e) => set("titleLocalized", { ...(f.titleLocalized ?? {}), ru: e.target.value.slice(0, 120) })}
+                              placeholder="Sarlavha (ru)..."
+                              className={`${inputCls} w-full text-xs`}
+                            />
                           </div>
-                          <input
-                            value={f.titleLocalized?.ru ?? ""}
-                            onChange={(e) => set("titleLocalized", { ...(f.titleLocalized ?? {}), ru: e.target.value.slice(0, 120) })}
-                            placeholder="Sarlavha (ru)"
-                            className={`${inputCls} w-full text-xs`}
-                          />
+                        </div>
+                        <div>
+                          <p className="text-[10px] font-bold text-gray-400 uppercase tracking-widest mb-1.5">🇬🇧 Sarlavha (English)</p>
+                          <div className={`rounded-xl border p-2 ${(f.titleLocalized?.en ?? "").trim() ? "border-emerald-200 bg-emerald-50/40" : "border-gray-200"}`}>
+                            <input
+                              value={f.titleLocalized?.en ?? ""}
+                              onChange={(e) => set("titleLocalized", { ...(f.titleLocalized ?? {}), en: e.target.value.slice(0, 120) })}
+                              placeholder="Title (en)..."
+                              className={`${inputCls} w-full text-xs`}
+                            />
+                          </div>
                         </div>
                       </div>
 
@@ -5851,22 +5879,31 @@ function AnnouncementsSection({ refreshKey }: { refreshKey: number }) {
                     )}
                     {errors.content && <p className="text-[10px] text-red-500 mt-0.5">⚠ {errors.content}</p>}
 
-                    {/* ── Russian content translation ──────────── */}
-                    <div className="mt-3">
-                      <p className="text-[10px] font-bold text-gray-400 uppercase tracking-widest mb-2">🇷🇺 Kontent (Русский, tavsiya)</p>
-                      <div className={`rounded-xl border p-2.5 ${(f.contentLocalized?.ru ?? "").trim() ? "border-emerald-200 bg-emerald-50/40" : "border-gray-200"}`}>
-                        <div className="flex items-center gap-1 mb-1.5">
-                          <span className="text-xs">🇷🇺</span>
-                          <span className="text-[9px] font-bold text-gray-500 uppercase flex-1">Русский</span>
-                          {(f.contentLocalized?.ru ?? "").trim() && <span className="text-[9px] text-emerald-600 font-bold">✅</span>}
+                    {/* ── Content translations (RU & EN) ──────────── */}
+                    <div className="mt-3 grid grid-cols-2 gap-3">
+                      <div>
+                        <p className="text-[10px] font-bold text-gray-400 uppercase tracking-widest mb-1.5">🇷🇺 Kontent (Русский)</p>
+                        <div className={`rounded-xl border p-2 ${(f.contentLocalized?.ru ?? "").trim() ? "border-emerald-200 bg-emerald-50/40" : "border-gray-200"}`}>
+                          <textarea
+                            value={f.contentLocalized?.ru ?? ""}
+                            onChange={(e) => set("contentLocalized", { ...(f.contentLocalized ?? {}), ru: e.target.value })}
+                            rows={3}
+                            placeholder="Kontent (ru)..."
+                            className={`${inputCls} w-full resize-y min-h-[70px] font-mono text-xs`}
+                          />
                         </div>
-                        <textarea
-                          value={f.contentLocalized?.ru ?? ""}
-                          onChange={(e) => set("contentLocalized", { ...(f.contentLocalized ?? {}), ru: e.target.value })}
-                          rows={4}
-                          placeholder="Kontent (ru) — Markdown qo'llab-quvvatlanadi"
-                          className={`${inputCls} w-full resize-y min-h-[80px] font-mono text-xs`}
-                        />
+                      </div>
+                      <div>
+                        <p className="text-[10px] font-bold text-gray-400 uppercase tracking-widest mb-1.5">🇬🇧 Kontent (English)</p>
+                        <div className={`rounded-xl border p-2 ${(f.contentLocalized?.en ?? "").trim() ? "border-emerald-200 bg-emerald-50/40" : "border-gray-200"}`}>
+                          <textarea
+                            value={f.contentLocalized?.en ?? ""}
+                            onChange={(e) => set("contentLocalized", { ...(f.contentLocalized ?? {}), en: e.target.value })}
+                            rows={3}
+                            placeholder="Content (en)..."
+                            className={`${inputCls} w-full resize-y min-h-[70px] font-mono text-xs`}
+                          />
+                        </div>
                       </div>
                     </div>
                   </section>
@@ -5876,9 +5913,9 @@ function AnnouncementsSection({ refreshKey }: { refreshKey: number }) {
                   {/* 🎯 CTA */}
                   <section>
                     <p className="text-[10px] font-bold text-gray-400 uppercase tracking-widest mb-3">🎯 CTA tugma (ixtiyoriy)</p>
-                    <div className="grid grid-cols-2 gap-3">
+                    <div className="grid grid-cols-2 gap-3 mb-3">
                       <div>
-                        <label className="text-xs font-semibold text-gray-600 mb-1 block">Tugma matni</label>
+                        <label className="text-xs font-semibold text-gray-600 mb-1 block">Tugma matni (Uzbek)</label>
                         <input
                           value={f.ctaText ?? ""}
                           onChange={(e) => set("ctaText", e.target.value)}
@@ -5896,6 +5933,26 @@ function AnnouncementsSection({ refreshKey }: { refreshKey: number }) {
                           placeholder="/plans yoki https://..."
                         />
                         {errors.ctaLink && <p className="text-[10px] text-red-500 mt-0.5">⚠ {errors.ctaLink}</p>}
+                      </div>
+                    </div>
+                    <div className="grid grid-cols-2 gap-3">
+                      <div>
+                        <label className="text-xs font-semibold text-gray-600 mb-1 block">🇷🇺 Tugma matni (Русский)</label>
+                        <input
+                          value={f.ctaTextLocalized?.ru ?? ""}
+                          onChange={(e) => set("ctaTextLocalized", { ...(f.ctaTextLocalized ?? {}), ru: e.target.value })}
+                          className={`${inputCls} w-full text-xs`}
+                          placeholder="Купить монеты"
+                        />
+                      </div>
+                      <div>
+                        <label className="text-xs font-semibold text-gray-600 mb-1 block">🇬🇧 Tugma matni (English)</label>
+                        <input
+                          value={f.ctaTextLocalized?.en ?? ""}
+                          onChange={(e) => set("ctaTextLocalized", { ...(f.ctaTextLocalized ?? {}), en: e.target.value })}
+                          className={`${inputCls} w-full text-xs`}
+                          placeholder="Buy Tanga"
+                        />
                       </div>
                     </div>
                   </section>
@@ -7123,6 +7180,7 @@ function TopBar({ section, unseenAlerts, onRefresh, onOpenMobileSidebar }: {
         </div>
       </div>
       <div className="flex items-center gap-3 flex-shrink-0">
+        <NotificationBell role="admin" />
         {unseenAlerts > 0 && (
           <div className="flex items-center gap-1.5 px-2.5 py-1.5 rounded-xl bg-red-50 border border-red-100">
             <Bell className="w-3.5 h-3.5 text-red-500" />

@@ -7,6 +7,7 @@ import { motion, AnimatePresence } from "framer-motion";
 import { useAuth } from "@/contexts/auth-context";
 import { useI18n } from "@/contexts/i18n-context";
 import { LOCALES } from "@/lib/i18n";
+import { NotificationBell } from "./notification-bell";
 import logoImg from "/hormang-logo.png";
 
 function LanguageSwitcher({ variant = "desktop" }: { variant?: "desktop" | "mobile" }) {
@@ -127,6 +128,8 @@ export function Navbar() {
             </ul>
 
             <LanguageSwitcher />
+
+            <NotificationBell role={user?.role || "all"} userId={user?.id} />
 
             <div className="flex items-center gap-3 border-l border-gray-200 pl-3">
               {user ? (

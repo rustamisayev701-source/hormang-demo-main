@@ -4,6 +4,7 @@ import { BottomNav } from "@/components/bottom-nav";
 import { useLocation } from "wouter";
 import { motion, AnimatePresence } from "framer-motion";
 import logoImg from "/hormang-logo.png";
+import { NotificationBell } from "@/components/notification-bell";
 import {
   ClipboardList, Inbox, CheckCircle2,
   Plus, MessageCircle, LayoutGrid, Briefcase, LogOut, MessagesSquare,
@@ -324,6 +325,7 @@ export default function CustomerHomePage() {
             </div>
 
             <div className="flex items-center gap-2">
+              <NotificationBell role="buyer" userId={user?.id} />
               <button
                 onClick={() => setLocation("/dashboard")}
                 className="w-8 h-8 rounded-full overflow-hidden flex-shrink-0 ring-2 ring-blue-100 active:scale-95 transition-transform"

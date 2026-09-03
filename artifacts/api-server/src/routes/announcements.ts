@@ -1,21 +1,24 @@
 import { Router, type IRouter } from "express";
 import { eq, desc } from "drizzle-orm";
-import { db, announcementsTable, type AnnouncementRow } from "@workspace/db";
+import { db, announcementsTable, notificationsTable, type AnnouncementRow } from "@workspace/db";
 import { requireAdminKey } from "../middlewares/admin.js";
 
 const router: IRouter = Router();
 
 function toJson(row: AnnouncementRow) {
+  const hasRu = row.titleRu || row.contentRu || row.ctaTextRu;
+  const hasEn = row.titleEn || row.contentEn || row.ctaTextEn;
+
   return {
     id: row.id,
     type: row.type,
     title: row.titleUz,
-    titleLocalized: row.titleRu ? { uz: row.titleUz, ru: row.titleRu } : undefined,
+    titleLocalized: (hasRu || hasEn) ? { uz: row.titleUz, ru: row.titleRu ?? undefined, en: row.titleEn ?? undefined } : undefined,
     content: row.contentUz,
-    contentLocalized: row.contentRu ? { uz: row.contentUz, ru: row.contentRu } : undefined,
+    contentLocalized: (hasRu || hasEn) ? { uz: row.contentUz, ru: row.contentRu ?? undefined, en: row.contentEn ?? undefined } : undefined,
     image: row.image ?? undefined,
     ctaText: row.ctaTextUz ?? undefined,
-    ctaTextLocalized: row.ctaTextRu ? { uz: row.ctaTextUz ?? undefined, ru: row.ctaTextRu } : undefined,
+    ctaTextLocalized: (hasRu || hasEn) ? { uz: row.ctaTextUz ?? undefined, ru: row.ctaTextRu ?? undefined, en: row.ctaTextEn ?? undefined } : undefined,
     ctaLink: row.ctaLink ?? undefined,
     target: row.target,
     isPinned: row.isPinned,
@@ -30,12 +33,12 @@ function toJson(row: AnnouncementRow) {
 interface AnnouncementBody {
   type?: "news" | "event";
   title?: string;
-  titleLocalized?: { uz?: string; ru?: string };
+  titleLocalized?: { uz?: string; ru?: string; en?: string };
   content?: string;
-  contentLocalized?: { uz?: string; ru?: string };
+  contentLocalized?: { uz?: string; ru?: string; en?: string };
   image?: string;
   ctaText?: string;
-  ctaTextLocalized?: { uz?: string; ru?: string };
+  ctaTextLocalized?: { uz?: string; ru?: string; en?: string };
   ctaLink?: string;
   target?: "all" | "providers" | "customers";
   isPinned?: boolean;
@@ -89,11 +92,14 @@ router.post("/", requireAdminKey, async (req, res) => {
         type: body.type,
         titleUz: body.title.trim(),
         titleRu: body.titleLocalized?.ru?.trim() || null,
+        titleEn: body.titleLocalized?.en?.trim() || null,
         contentUz: body.content.trim(),
         contentRu: body.contentLocalized?.ru?.trim() || null,
+        contentEn: body.contentLocalized?.en?.trim() || null,
         image: body.image?.trim() || null,
         ctaTextUz: body.ctaText?.trim() || null,
         ctaTextRu: body.ctaTextLocalized?.ru?.trim() || null,
+        ctaTextEn: body.ctaTextLocalized?.en?.trim() || null,
         ctaLink: body.ctaLink?.trim() || null,
         target: body.target,
         isPinned: body.isPinned ?? false,
@@ -102,6 +108,7 @@ router.post("/", requireAdminKey, async (req, res) => {
         publishAt: toDate(body.publishAt),
       })
       .returning();
+
     res.status(201).json({ announcement: toJson(row) });
   } catch (err) {
     console.error("Create announcement error:", err);
@@ -123,11 +130,14 @@ router.put("/:id", requireAdminKey, async (req, res) => {
         type: body.type,
         titleUz: body.title.trim(),
         titleRu: body.titleLocalized?.ru?.trim() || null,
+        titleEn: body.titleLocalized?.en?.trim() || null,
         contentUz: body.content.trim(),
         contentRu: body.contentLocalized?.ru?.trim() || null,
+        contentEn: body.contentLocalized?.en?.trim() || null,
         image: body.image?.trim() || null,
         ctaTextUz: body.ctaText?.trim() || null,
         ctaTextRu: body.ctaTextLocalized?.ru?.trim() || null,
+        ctaTextEn: body.ctaTextLocalized?.en?.trim() || null,
         ctaLink: body.ctaLink?.trim() || null,
         target: body.target,
         isPinned: body.isPinned ?? false,
@@ -138,6 +148,7 @@ router.put("/:id", requireAdminKey, async (req, res) => {
       })
       .where(eq(announcementsTable.id, id))
       .returning();
+
     if (!row) {
       res.status(404).json({ error: "E'lon topilmadi" });
       return;
@@ -146,6 +157,42 @@ router.put("/:id", requireAdminKey, async (req, res) => {
   } catch (err) {
     console.error("Update announcement error:", err);
     res.status(500).json({ error: "Xatolik yuz berdi" });
+  }
+});
+
+router.post("/:id/send-notification", requireAdminKey, async (req, res) => {
+  try {
+    const id: string = String(req.params.id);
+    const [ann] = await db.select().from(announcementsTable).where(eq(announcementsTable.id, id)).limit(1);
+    if (!ann) {
+      res.status(404).json({ error: "E'lon topilmadi" });
+      return;
+    }
+
+    const [notif] = await db
+      .insert(notificationsTable)
+      .values({
+        announcementId: ann.id,
+        target: ann.target,
+        type: ann.type,
+        titleUz: ann.titleUz,
+        titleRu: ann.titleRu,
+        titleEn: ann.titleEn,
+        contentUz: ann.contentUz,
+        contentRu: ann.contentRu,
+        contentEn: ann.contentEn,
+        ctaTextUz: ann.ctaTextUz,
+        ctaTextRu: ann.ctaTextRu,
+        ctaTextEn: ann.ctaTextEn,
+        ctaLink: ann.ctaLink,
+        image: ann.image,
+      })
+      .returning();
+
+    res.json({ ok: true, notification: notif });
+  } catch (err) {
+    console.error("Send announcement notification error:", err);
+    res.status(500).json({ error: "Notification yuborishda xatolik" });
   }
 });
 

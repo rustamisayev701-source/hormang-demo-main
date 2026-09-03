@@ -11,6 +11,7 @@ import { useState, useEffect, useRef } from "react";
 import { TangaCoin } from "@/components/tanga-coin";
 import { useLocation } from "wouter";
 import { useStoreRefresh } from "@/hooks/use-store-refresh";
+import { NotificationBell } from "@/components/notification-bell";
 import { motion, AnimatePresence } from "framer-motion";
 import {
   ChevronRight, ChevronLeft, CalendarDays, Sparkles,
@@ -1280,6 +1281,7 @@ export default function ProviderHomePage() {
             </span>
           )}
           <TangaChip userId={user?.id ?? ""} onClick={() => setLocation("/plans")} />
+          <NotificationBell role="provider" userId={user?.id} />
           <button
             onClick={() => setLocation("/dashboard")}
             className="w-8 h-8 rounded-full flex items-center justify-center text-white text-xs font-bold shadow-sm overflow-hidden flex-shrink-0"
