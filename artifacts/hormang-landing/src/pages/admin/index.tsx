@@ -5454,6 +5454,7 @@ function AnnouncementsSection({ refreshKey }: { refreshKey: number }) {
   const [saving, setSaving]             = useState(false);
   const [contentTab, setContentTab]     = useState<"write" | "preview">("write");
   const [errors, setErrors]             = useState<Record<string, string>>({});
+  const [translating, setTranslating]   = useState(false);
 
   function load() {
     getAllAnnouncements().then(setItems).catch((err) => console.error("Load announcements failed:", err));
@@ -5535,6 +5536,35 @@ function AnnouncementsSection({ refreshKey }: { refreshKey: number }) {
       setErrors({ title: err instanceof AdminApiError ? err.message : "Saqlashda xatolik yuz berdi" });
     } finally {
       setSaving(false);
+    }
+  }
+
+  async function handleAutoTranslate() {
+    const texts = [
+      form.title.trim(),
+      form.content.trim(),
+      form.ctaText?.trim() ?? "",
+    ];
+    if (!texts[0] && !texts[1]) {
+      setErrors({ title: "Tarjima uchun sarlavha yoki kontent kiritilmagan" });
+      return;
+    }
+    setTranslating(true);
+    try {
+      const [ruResults, enResults] = await Promise.all([
+        translateTexts(texts, "ru"),
+        translateTexts(texts, "en"),
+      ]);
+      setForm((prev) => ({
+        ...prev,
+        titleLocalized:   { ...prev.titleLocalized,   ru: ruResults[0] ?? prev.titleLocalized?.ru ?? "",   en: enResults[0] ?? prev.titleLocalized?.en ?? "" },
+        contentLocalized: { ...prev.contentLocalized, ru: ruResults[1] ?? prev.contentLocalized?.ru ?? "", en: enResults[1] ?? prev.contentLocalized?.en ?? "" },
+        ctaTextLocalized: { ...prev.ctaTextLocalized, ru: ruResults[2] ?? prev.ctaTextLocalized?.ru ?? "", en: enResults[2] ?? prev.ctaTextLocalized?.en ?? "" },
+      }));
+    } catch (err) {
+      setErrors({ title: err instanceof AdminApiError ? err.message : "Tarjimada xatolik yuz berdi" });
+    } finally {
+      setTranslating(false);
     }
   }
 
@@ -6085,6 +6115,14 @@ function AnnouncementsSection({ refreshKey }: { refreshKey: number }) {
                 <button onClick={closeForm} className="px-5 py-2.5 rounded-xl font-bold text-sm border border-gray-200 text-gray-600 hover:bg-gray-50 transition-colors">
                   Bekor qilish
                 </button>
+                <button
+                  onClick={handleAutoTranslate}
+                  disabled={translating || saving}
+                  className="flex items-center gap-1.5 px-4 py-2.5 rounded-xl font-bold text-sm border border-blue-300 text-blue-700 bg-blue-50 hover:bg-blue-100 transition-colors disabled:opacity-50"
+                >
+                  {translating ? <Loader2 className="w-3.5 h-3.5 animate-spin" /> : <Languages className="w-3.5 h-3.5" />}
+                  {translating ? "Tarjima qilinmoqda…" : "🌐 RU / EN tarjima"}
+                </button>
                 <div className="flex-1" />
                 {Object.keys(errors).length > 0 && (
                   <p className="text-xs text-red-500 self-center">{Object.keys(errors).filter(k => k !== "expiresAt").length} xato bor</p>
@@ -6098,6 +6136,7 @@ function AnnouncementsSection({ refreshKey }: { refreshKey: number }) {
                   {saving ? "Saqlanmoqda…" : editing ? "💾 Saqlash" : "✅ Yaratish"}
                 </button>
               </div>
+
             </motion.div>
           </>
         )}
