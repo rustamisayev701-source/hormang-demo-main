@@ -5455,13 +5455,24 @@ function AnnouncementsSection({ refreshKey }: { refreshKey: number }) {
   const [contentTab, setContentTab]     = useState<"write" | "preview">("write");
   const [errors, setErrors]             = useState<Record<string, string>>({});
   const [translating, setTranslating]   = useState(false);
+  const [translatingTarget, setTranslatingTarget] = useState<"all" | "title" | "content" | "cta" | null>(null);
+  const [translateSuccess, setTranslateSuccess] = useState<string | null>(null);
+  const [quickTranslatingId, setQuickTranslatingId] = useState<string | null>(null);
 
   function load() {
     getAllAnnouncements().then(setItems).catch((err) => console.error("Load announcements failed:", err));
   }
   useEffect(() => { load(); }, [refreshKey]);
 
-  function openCreate() { setEditing(null); setForm(EMPTY_FORM); setErrors({}); setContentTab("write"); setShowForm(true); }
+  function openCreate() {
+    setEditing(null);
+    setForm(EMPTY_FORM);
+    setErrors({});
+    setContentTab("write");
+    setTranslateSuccess(null);
+    setShowForm(true);
+  }
+
   function openEdit(a: Announcement) {
     setEditing(a);
     setForm({
@@ -5475,9 +5486,15 @@ function AnnouncementsSection({ refreshKey }: { refreshKey: number }) {
     });
     setErrors({});
     setContentTab("write");
+    setTranslateSuccess(null);
     setShowForm(true);
   }
-  function closeForm() { setShowForm(false); setEditing(null); setErrors({}); }
+  function closeForm() {
+    setShowForm(false);
+    setEditing(null);
+    setErrors({});
+    setTranslateSuccess(null);
+  }
 
   function validate(): boolean {
     const e: Record<string, string> = {};
@@ -5539,7 +5556,7 @@ function AnnouncementsSection({ refreshKey }: { refreshKey: number }) {
     }
   }
 
-  async function handleAutoTranslate() {
+  async function handleAutoTranslateAll() {
     const texts = [
       form.title.trim(),
       form.content.trim(),
@@ -5550,6 +5567,8 @@ function AnnouncementsSection({ refreshKey }: { refreshKey: number }) {
       return;
     }
     setTranslating(true);
+    setTranslatingTarget("all");
+    setTranslateSuccess(null);
     try {
       const [ruResults, enResults] = await Promise.all([
         translateTexts(texts, "ru"),
@@ -5557,14 +5576,128 @@ function AnnouncementsSection({ refreshKey }: { refreshKey: number }) {
       ]);
       setForm((prev) => ({
         ...prev,
-        titleLocalized:   { ...prev.titleLocalized,   ru: ruResults[0] ?? prev.titleLocalized?.ru ?? "",   en: enResults[0] ?? prev.titleLocalized?.en ?? "" },
-        contentLocalized: { ...prev.contentLocalized, ru: ruResults[1] ?? prev.contentLocalized?.ru ?? "", en: enResults[1] ?? prev.contentLocalized?.en ?? "" },
-        ctaTextLocalized: { ...prev.ctaTextLocalized, ru: ruResults[2] ?? prev.ctaTextLocalized?.ru ?? "", en: enResults[2] ?? prev.ctaTextLocalized?.en ?? "" },
+        titleLocalized: {
+          ...prev.titleLocalized,
+          ru: ruResults[0] || prev.titleLocalized?.ru || "",
+          en: enResults[0] || prev.titleLocalized?.en || "",
+        },
+        contentLocalized: {
+          ...prev.contentLocalized,
+          ru: ruResults[1] || prev.contentLocalized?.ru || "",
+          en: enResults[1] || prev.contentLocalized?.en || "",
+        },
+        ctaTextLocalized: {
+          ...prev.ctaTextLocalized,
+          ru: ruResults[2] || prev.ctaTextLocalized?.ru || "",
+          en: enResults[2] || prev.ctaTextLocalized?.en || "",
+        },
       }));
+      setTranslateSuccess("Barcha matnlar rus va ingliz tillariga muvaffaqiyatli tarjima qilindi!");
+      setTimeout(() => setTranslateSuccess(null), 6000);
     } catch (err) {
       setErrors({ title: err instanceof AdminApiError ? err.message : "Tarjimada xatolik yuz berdi" });
     } finally {
       setTranslating(false);
+      setTranslatingTarget(null);
+    }
+  }
+
+  async function handleTranslateField(field: "title" | "content" | "cta") {
+    let text = "";
+    if (field === "title") text = form.title.trim();
+    else if (field === "content") text = form.content.trim();
+    else if (field === "cta") text = form.ctaText?.trim() ?? "";
+
+    if (!text) {
+      setErrors({ [field]: "Avval matnni kiriting" });
+      return;
+    }
+
+    setTranslating(true);
+    setTranslatingTarget(field);
+    setTranslateSuccess(null);
+    try {
+      const [ruResults, enResults] = await Promise.all([
+        translateTexts([text], "ru"),
+        translateTexts([text], "en"),
+      ]);
+      if (field === "title") {
+        setForm((prev) => ({
+          ...prev,
+          titleLocalized: {
+            ...prev.titleLocalized,
+            ru: ruResults[0] || prev.titleLocalized?.ru || "",
+            en: enResults[0] || prev.titleLocalized?.en || "",
+          },
+        }));
+        setTranslateSuccess("Sarlavha rus va ingliz tillariga tarjima qilindi!");
+      } else if (field === "content") {
+        setForm((prev) => ({
+          ...prev,
+          contentLocalized: {
+            ...prev.contentLocalized,
+            ru: ruResults[0] || prev.contentLocalized?.ru || "",
+            en: enResults[0] || prev.contentLocalized?.en || "",
+          },
+        }));
+        setTranslateSuccess("Kontent rus va ingliz tillariga tarjima qilindi!");
+      } else if (field === "cta") {
+        setForm((prev) => ({
+          ...prev,
+          ctaTextLocalized: {
+            ...prev.ctaTextLocalized,
+            ru: ruResults[0] || prev.ctaTextLocalized?.ru || "",
+            en: enResults[0] || prev.ctaTextLocalized?.en || "",
+          },
+        }));
+        setTranslateSuccess("CTA matni rus va ingliz tillariga tarjima qilindi!");
+      }
+      setTimeout(() => setTranslateSuccess(null), 6000);
+    } catch (err) {
+      setErrors({ [field]: err instanceof AdminApiError ? err.message : "Tarjimada xatolik yuz berdi" });
+    } finally {
+      setTranslating(false);
+      setTranslatingTarget(null);
+    }
+  }
+
+  async function handleQuickTranslate(a: Announcement) {
+    const texts = [a.title.trim(), a.content.trim(), a.ctaText?.trim() ?? ""];
+    setQuickTranslatingId(a.id);
+    try {
+      const [ruResults, enResults] = await Promise.all([
+        translateTexts(texts, "ru"),
+        translateTexts(texts, "en"),
+      ]);
+      await saveAnnouncement({
+        ...a,
+        titleLocalized: {
+          uz: a.title,
+          ru: ruResults[0] || a.titleLocalized?.ru || "",
+          en: enResults[0] || a.titleLocalized?.en || "",
+        },
+        contentLocalized: {
+          uz: a.content,
+          ru: ruResults[1] || a.contentLocalized?.ru || "",
+          en: enResults[1] || a.contentLocalized?.en || "",
+        },
+        ctaTextLocalized: a.ctaText ? {
+          uz: a.ctaText,
+          ru: ruResults[2] || a.ctaTextLocalized?.ru || "",
+          en: enResults[2] || a.ctaTextLocalized?.en || "",
+        } : undefined,
+      });
+      logAction({
+        actorId: ADMIN_USER, actorRole: "admin", action: "ANNOUNCEMENT_UPDATED",
+        category: "admin", targetId: a.id, targetType: "platform",
+        description: `E'lon 2 ta tilga (RU/EN) avtomatik tarjima qilindi: ${a.title}`
+      });
+      load();
+      alert(`"${a.title}" e'loni rus va ingliz tillariga muvaffaqiyatli tarjima qilindi va saqlandi!`);
+    } catch (err) {
+      alert(err instanceof AdminApiError ? err.message : "Tarjima qilishda xatolik yuz berdi");
+    } finally {
+      setQuickTranslatingId(null);
     }
   }
 
@@ -5704,10 +5837,31 @@ function AnnouncementsSection({ refreshKey }: { refreshKey: number }) {
                           ⏳ {new Date(a.expiresAt).toLocaleDateString("uz-UZ")}
                         </span>}
                         {a.ctaText && <span className="px-1.5 py-0.5 bg-violet-50 text-violet-700 border border-violet-200 rounded-full font-bold">CTA</span>}
+                        {(a.titleLocalized?.ru && a.titleLocalized?.en) ? (
+                          <span className="px-1.5 py-0.5 bg-emerald-50 text-emerald-700 border border-emerald-200 rounded-full font-bold" title="Rus va ingliz tillariga tarjima qilingan">
+                            🌐 RU & EN
+                          </span>
+                        ) : (
+                          <span className="px-1.5 py-0.5 bg-amber-50 text-amber-700 border border-amber-200 rounded-full font-bold" title="Rus yoki ingliz tilidagi tarjima to'liq emas">
+                            ⚠️ RU/EN yo'q
+                          </span>
+                        )}
                       </div>
                     </td>
                     <td className="px-4 py-3 whitespace-nowrap">
                       <div className="flex items-center gap-1">
+                        <button
+                          onClick={() => handleQuickTranslate(a)}
+                          disabled={quickTranslatingId === a.id}
+                          className="p-1.5 rounded-lg text-gray-400 hover:text-blue-600 hover:bg-blue-50 transition-colors disabled:opacity-40"
+                          title="2 ta tilga avtomatik tarjima qilish (RU / EN)"
+                        >
+                          {quickTranslatingId === a.id ? (
+                            <Loader2 className="w-3.5 h-3.5 animate-spin text-blue-600" />
+                          ) : (
+                            <Languages className="w-3.5 h-3.5" />
+                          )}
+                        </button>
                         <button onClick={() => handleSendNotification(a)}
                           className="p-1.5 rounded-lg text-gray-400 hover:text-red-600 hover:bg-red-50 transition-colors" title="Notification qilib jo'natish">
                           <Bell className="w-3.5 h-3.5" />
@@ -5772,6 +5926,81 @@ function AnnouncementsSection({ refreshKey }: { refreshKey: number }) {
                 {/* LEFT: form */}
                 <div className="flex-1 overflow-y-auto p-6 space-y-6 border-r border-gray-200">
 
+                  {/* 🌐 2 ta tilga avtomatik tarjima qilish (RU / EN) */}
+                  <div className="rounded-2xl border border-blue-200 bg-gradient-to-br from-blue-50/90 via-indigo-50/50 to-white p-4 shadow-sm">
+                    <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3">
+                      <div className="flex items-start gap-3">
+                        <div className="w-9 h-9 rounded-xl bg-blue-600 text-white flex items-center justify-center flex-shrink-0 shadow-md">
+                          <Languages className="w-5 h-5" />
+                        </div>
+                        <div>
+                          <div className="flex items-center gap-2">
+                            <h4 className="text-sm font-extrabold text-gray-900">
+                              2 ta tilga avtomatik tarjima
+                            </h4>
+                            <span className="px-2 py-0.5 rounded-full text-[10px] font-bold bg-blue-100 text-blue-800 border border-blue-200">
+                              RU & EN
+                            </span>
+                          </div>
+                          <p className="text-xs text-gray-600 mt-0.5">
+                            O'zbekcha sarlavha, to'liq kontent va CTA tugmasini bir bosish bilan rus va ingliz tillariga avtomatik tarjima qilish.
+                          </p>
+                        </div>
+                      </div>
+
+                      <button
+                        type="button"
+                        onClick={handleAutoTranslateAll}
+                        disabled={translating || (!f.title.trim() && !f.content.trim())}
+                        className="flex items-center justify-center gap-2 px-4 py-2.5 rounded-xl font-bold text-xs text-white shadow-md transition-all active:scale-95 disabled:opacity-50 disabled:cursor-not-allowed cursor-pointer whitespace-nowrap"
+                        style={{ background: "linear-gradient(135deg,#2563EB,#4F46E5)" }}
+                        title="Barcha matnlarni (sarlavha, kontent, CTA) rus va ingliz tillariga tarjima qilish"
+                      >
+                        {translatingTarget === "all" ? (
+                          <Loader2 className="w-4 h-4 animate-spin" />
+                        ) : (
+                          <Sparkles className="w-4 h-4" />
+                        )}
+                        <span>
+                          {translatingTarget === "all"
+                            ? "2 ta tilga tarjima qilinmoqda…"
+                            : "✨ 2 ta tilga avtomatik tarjima qilish"}
+                        </span>
+                      </button>
+                    </div>
+
+                    {/* Language completeness pills */}
+                    <div className="mt-3 pt-3 border-t border-blue-100/80 flex flex-wrap items-center gap-2 text-xs">
+                      <span className="text-gray-400 font-medium text-[11px]">Tarjima holati:</span>
+                      <span
+                        className={`inline-flex items-center gap-1.5 px-2.5 py-1 rounded-lg text-[11px] font-semibold border ${
+                          (f.titleLocalized?.ru?.trim() && f.contentLocalized?.ru?.trim())
+                            ? "bg-emerald-50 text-emerald-700 border-emerald-200"
+                            : "bg-amber-50 text-amber-700 border-amber-200"
+                        }`}
+                      >
+                        🇷🇺 Ruscha: {(f.titleLocalized?.ru?.trim() && f.contentLocalized?.ru?.trim()) ? "To'liq tayyor ✓" : "Kiritilmagan"}
+                      </span>
+                      <span
+                        className={`inline-flex items-center gap-1.5 px-2.5 py-1 rounded-lg text-[11px] font-semibold border ${
+                          (f.titleLocalized?.en?.trim() && f.contentLocalized?.en?.trim())
+                            ? "bg-emerald-50 text-emerald-700 border-emerald-200"
+                            : "bg-amber-50 text-amber-700 border-amber-200"
+                        }`}
+                      >
+                        🇬🇧 Inglizcha: {(f.titleLocalized?.en?.trim() && f.contentLocalized?.en?.trim()) ? "To'liq tayyor ✓" : "Kiritilmagan"}
+                      </span>
+                    </div>
+
+                    {/* Success message banner */}
+                    {translateSuccess && (
+                      <div className="mt-3 p-2.5 rounded-xl bg-emerald-50 border border-emerald-200 text-xs font-bold text-emerald-800 flex items-center gap-2">
+                        <CheckCircle2 className="w-4 h-4 text-emerald-600 flex-shrink-0" />
+                        <span>{translateSuccess}</span>
+                      </div>
+                    )}
+                  </div>
+
                   {/* 📌 Asosiy ma'lumot */}
                   <section>
                     <p className="text-[10px] font-bold text-gray-400 uppercase tracking-widest mb-3">📌 Asosiy ma'lumot</p>
@@ -5779,9 +6008,25 @@ function AnnouncementsSection({ refreshKey }: { refreshKey: number }) {
                       <div>
                         <div className="flex items-center justify-between mb-1">
                           <label className="text-xs font-semibold text-gray-600">Sarlavha *</label>
-                          <span className={`text-[10px] font-mono ${f.title.length > 100 ? "text-orange-500" : "text-gray-400"}`}>
-                            {f.title.length}/120
-                          </span>
+                          <div className="flex items-center gap-2">
+                            <button
+                              type="button"
+                              onClick={() => handleTranslateField("title")}
+                              disabled={translating || !f.title.trim()}
+                              className="flex items-center gap-1 text-[10px] font-bold text-blue-600 hover:text-blue-800 bg-blue-50 hover:bg-blue-100 px-2.5 py-1 rounded-lg border border-blue-200 transition-colors disabled:opacity-40 cursor-pointer"
+                              title="Faqat sarlavhani rus va ingliz tillariga tarjima qilish"
+                            >
+                              {translatingTarget === "title" ? (
+                                <Loader2 className="w-3 h-3 animate-spin" />
+                              ) : (
+                                <Languages className="w-3 h-3" />
+                              )}
+                              <span>Sarlavhani RU/EN ga tarjima</span>
+                            </button>
+                            <span className={`text-[10px] font-mono ${f.title.length > 100 ? "text-orange-500" : "text-gray-400"}`}>
+                              {f.title.length}/120
+                            </span>
+                          </div>
                         </div>
                         <input
                           value={f.title}
@@ -5874,7 +6119,23 @@ function AnnouncementsSection({ refreshKey }: { refreshKey: number }) {
                   {/* 📝 Kontent */}
                   <section>
                     <div className="flex items-center justify-between mb-3">
-                      <p className="text-[10px] font-bold text-gray-400 uppercase tracking-widest">📝 Kontent *</p>
+                      <div className="flex items-center gap-2">
+                        <p className="text-[10px] font-bold text-gray-400 uppercase tracking-widest">📝 Kontent *</p>
+                        <button
+                          type="button"
+                          onClick={() => handleTranslateField("content")}
+                          disabled={translating || !f.content.trim()}
+                          className="flex items-center gap-1 text-[10px] font-bold text-blue-600 hover:text-blue-800 bg-blue-50 hover:bg-blue-100 px-2.5 py-1 rounded-lg border border-blue-200 transition-colors disabled:opacity-40 cursor-pointer"
+                          title="Faqat kontent matnini rus va ingliz tillariga tarjima qilish"
+                        >
+                          {translatingTarget === "content" ? (
+                            <Loader2 className="w-3 h-3 animate-spin" />
+                          ) : (
+                            <Languages className="w-3 h-3" />
+                          )}
+                          <span>Kontentni RU/EN ga tarjima</span>
+                        </button>
+                      </div>
                       <div className="flex rounded-lg border border-gray-200 overflow-hidden">
                         <button
                           onClick={() => setContentTab("write")}
@@ -5942,7 +6203,25 @@ function AnnouncementsSection({ refreshKey }: { refreshKey: number }) {
 
                   {/* 🎯 CTA */}
                   <section>
-                    <p className="text-[10px] font-bold text-gray-400 uppercase tracking-widest mb-3">🎯 CTA tugma (ixtiyoriy)</p>
+                    <div className="flex items-center justify-between mb-3">
+                      <p className="text-[10px] font-bold text-gray-400 uppercase tracking-widest">🎯 CTA tugma (ixtiyoriy)</p>
+                      {f.ctaText?.trim() && (
+                        <button
+                          type="button"
+                          onClick={() => handleTranslateField("cta")}
+                          disabled={translating || !f.ctaText?.trim()}
+                          className="flex items-center gap-1 text-[10px] font-bold text-blue-600 hover:text-blue-800 bg-blue-50 hover:bg-blue-100 px-2.5 py-1 rounded-lg border border-blue-200 transition-colors disabled:opacity-40 cursor-pointer"
+                          title="Faqat CTA matnini rus va ingliz tillariga tarjima qilish"
+                        >
+                          {translatingTarget === "cta" ? (
+                            <Loader2 className="w-3 h-3 animate-spin" />
+                          ) : (
+                            <Languages className="w-3 h-3" />
+                          )}
+                          <span>CTA matnini RU/EN ga tarjima</span>
+                        </button>
+                      )}
+                    </div>
                     <div className="grid grid-cols-2 gap-3 mb-3">
                       <div>
                         <label className="text-xs font-semibold text-gray-600 mb-1 block">Tugma matni (Uzbek)</label>
@@ -6116,12 +6395,23 @@ function AnnouncementsSection({ refreshKey }: { refreshKey: number }) {
                   Bekor qilish
                 </button>
                 <button
-                  onClick={handleAutoTranslate}
-                  disabled={translating || saving}
-                  className="flex items-center gap-1.5 px-4 py-2.5 rounded-xl font-bold text-sm border border-blue-300 text-blue-700 bg-blue-50 hover:bg-blue-100 transition-colors disabled:opacity-50"
+                  type="button"
+                  onClick={handleAutoTranslateAll}
+                  disabled={translating || saving || (!f.title.trim() && !f.content.trim())}
+                  className="flex items-center gap-2 px-5 py-2.5 rounded-xl font-bold text-sm text-white shadow-md transition-all active:scale-95 disabled:opacity-50 cursor-pointer"
+                  style={{ background: "linear-gradient(135deg,#2563EB,#4F46E5)" }}
+                  title="2 ta tilga (rus va ingliz) avtomatik tarjima qilish"
                 >
-                  {translating ? <Loader2 className="w-3.5 h-3.5 animate-spin" /> : <Languages className="w-3.5 h-3.5" />}
-                  {translating ? "Tarjima qilinmoqda…" : "🌐 RU / EN tarjima"}
+                  {translatingTarget === "all" ? (
+                    <Loader2 className="w-4 h-4 animate-spin" />
+                  ) : (
+                    <Sparkles className="w-4 h-4" />
+                  )}
+                  <span>
+                    {translatingTarget === "all"
+                      ? "Tarjima qilinmoqda…"
+                      : "✨ 2 ta tilga avtomatik tarjima qilish"}
+                  </span>
                 </button>
                 <div className="flex-1" />
                 {Object.keys(errors).length > 0 && (
